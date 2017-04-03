@@ -11,12 +11,15 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
-public class restructureAvroRecords {
+public class RestructureAvroRecords {
+    private static final Logger logger = LogManager.getLogger(RestructureAvroRecords.class);
 
     private final String OUTPUT_FILE_EXTENSION = "json";
     private final String OFFSETS_FILE_NAME = "offsets.csv";
@@ -34,23 +37,28 @@ public class restructureAvroRecords {
     private int processedRecordsCount;
 
     public static void main(String [] args) throws Exception {
-        restructureAvroRecords restr = new restructureAvroRecords(args[0], args[2]);
-        long time1 = System.currentTimeMillis();
-        restr.start(args[1]);
-        System.out.printf("Processed %d files and %,d records\n", restr.getProcessedFileCount(), restr.getProcessedRecordsCount());
-        System.out.printf("Time taken: %.2f seconds\n",(System.currentTimeMillis() - time1)/1000d);
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
-//        restructureAvroRecords restr = new restructureAvroRecords("webhdfs://radar-test.thehyve.net:50070", "output4/");
-//        restr.start("/topicE4/");
+        logger.info(dateFormat.format(new Date()));
+        logger.info("Starting...");
+        logger.info("In:  " + args[0] + args[1]);
+        logger.info("Out: " + args[2]);
+
+        long time1 = System.currentTimeMillis();
+
+        RestructureAvroRecords restr = new RestructureAvroRecords(args[0], args[2]);
+        restr.start(args[1]);
+
+        logger.info(String.format("Processed %d files and %,d records", restr.getProcessedFileCount(), restr.getProcessedRecordsCount()));
+        logger.info(String.format("Time taken: %.2f seconds",(System.currentTimeMillis() - time1)/1000d));
 
 //        restr.processTopic(new Path("/topicE4/android_empatica_e4_temperature/"));
-//        restr.processAvroFile(new Path("/testE4Time/android_phone_acceleration/partition=0/android_phone_acceleration+0+0000590000+0000599999.avro"),"wazaa" );
+//        restr.processFile(new Path("/testE4Time/android_phone_acceleration/partition=0/android_phone_acceleration+0+0000590000+0000599999.avro"),"wazaa" );
     }
 
-    public restructureAvroRecords(String inputPath, String outputPath) {
+    public RestructureAvroRecords(String inputPath, String outputPath) {
         this.setInputWebHdfsURL(inputPath);
         this.setOutputPath(outputPath);
-        bins.setBinFilePath(outputPath + "/" + BINS_FILE_NAME);
     }
 
     public void setInputWebHdfsURL(String fileSystemURL) {
@@ -61,6 +69,7 @@ public class restructureAvroRecords {
         // Remove trailing backslash
         outputPath = path.replaceAll("/$","");
         offsetsPath = outputPath + "/" + OFFSETS_FILE_NAME;
+        bins.setBinFilePath(outputPath + "/" + BINS_FILE_NAME);
     }
 
     public int getProcessedFileCount() {
@@ -107,16 +116,16 @@ public class restructureAvroRecords {
             LocatedFileStatus locatedFileStatus = files.next();
 
             if (locatedFileStatus.isFile())
-                this.processAvroFile( locatedFileStatus.getPath(), topicName );
+                this.processFile(locatedFileStatus.getPath(), topicName);
         }
     }
 
-    private void processAvroFile(Path filePath, String topicName) throws IOException {
+    private void processFile(Path filePath, String topicName) throws IOException {
         String fileName = filePath.getName();
 
         // Skip if extension is not .avro
         if (! FilenameUtils.getExtension(fileName).equals("avro")) {
-            System.out.printf("Skipped non avro file: %s\n", fileName);
+            logger.info("Skipped non-avro file: " + fileName);
             return;
         }
 
@@ -125,11 +134,12 @@ public class restructureAvroRecords {
             return;
         }
 
-        System.out.println(filePath);
+        logger.info(filePath);
+
         // Read and parse avro file
         FsInput input = new FsInput(filePath, conf);
-        DatumReader<GenericRecord> datumReader = new GenericDatumReader<GenericRecord>();
-        DataFileReader<GenericRecord> dataFileReader = new DataFileReader<GenericRecord>(input, datumReader);
+        DatumReader<GenericRecord> datumReader = new GenericDatumReader<>();
+        DataFileReader<GenericRecord> dataFileReader = new DataFileReader<>(input, datumReader);
 
         GenericRecord record = null;
         while (dataFileReader.hasNext()) {
@@ -176,9 +186,9 @@ public class restructureAvroRecords {
         File directory = new File(directoryName);
         if (! directory.exists()){
             if (directory.mkdirs())
-                System.out.printf("Created directory: %s\n", directory.getAbsolutePath());
+                logger.info("Created directory: " + directory.getAbsolutePath());
             else
-                System.out.printf("FAILED to create directory: %s\n", directory.getAbsolutePath());
+                logger.warn("FAILED to create directory: " + directory.getAbsolutePath());
         }
 
         String filePath = directoryName + "/" + fileName;
@@ -206,10 +216,10 @@ public class restructureAvroRecords {
             fromOffset = Integer.valueOf( fileNameParts[2] );
             toOffset = Integer.valueOf( fileNameParts[3] );
         } catch (IndexOutOfBoundsException e) {
-            System.out.println("Could not split filename to the commit offsets.");
+            logger.warn("Could not split filename to the commit offsets.");
             return;
         } catch (NumberFormatException e) {
-            System.out.println("Could not convert offsets to integers.");
+            logger.warn("Could not convert offsets to integers.");
             return;
         }
 
@@ -236,9 +246,8 @@ public class restructureAvroRecords {
                 String[] columns = line.split(",");
                 seenFiles.add(columns[0]);
             }
-
         } catch (IOException e) {
-            System.out.println("No files processed yet.");
+            logger.info("Offsets file does not exist yet, will be created.");
         }
     }
 }

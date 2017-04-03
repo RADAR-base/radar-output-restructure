@@ -3,11 +3,14 @@ package org.radarcns;
 import org.apache.commons.collections.MapIterator;
 import org.apache.commons.collections.keyvalue.MultiKey;
 import org.apache.commons.collections.map.MultiKeyMap;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.*;
 
 
 public class Frequency {
+    private static final Logger logger = LogManager.getLogger(RestructureAvroRecords.class);
 
     private MultiKeyMap bins = new MultiKeyMap();
     private String binFilePath;
@@ -31,7 +34,7 @@ public class Frequency {
 
     public void addToBin(String topicName, String id, Double time, Integer countToAdd) {
         // Hour resolution
-        String hourlyTimestamp = restructureAvroRecords.createHourTimestamp(time);
+        String hourlyTimestamp = RestructureAvroRecords.createHourTimestamp(time);
 
         addToBin(topicName, id, hourlyTimestamp, countToAdd);
     }
@@ -91,9 +94,9 @@ public class Frequency {
                 this.addToBin(columns[0], columns[1], columns[2], Integer.valueOf(columns[3]));
             }
         } catch (IOException e) {
-            System.out.println("Could not read the file with bins. Creating new file when writing.");
+            logger.warn("Could not read the file with bins. Creating new file when writing.");
         } catch (ArrayIndexOutOfBoundsException e) {
-            System.out.println("Unable to parse the contents of the bins file. Skipping reading.");
+            logger.warn("Unable to parse the contents of the bins file. Skipping reading.");
         }
     }
 }
