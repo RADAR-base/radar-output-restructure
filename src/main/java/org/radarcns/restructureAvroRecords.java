@@ -31,14 +31,14 @@ public class restructureAvroRecords {
     private final static SimpleDateFormat dateFormatFileName = new SimpleDateFormat("yyyyMMdd_HH");
 
     private int processedFileCount;
+    private int processedRecordsCount;
 
     public static void main(String [] args) throws Exception {
-
         restructureAvroRecords restr = new restructureAvroRecords(args[0], args[2]);
         long time1 = System.currentTimeMillis();
         restr.start(args[1]);
+        System.out.printf("Processed %d files and %,d records\n", restr.getProcessedFileCount(), restr.getProcessedRecordsCount());
         System.out.printf("Time taken: %.2f seconds\n",(System.currentTimeMillis() - time1)/1000d);
-
 
 //        restructureAvroRecords restr = new restructureAvroRecords("webhdfs://radar-test.thehyve.net:50070", "output4/");
 //        restr.start("/topicE4/");
@@ -61,6 +61,14 @@ public class restructureAvroRecords {
         // Remove trailing backslash
         outputPath = path.replaceAll("/$","");
         offsetsPath = outputPath + "/" + OFFSETS_FILE_NAME;
+    }
+
+    public int getProcessedFileCount() {
+        return processedFileCount;
+    }
+
+    public int getProcessedRecordsCount() {
+        return processedRecordsCount;
     }
 
     public void start(String directoryName) throws IOException {
@@ -86,8 +94,6 @@ public class restructureAvroRecords {
                 processTopic(filePath);
             }
         }
-
-        System.out.printf("%d files processed\n", processedFileCount);
     }
 
     private void processTopic(Path topicPath) throws IOException {
@@ -133,6 +139,7 @@ public class restructureAvroRecords {
             this.writeRecord(record, topicName);
         }
 
+        // Write which file has been processed and update bins
         this.writeSeenOffsets(fileName);
         bins.writeBins();
         processedFileCount++;
@@ -154,8 +161,9 @@ public class restructureAvroRecords {
         String data = record.toString(); // TODO: check whether this indeed always creates valid JSON
         this.appendToFile(dirName, outputFileName, data);
 
-        // Count data
+        // Count data (binned and total)
         bins.addToBin(topicName, keyField.get("sourceId").toString(), (Double) valueField.get("time"));
+        processedRecordsCount++;
     }
 
     public static String createHourTimestamp(Double time) {
@@ -230,8 +238,7 @@ public class restructureAvroRecords {
             }
 
         } catch (IOException e) {
-            // TODO
-            e.printStackTrace();
+            System.out.println("No files processed yet.");
         }
     }
 }
