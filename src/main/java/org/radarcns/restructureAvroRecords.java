@@ -20,32 +20,37 @@ public class restructureAvroRecords {
 
     private final String OUTPUT_FILE_EXTENSION = "json";
     private final String OFFSETS_FILE_NAME = "offsets.csv";
+    private final String BINS_FILE_NAME = "bins.csv";
 
     private String outputPath = ".";
     private String offsetsPath = outputPath + "/" + OFFSETS_FILE_NAME;
     private Set<String> seenFiles = new HashSet<>();
+    private Frequency bins = new Frequency();
 
     private Configuration conf = new Configuration();
-    private final SimpleDateFormat dateFormatFileName = new SimpleDateFormat("yyyyMMdd_HH");
+    private final static SimpleDateFormat dateFormatFileName = new SimpleDateFormat("yyyyMMdd_HH");
 
     private int processedFileCount;
 
     public static void main(String [] args) throws Exception {
 
-//        restructureAvroRecords restr = new restructureAvroRecords(args[0], args[2]);
-//        restr.start(args[1]);
+        restructureAvroRecords restr = new restructureAvroRecords(args[0], args[2]);
+        long time1 = System.currentTimeMillis();
+        restr.start(args[1]);
+        System.out.printf("Time taken: %.2f seconds\n",(System.currentTimeMillis() - time1)/1000d);
 
-        restructureAvroRecords restr = new restructureAvroRecords("webhdfs://radar-test.thehyve.net:50070", "output3/");
-        restr.start("/topicAndroidPhoneNew/");
 
-//        restructureAvroRecords.processTopic("/topicE4/android_empatica_e4_inter_beat_interval/partition=0/");
-//        restructureAvroRecords.processAvroFile(new Path("/topicE4/android_empatica_e4_inter_beat_interval/partition=0/android_empatica_e4_inter_beat_interval+0+0000031485+0000031488.avro") );
-//        restructureAvroRecords.processAvroFile(new Path("/testE4Time/android_phone_acceleration/partition=0/android_phone_acceleration+0+0000590000+0000599999.avro"),"wazaa" );
+//        restructureAvroRecords restr = new restructureAvroRecords("webhdfs://radar-test.thehyve.net:50070", "output4/");
+//        restr.start("/topicE4/");
+
+//        restr.processTopic(new Path("/topicE4/android_empatica_e4_temperature/"));
+//        restr.processAvroFile(new Path("/testE4Time/android_phone_acceleration/partition=0/android_phone_acceleration+0+0000590000+0000599999.avro"),"wazaa" );
     }
 
     public restructureAvroRecords(String inputPath, String outputPath) {
         this.setInputWebHdfsURL(inputPath);
         this.setOutputPath(outputPath);
+        bins.setBinFilePath(outputPath + "/" + BINS_FILE_NAME);
     }
 
     public void setInputWebHdfsURL(String fileSystemURL) {
@@ -81,10 +86,11 @@ public class restructureAvroRecords {
                 processTopic(filePath);
             }
         }
+
         System.out.printf("%d files processed\n", processedFileCount);
     }
 
-    public void processTopic(Path topicPath) throws IOException {
+    private void processTopic(Path topicPath) throws IOException {
         // Get files in this topic directory
         FileSystem fs = FileSystem.get(conf);
         RemoteIterator<LocatedFileStatus> files = fs.listFiles(topicPath, true); // TODO: all partitions or just 'partition=0'?
@@ -94,15 +100,12 @@ public class restructureAvroRecords {
         while (files.hasNext()) {
             LocatedFileStatus locatedFileStatus = files.next();
 
-            System.out.println(locatedFileStatus.getPath());
-
             if (locatedFileStatus.isFile())
                 this.processAvroFile( locatedFileStatus.getPath(), topicName );
-
         }
     }
 
-    public void processAvroFile(Path filePath, String topicName) throws IOException {
+    private void processAvroFile(Path filePath, String topicName) throws IOException {
         String fileName = filePath.getName();
 
         // Skip if extension is not .avro
@@ -116,9 +119,10 @@ public class restructureAvroRecords {
             return;
         }
 
+        System.out.println(filePath);
+        // Read and parse avro file
         FsInput input = new FsInput(filePath, conf);
         DatumReader<GenericRecord> datumReader = new GenericDatumReader<GenericRecord>();
-
         DataFileReader<GenericRecord> dataFileReader = new DataFileReader<GenericRecord>(input, datumReader);
 
         GenericRecord record = null;
@@ -130,15 +134,17 @@ public class restructureAvroRecords {
         }
 
         this.writeSeenOffsets(fileName);
+        bins.writeBins();
         processedFileCount++;
     }
 
-    public void writeRecord(GenericRecord record, String topicName) throws IOException {
+    private void writeRecord(GenericRecord record, String topicName) throws IOException {
         GenericRecord keyField = (GenericRecord) record.get("keyField");
         GenericRecord valueField = (GenericRecord) record.get("valueField");
 
         // Make a timestamped filename YYYYMMDD_HH00.json
-        String outputFileName = this.createFilePathFromTimestamp( (Double) valueField.get("time"));
+        String hourlyTimestamp = createHourTimestamp( (Double) valueField.get("time"));
+        String outputFileName = hourlyTimestamp + "00." + OUTPUT_FILE_EXTENSION;
 
         // Clean user id and create final output pathname
         String userId = keyField.get("userId").toString().replaceAll("\\W+", "");
@@ -147,21 +153,18 @@ public class restructureAvroRecords {
         // Write data
         String data = record.toString(); // TODO: check whether this indeed always creates valid JSON
         this.appendToFile(dirName, outputFileName, data);
+
+        // Count data
+        bins.addToBin(topicName, keyField.get("sourceId").toString(), (Double) valueField.get("time"));
     }
 
-    public String createFilePathFromTimestamp(Double time) {
-        // Send all output to the Appendable object sb
-        StringBuilder sb = new StringBuilder();
-        Formatter formatter = new Formatter(sb, Locale.US);
-
-        // In millis
+    public static String createHourTimestamp(Double time) {
+        // Convert from millis to date and apply dateFormat
         Date date = new Date( time.longValue() * 1000 );
-
-        formatter.format("%s00.%s", dateFormatFileName.format(date), OUTPUT_FILE_EXTENSION);
-        return sb.toString();
+        return dateFormatFileName.format(date);
     }
 
-    public void appendToFile(String directoryName, String fileName, String data) {
+    private void appendToFile(String directoryName, String fileName, String data) {
         File directory = new File(directoryName);
         if (! directory.exists()){
             if (directory.mkdirs())
@@ -216,7 +219,6 @@ public class restructureAvroRecords {
     }
 
     private void readSeenOffsets() {
-
         try (FileReader fr = new FileReader(offsetsPath);
              BufferedReader br = new BufferedReader(fr))
         {
@@ -231,6 +233,5 @@ public class restructureAvroRecords {
             // TODO
             e.printStackTrace();
         }
-
     }
 }
