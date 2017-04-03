@@ -16,7 +16,7 @@ import java.io.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
-public class restructureAvroSensorTopics {
+public class restructureAvroRecords {
 
     String outputPath = ".";
     String OUTPUT_FILE_EXTENSION = "json";
@@ -25,16 +25,15 @@ public class restructureAvroSensorTopics {
     SimpleDateFormat dateFormatFileName = new SimpleDateFormat("yyyyMMdd_HH");
 
     public static void main(String [] args) throws Exception {
-        System.out.println("Started!");
 
-        restructureAvroSensorTopics res = new restructureAvroSensorTopics();
-        res.setInputWebHdfsURL("webhdfs://radar-test.thehyve.net:50070");
-        res.setOutputPath("output3/");
+        restructureAvroRecords restr = new restructureAvroRecords();
+        restr.setInputWebHdfsURL(args[0]); //"webhdfs://radar-test.thehyve.net:50070");
+        restr.setOutputPath(args[2]); //"output3/");
 
-        res.start("/topicAndroidPhoneNew/");
-//        restructureAvroSensorTopics.processTopic("/topicE4/android_empatica_e4_inter_beat_interval/partition=0/");
-//        restructureAvroSensorTopics.processAvroFile(new Path("/topicE4/android_empatica_e4_inter_beat_interval/partition=0/android_empatica_e4_inter_beat_interval+0+0000031485+0000031488.avro") );
-//        restructureAvroSensorTopics.processAvroFile(new Path("/testE4Time/android_phone_acceleration/partition=0/android_phone_acceleration+0+0000590000+0000599999.avro"),"wazaa" );
+        restr.start(args[1]); //"/topicAndroidPhoneNew/");
+//        restructureAvroRecords.processTopic("/topicE4/android_empatica_e4_inter_beat_interval/partition=0/");
+//        restructureAvroRecords.processAvroFile(new Path("/topicE4/android_empatica_e4_inter_beat_interval/partition=0/android_empatica_e4_inter_beat_interval+0+0000031485+0000031488.avro") );
+//        restructureAvroRecords.processAvroFile(new Path("/testE4Time/android_phone_acceleration/partition=0/android_phone_acceleration+0+0000590000+0000599999.avro"),"wazaa" );
     }
 
     public void setInputWebHdfsURL(String fileSystemURL) {
@@ -74,7 +73,6 @@ public class restructureAvroSensorTopics {
 
         String topicName = topicPath.getName();
 
-        int fileCounter = 0;
         while (files.hasNext()) {
             LocatedFileStatus locatedFileStatus = files.next();
 
@@ -82,10 +80,6 @@ public class restructureAvroSensorTopics {
 
             if (locatedFileStatus.isFile())
                 this.processAvroFile( locatedFileStatus.getPath(), topicName );
-            fileCounter += 1;
-
-            if (fileCounter > 1)
-                continue;
         }
     }
 
@@ -119,7 +113,7 @@ public class restructureAvroSensorTopics {
         GenericRecord valueField = (GenericRecord) record.get("valueField");
 
         // Make a timestamped filename YYYYMMDD_HH00.json
-        String outputFileName = this.createFilepathFromTimestamp( (Double) valueField.get("time"));
+        String outputFileName = this.createFilePathFromTimestamp( (Double) valueField.get("time"));
 
         // Clean user id and create final output pathname
         String userId = keyField.get("userId").toString().replaceAll("\\W+", "");
@@ -130,7 +124,7 @@ public class restructureAvroSensorTopics {
         this.appendToFile(dirName, outputFileName, data);
     }
 
-    public String createFilepathFromTimestamp(Double time) {
+    public String createFilePathFromTimestamp(Double time) {
         // Send all output to the Appendable object sb
         StringBuilder sb = new StringBuilder();
         Formatter formatter = new Formatter(sb, Locale.US);
