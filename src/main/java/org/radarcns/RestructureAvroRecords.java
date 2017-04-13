@@ -1,5 +1,13 @@
 package org.radarcns;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
@@ -11,35 +19,36 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
-import java.io.*;
-import java.text.SimpleDateFormat;
-import java.util.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class RestructureAvroRecords {
-    private static final Logger logger = LogManager.getLogger(RestructureAvroRecords.class);
+    private static final Logger logger = LoggerFactory.getLogger(RestructureAvroRecords.class);
 
-    private final String OUTPUT_FILE_EXTENSION = "json";
-    private final String OFFSETS_FILE_NAME = "offsets.csv";
-    private final String BINS_FILE_NAME = "bins.csv";
+    private static final String OUTPUT_FILE_EXTENSION = "json";
+    private static final String OFFSETS_FILE_NAME = "offsets.csv";
+    private static final String BINS_FILE_NAME = "bins.csv";
+    private static final SimpleDateFormat FILE_DATE_FORMAT = new SimpleDateFormat("yyyyMMdd_HH");
 
-    private String outputPath = ".";
-    private String offsetsPath = outputPath + "/" + OFFSETS_FILE_NAME;
-    private Set<String> seenFiles = new HashSet<>();
-    private Frequency bins = new Frequency();
+    private File outputPath = new File(".");
+    private File offsetsPath = new File(outputPath, OFFSETS_FILE_NAME);
+    private final Set<String> seenFiles = new HashSet<>();
+    private final Frequency bins = new Frequency();
 
-    private Configuration conf = new Configuration();
-    private final static SimpleDateFormat dateFormatFileName = new SimpleDateFormat("yyyyMMdd_HH");
+    private final Configuration conf = new Configuration();
+    private final DatumReader<GenericRecord> datumReader;
 
     private int processedFileCount;
     private int processedRecordsCount;
 
     public static void main(String [] args) throws Exception {
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+//        Thread.sleep(120_000);
+        if (args.length != 3) {
+            System.out.println("Usage: hadoop jar restructurehdfs-all-0.1.0.jar <webhdfs_url> <hdfs_topic> <output_folder>");
+            System.exit(1);
+        }
 
-        logger.info(dateFormat.format(new Date()));
+        logger.info(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
         logger.info("Starting...");
         logger.info("In:  " + args[0] + args[1]);
         logger.info("Out: " + args[2]);
@@ -49,8 +58,8 @@ public class RestructureAvroRecords {
         RestructureAvroRecords restr = new RestructureAvroRecords(args[0], args[2]);
         restr.start(args[1]);
 
-        logger.info(String.format("Processed %d files and %,d records", restr.getProcessedFileCount(), restr.getProcessedRecordsCount()));
-        logger.info(String.format("Time taken: %.2f seconds",(System.currentTimeMillis() - time1)/1000d));
+        logger.info("Processed %d files and %,d records", restr.getProcessedFileCount(), restr.getProcessedRecordsCount());
+        logger.info("Time taken: %.2f seconds", (System.currentTimeMillis() - time1)/1000d);
 
 //        restr.processTopic(new Path("/topicE4/android_empatica_e4_temperature/"));
 //        restr.processFile(new Path("/testE4Time/android_phone_acceleration/partition=0/android_phone_acceleration+0+0000590000+0000599999.avro"),"wazaa" );
@@ -59,6 +68,7 @@ public class RestructureAvroRecords {
     public RestructureAvroRecords(String inputPath, String outputPath) {
         this.setInputWebHdfsURL(inputPath);
         this.setOutputPath(outputPath);
+        datumReader = new GenericDatumReader<>();
     }
 
     public void setInputWebHdfsURL(String fileSystemURL) {
@@ -67,9 +77,9 @@ public class RestructureAvroRecords {
 
     public void setOutputPath(String path) {
         // Remove trailing backslash
-        outputPath = path.replaceAll("/$","");
-        offsetsPath = outputPath + "/" + OFFSETS_FILE_NAME;
-        bins.setBinFilePath(outputPath + "/" + BINS_FILE_NAME);
+        outputPath = new File(path.replaceAll("/$",""));
+        offsetsPath = new File(outputPath, OFFSETS_FILE_NAME);
+        bins.setBinFilePath(new File(outputPath, BINS_FILE_NAME));
     }
 
     public int getProcessedFileCount() {
@@ -112,20 +122,30 @@ public class RestructureAvroRecords {
 
         String topicName = topicPath.getName();
 
-        while (files.hasNext()) {
-            LocatedFileStatus locatedFileStatus = files.next();
+        long t1 = System.currentTimeMillis();
 
-            if (locatedFileStatus.isFile())
-                this.processFile(locatedFileStatus.getPath(), topicName);
+        try (FileCache cache = new FileCache(100)) {
+            while (files.hasNext()) {
+                LocatedFileStatus locatedFileStatus = files.next();
+
+                if (locatedFileStatus.isFile()) {
+                    this.processFile(locatedFileStatus.getPath(), topicName, cache);
+                    if (processedFileCount == 10) {
+                        double diff = (System.currentTimeMillis() - t1) / 1000d;
+                        logger.info("Processed 10 files in {} seconds", diff);
+                        System.exit(0);
+                    }
+                }
+            }
         }
     }
 
-    private void processFile(Path filePath, String topicName) throws IOException {
+    private void processFile(Path filePath, String topicName, FileCache cache) throws IOException {
         String fileName = filePath.getName();
 
         // Skip if extension is not .avro
-        if (! FilenameUtils.getExtension(fileName).equals("avro")) {
-            logger.info("Skipped non-avro file: " + fileName);
+        if (!FilenameUtils.getExtension(fileName).equals("avro")) {
+            logger.info("Skipped non-avro file: {}", fileName);
             return;
         }
 
@@ -134,11 +154,10 @@ public class RestructureAvroRecords {
             return;
         }
 
-        logger.info(filePath);
+        logger.info("{}", filePath);
 
         // Read and parse avro file
         FsInput input = new FsInput(filePath, conf);
-        DatumReader<GenericRecord> datumReader = new GenericDatumReader<>();
         DataFileReader<GenericRecord> dataFileReader = new DataFileReader<>(input, datumReader);
 
         GenericRecord record = null;
@@ -146,16 +165,16 @@ public class RestructureAvroRecords {
             record = dataFileReader.next(record);
 
             // Get the fields
-            this.writeRecord(record, topicName);
+            this.writeRecord(record, topicName, cache);
         }
 
         // Write which file has been processed and update bins
-        this.writeSeenOffsets(fileName);
+        this.writeSeenOffsets(fileName, cache);
         bins.writeBins();
         processedFileCount++;
     }
 
-    private void writeRecord(GenericRecord record, String topicName) throws IOException {
+    private void writeRecord(GenericRecord record, String topicName, FileCache cache) throws IOException {
         GenericRecord keyField = (GenericRecord) record.get("keyField");
         GenericRecord valueField = (GenericRecord) record.get("valueField");
 
@@ -165,11 +184,12 @@ public class RestructureAvroRecords {
 
         // Clean user id and create final output pathname
         String userId = keyField.get("userId").toString().replaceAll("\\W+", "");
-        String dirName = this.outputPath + "/" +  userId + "/" + topicName;
+        File userDir = new File(this.outputPath, userId);
+        File userTopicDir = new File(userDir, topicName);
+        File outputFile = new File(userTopicDir, outputFileName);
 
         // Write data
-        String data = record.toString(); // TODO: check whether this indeed always creates valid JSON
-        this.appendToFile(dirName, outputFileName, data);
+        cache.appendLine(outputFile, record.toString());
 
         // Count data (binned and total)
         bins.addToBin(topicName, keyField.get("sourceId").toString(), (Double) valueField.get("time"));
@@ -179,33 +199,10 @@ public class RestructureAvroRecords {
     public static String createHourTimestamp(Double time) {
         // Convert from millis to date and apply dateFormat
         Date date = new Date( time.longValue() * 1000 );
-        return dateFormatFileName.format(date);
+        return FILE_DATE_FORMAT.format(date);
     }
 
-    private void appendToFile(String directoryName, String fileName, String data) {
-        File directory = new File(directoryName);
-        if (! directory.exists()){
-            if (directory.mkdirs())
-                logger.info("Created directory: " + directory.getAbsolutePath());
-            else
-                logger.warn("FAILED to create directory: " + directory.getAbsolutePath());
-        }
-
-        String filePath = directoryName + "/" + fileName;
-
-        // Buffered writer to prevent opening and closing the same file many times
-        try(FileWriter fw = new FileWriter(filePath, true);
-            BufferedWriter bw = new BufferedWriter(fw);
-            PrintWriter out = new PrintWriter(bw))
-        {
-            out.println(data);
-        } catch (IOException e) {
-            // TODO: exception handling
-            e.printStackTrace();
-        }
-    }
-
-    private void writeSeenOffsets(String fileName) {
+    private void writeSeenOffsets(String fileName, FileCache cache) throws IOException {
         String[] fileNameParts = fileName.split("[+.]");
 
         String topicName, partition;
@@ -224,16 +221,7 @@ public class RestructureAvroRecords {
         }
 
         String data = String.join(",", fileName, topicName, partition, fromOffset.toString(), toOffset.toString());
-
-        try(FileWriter fw = new FileWriter(offsetsPath, true);
-            BufferedWriter bw = new BufferedWriter(fw);
-            PrintWriter out = new PrintWriter(bw))
-        {
-            out.println(data);
-        } catch (IOException e) {
-            // TODO: exception handling
-            e.printStackTrace();
-        }
+        cache.appendLine(offsetsPath, data);
     }
 
     private void readSeenOffsets() {

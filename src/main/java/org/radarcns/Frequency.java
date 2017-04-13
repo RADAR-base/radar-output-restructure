@@ -3,19 +3,19 @@ package org.radarcns;
 import org.apache.commons.collections.MapIterator;
 import org.apache.commons.collections.keyvalue.MultiKey;
 import org.apache.commons.collections.map.MultiKeyMap;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.io.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 public class Frequency {
-    private static final Logger logger = LogManager.getLogger(RestructureAvroRecords.class);
+    private static final Logger logger = LoggerFactory.getLogger(Frequency.class);
 
     private MultiKeyMap bins = new MultiKeyMap();
-    private String binFilePath;
+    private File binFilePath;
 
-    public void setBinFilePath(String binFilePath) {
+    public void setBinFilePath(File binFilePath) {
         this.binFilePath = binFilePath;
     }
 
@@ -23,7 +23,7 @@ public class Frequency {
         return bins;
     }
 
-    public void addToBin(String topicName, String id, String timestamp, Integer countToAdd) {
+    public void addToBin(String topicName, String id, String timestamp, int countToAdd) {
         Integer count = (Integer) bins.get(topicName, id, timestamp);
         if (count == null) {
             bins.put(topicName, id, timestamp, countToAdd);
@@ -32,7 +32,7 @@ public class Frequency {
         }
     }
 
-    public void addToBin(String topicName, String id, Double time, Integer countToAdd) {
+    public void addToBin(String topicName, String id, Double time, int countToAdd) {
         // Hour resolution
         String hourlyTimestamp = RestructureAvroRecords.createHourTimestamp(time);
 
