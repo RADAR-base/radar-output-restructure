@@ -100,3 +100,4 @@ modules.xml
 
 ## Pebble 2
 .lock*
+/data/

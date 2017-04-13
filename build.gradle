@@ -1,34 +1,44 @@
-group 'org.radarcns.restructurehdfs'
-version '1.0-SNAPSHOT'
-
 apply plugin: 'java'
-version = '0.1.0'
+apply plugin: 'application'
+
+group 'org.radarcns.restructurehdfs'
+version '0.1-SNAPSHOT'
+mainClassName = 'org.radarcns.RestructureAvroRecords'
+
+run {
+    args = ['webhdfs://radar-test.thehyve.net:50070', '/topicAndroidPhoneNew/android_phone_sensor_acceleration', "${projectDir}/data"]
+}
 
 sourceCompatibility = 1.8
+targetCompatibility = 1.8
 
 repositories {
-    mavenCentral()
+    jcenter()
 }
 
 dependencies {
-    testCompile group: 'junit', name: 'junit', version: '4.11'
-    compile 'org.apache.logging.log4j:log4j-core:2.8.1'
     compile 'org.apache.hadoop:hadoop-common:2.7.3'
+    compile 'org.apache.avro:avro:1.8.1'
+    compile 'org.apache.avro:avro-mapred:1.8.1'
+
+    runtime 'org.apache.logging.log4j:log4j-core:2.8.1'
+    runtime 'org.apache.logging.log4j:log4j-slf4j-impl:2.8.1'
     runtime 'org.apache.hadoop:hadoop-hdfs:2.7.3'
-    compile 'org.apache.avro:avro:1.7.7'
-    compile 'org.apache.avro:avro-mapred:1.7.7'
-    compile 'com.fasterxml.jackson.core:jackson-core:2.8.7'
+
+    testCompile group: 'junit', name: 'junit', version: '4.11'
 }
 
 //create a single Jar with all dependencies
 task fatJar(type: Jar) {
     manifest {
-        attributes 'Implementation-Title': 'Gradle Jar File Example',
+        attributes 'Implementation-Title': 'radar-restructure-hdfs',
                 'Implementation-Version': version,
-                'Main-Class': 'org.radarcns.RestructureAvroRecords'
+                'Main-Class': mainClassName
     }
     baseName = project.name + '-all'
-    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    from { configurations.runtime.collect {
+        it.isDirectory() ? it : zipTree(it).matching{ exclude { it.path.contains('META-INF') } }
+    } }
     with jar
 }
 
