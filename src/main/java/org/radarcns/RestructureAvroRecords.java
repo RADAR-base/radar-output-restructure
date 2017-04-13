@@ -122,19 +122,12 @@ public class RestructureAvroRecords {
 
         String topicName = topicPath.getName();
 
-        long t1 = System.currentTimeMillis();
-
         try (FileCache cache = new FileCache(100)) {
             while (files.hasNext()) {
                 LocatedFileStatus locatedFileStatus = files.next();
 
                 if (locatedFileStatus.isFile()) {
                     this.processFile(locatedFileStatus.getPath(), topicName, cache);
-                    if (processedFileCount == 10) {
-                        double diff = (System.currentTimeMillis() - t1) / 1000d;
-                        logger.info("Processed 10 files in {} seconds", diff);
-                        System.exit(0);
-                    }
                 }
             }
         }
