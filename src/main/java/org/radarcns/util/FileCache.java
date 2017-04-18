@@ -48,7 +48,7 @@ public class FileCache implements Flushable, Closeable {
             ensureCapacity();
 
             File dir = file.getParentFile();
-            if (!file.getParentFile().exists()){
+            if (!dir.exists()){
                 if (dir.mkdirs()) {
                     logger.debug("Created directory: {}", dir.getAbsolutePath());
                 } else {
