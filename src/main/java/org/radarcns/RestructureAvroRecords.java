@@ -57,7 +57,11 @@ public class RestructureAvroRecords {
         long time1 = System.currentTimeMillis();
 
         RestructureAvroRecords restr = new RestructureAvroRecords(args[0], args[2]);
-        restr.start(args[1]);
+        try {
+            restr.start(args[1]);
+        } catch (IOException ex) {
+            logger.error("Processing failed", ex);
+        }
 
         logger.info("Processed %d files and %,d records", restr.getProcessedFileCount(), restr.getProcessedRecordsCount());
         logger.info("Time taken: %.2f seconds", (System.currentTimeMillis() - time1)/1000d);
