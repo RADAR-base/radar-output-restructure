@@ -1,7 +1,12 @@
 package org.radarcns;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -9,9 +14,13 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
 import org.apache.avro.file.DataFileReader;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.DatumReader;
+import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.mapred.FsInput;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -38,6 +47,7 @@ public class RestructureAvroRecords {
 
     private final Configuration conf = new Configuration();
     private final DatumReader<GenericRecord> datumReader;
+    private final ObjectWriter writer;
 
     private int processedFileCount;
     private int processedRecordsCount;
@@ -74,6 +84,16 @@ public class RestructureAvroRecords {
         this.setInputWebHdfsURL(inputPath);
         this.setOutputPath(outputPath);
         datumReader = new GenericDatumReader<>();
+
+        ObjectMapper mapper = new ObjectMapper(new JsonFactory());
+        // only serialize fields, not getters, etc.
+        mapper.setVisibility(mapper.getSerializationConfig().getDefaultVisibilityChecker()
+                .withFieldVisibility(JsonAutoDetect.Visibility.ANY)
+                .withGetterVisibility(JsonAutoDetect.Visibility.NONE)
+                .withIsGetterVisibility(JsonAutoDetect.Visibility.NONE)
+                .withSetterVisibility(JsonAutoDetect.Visibility.NONE)
+                .withCreatorVisibility(JsonAutoDetect.Visibility.NONE));
+        writer = mapper.writer();
     }
 
     public void setInputWebHdfsURL(String fileSystemURL) {
@@ -172,7 +192,8 @@ public class RestructureAvroRecords {
         processedFileCount++;
     }
 
-    private void writeRecord(GenericRecord record, String topicName, FileCache cache) throws IOException {
+    private void writeRecord(GenericRecord record, String topicName, FileCache cache)
+            throws IOException {
         GenericRecord keyField = (GenericRecord) record.get("keyField");
         GenericRecord valueField = (GenericRecord) record.get("valueField");
 
@@ -236,4 +257,6 @@ public class RestructureAvroRecords {
             logger.info("Offsets file does not exist yet, will be created.");
         }
     }
+
+
 }

@@ -1,0 +1,19 @@
+{
+  "type": "record",
+  "name": "full",
+  "fields": [
+    {"name": "a", "type": "string"},
+    {"name": "b", "type": "bytes"},
+    {"name": "c", "type": {"type": "fixed", "size": 1, "name": "md5"}},
+    {"name": "d", "type": "long"},
+    {"name": "e", "type": "double"},
+    {"name": "f", "type": "float"},
+    {"name": "g", "type": "int"},
+    {"name": "h", "type": "null"},
+    {"name": "i", "type": {"type": "map", "values": "int"}},
+    {"name": "j", "type": {"type": "array", "items": ["null", "string", "full"]}},
+    {"name": "k", "type": {"name": "KEnum", "type": "enum", "symbols": ["S", "Y", "M"]}},
+    {"name": "l", "type": {"name": "LRecord", "type": "record", "fields": [{"name": "la", "type": ["null", "string"]}]}},
+    {"name": "m", "type": "boolean"}
+  ]
+}
