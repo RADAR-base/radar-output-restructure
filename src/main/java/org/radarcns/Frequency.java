@@ -16,6 +16,8 @@
 
 package org.radarcns;
 
+import org.apache.avro.Schema.Field;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.collections.MapIterator;
 import org.apache.commons.collections.keyvalue.MultiKey;
 import org.apache.commons.collections.map.MultiKeyMap;
@@ -48,15 +50,15 @@ public class Frequency {
         }
     }
 
-    public void addToBin(String topicName, String id, Double time, int countToAdd) {
+    public void addToBin(String topicName, String id, GenericRecord valueField, Field timeField, int countToAdd) {
         // Hour resolution
-        String hourlyTimestamp = RestructureAvroRecords.createHourTimestamp(time);
+        String hourlyTimestamp = RestructureAvroRecords.createHourTimestamp(valueField, timeField);
 
         addToBin(topicName, id, hourlyTimestamp, countToAdd);
     }
 
-    public void addToBin(String topicName, String id, Double time) {
-        addToBin(topicName, id, time, 1);
+    public void addToBin(String topicName, String id, GenericRecord valueField, Field timeField) {
+        addToBin(topicName, id, valueField, timeField, 1);
     }
 
     public void printBins() {

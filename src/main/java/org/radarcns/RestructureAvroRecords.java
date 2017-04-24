@@ -20,6 +20,7 @@ import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import org.apache.avro.Schema.Field;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
@@ -208,12 +209,16 @@ public class RestructureAvroRecords {
 
     private void writeRecord(GenericRecord record, String topicName, FileCache cache)
             throws IOException {
-        GenericRecord keyField = (GenericRecord) record.get("keyField");
-        GenericRecord valueField = (GenericRecord) record.get("valueField");
+        GenericRecord keyField = (GenericRecord) record.get("key");
+        GenericRecord valueField = (GenericRecord) record.get("value");
 
-        // Make a timestamped filename YYYYMMDD_HH00.json
-        String hourlyTimestamp = createHourTimestamp( (Double) valueField.get("time"));
-        String outputFileName = hourlyTimestamp + "00." + outputFileExtension;
+        if (keyField == null || valueField == null) {
+            logger.error("Failed to process {}", record);
+            throw new IOException("Failed to process " + record + "; no key or value");
+        }
+
+        Field timeField = valueField.getSchema().getField("time");
+        String outputFileName = createFilename(valueField, timeField);
 
         // Clean user id and create final output pathname
         String userId = keyField.get("userId").toString().replaceAll("\\W+", "");
@@ -225,13 +230,28 @@ public class RestructureAvroRecords {
         cache.writeRecord(outputFile, record);
 
         // Count data (binned and total)
-        bins.addToBin(topicName, keyField.get("sourceId").toString(), (Double) valueField.get("time"));
+        bins.addToBin(topicName, keyField.get("sourceId").toString(), valueField, timeField);
         processedRecordsCount++;
     }
 
-    public static String createHourTimestamp(Double time) {
+    private String createFilename(GenericRecord valueField, Field timeField) {
+        if (timeField == null) {
+            logger.warn("Time field of record valueField " + valueField + " is not set");
+            return "unknown." + outputFileExtension;
+        }
+        // Make a timestamped filename YYYYMMDD_HH00.json
+        String hourlyTimestamp = createHourTimestamp(valueField, timeField);
+        return hourlyTimestamp + "00." + outputFileExtension;
+    }
+
+    public static String createHourTimestamp(GenericRecord valueField, Field timeField) {
+        if (timeField == null) {
+            return "unknown";
+        }
+
+        double time = (Double) valueField.get(timeField.pos());
         // Convert from millis to date and apply dateFormat
-        Date date = new Date( time.longValue() * 1000 );
+        Date date = new Date((long) (time * 1000d));
         return FILE_DATE_FORMAT.format(date);
     }
 }
