@@ -64,8 +64,8 @@ public class RestructureAvroRecords {
             logger.error("Processing failed", ex);
         }
 
-        logger.info("Processed %d files and %,d records", restr.getProcessedFileCount(), restr.getProcessedRecordsCount());
-        logger.info("Time taken: %.2f seconds", (System.currentTimeMillis() - time1)/1000d);
+        logger.info("Processed {} files and {} records", restr.getProcessedFileCount(), restr.getProcessedRecordsCount());
+        logger.info("Time taken: {} seconds", (System.currentTimeMillis() - time1)/1000d);
     }
 
     public RestructureAvroRecords(String inputPath, String outputPath) {
