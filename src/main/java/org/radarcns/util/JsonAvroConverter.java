@@ -1,5 +1,12 @@
 package org.radarcns.util;
 
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.util.MinimalPrettyPrinter;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
+import java.io.IOException;
+import java.io.Writer;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -11,11 +18,27 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 
-/**
- * Created by joris on 20/04/2017.
- */
-public class AvroConverter {
-    public static Map<String, Object> convertRecord(GenericRecord record) {
+public final class JsonAvroConverter implements RecordConverter {
+
+    public static RecordConverterFactory getFactory() {
+        JsonFactory factory = new JsonFactory();
+        return (writer, record, writeHeader) -> new JsonAvroConverter(factory, writer);
+    }
+
+    private final ObjectWriter jsonWriter;
+    private final JsonGenerator generator;
+
+    public JsonAvroConverter(JsonFactory factory, Writer writer) throws IOException {
+        generator = factory.createGenerator(writer).setPrettyPrinter(new MinimalPrettyPrinter("\n"));
+        jsonWriter = new ObjectMapper(factory).writer();
+    }
+
+    @Override
+    public void writeRecord(GenericRecord record) throws IOException {
+        jsonWriter.writeValue(generator, convertRecord(record));
+    }
+
+    public Map<String, Object> convertRecord(GenericRecord record) {
         Map<String, Object> map = new HashMap<>();
         Schema schema = record.getSchema();
         for (Field field : schema.getFields()) {
@@ -24,7 +47,7 @@ public class AvroConverter {
         return map;
     }
 
-    private static Object convertAvro(Object data, Schema schema) {
+    private Object convertAvro(Object data, Schema schema) {
         switch (schema.getType()) {
             case RECORD:
                 return convertRecord((GenericRecord) data);
@@ -66,5 +89,15 @@ public class AvroConverter {
             default:
                 throw new IllegalArgumentException("Cannot parse field type " + schema.getType());
         }
+    }
+
+    @Override
+    public void flush() throws IOException {
+        generator.flush();
+    }
+
+    @Override
+    public void close() throws IOException {
+        generator.close();
     }
 }

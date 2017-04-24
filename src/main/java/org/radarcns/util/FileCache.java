@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import javax.annotation.Nonnull;
+import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,10 +23,12 @@ import org.slf4j.LoggerFactory;
 public class FileCache implements Flushable, Closeable {
     private static final Logger logger = LoggerFactory.getLogger(FileCache.class);
 
+    private RecordConverterFactory converterFactory;
     private final int maxFiles;
     private final Map<File, SingleFileCache> caches;
 
-    public FileCache(int maxFiles) {
+    public FileCache(RecordConverterFactory converterFactory, int maxFiles) {
+        this.converterFactory = converterFactory;
         this.maxFiles = maxFiles;
         this.caches = new HashMap<>(maxFiles * 4 / 3 + 1);
     }
@@ -35,14 +39,14 @@ public class FileCache implements Flushable, Closeable {
      * those will be used. Otherwise, the file will be opened and the file handle cached.
      *
      * @param file file to append data to
-     * @param data data without line ending
+     * @param record data without line ending
      * @return true if the cache was used, false if a new file was opened.
      * @throws IOException when failing to open a file or writing to it.
      */
-    public boolean appendLine(File file, String data) throws IOException {
+    public boolean writeRecord(File file, GenericRecord record) throws IOException {
         SingleFileCache cache = caches.get(file);
         if (cache != null) {
-            cache.appendLine(data);
+            cache.writeRecord(record);
             return true;
         } else {
             ensureCapacity();
@@ -56,9 +60,9 @@ public class FileCache implements Flushable, Closeable {
                 }
             }
 
-            cache = new SingleFileCache(file);
+            cache = new SingleFileCache(file, record);
             caches.put(file, cache);
-            cache.appendLine(data);
+            cache.writeRecord(record);
             return false;
         }
     }
@@ -96,37 +100,40 @@ public class FileCache implements Flushable, Closeable {
         }
     }
 
-    private static class SingleFileCache implements Closeable, Flushable, Comparable<SingleFileCache> {
+    private class SingleFileCache implements Closeable, Flushable, Comparable<SingleFileCache> {
         private final BufferedWriter bufferedWriter;
         private final Writer fileWriter;
+        private final RecordConverter recordConverter;
         private final File file;
         private long lastUse;
 
-        private SingleFileCache(File file) throws IOException {
+        private SingleFileCache(File file, GenericRecord record) throws IOException {
             this.file = file;
+            boolean fileIsNew = !file.exists() || file.length() == 0;
             this.fileWriter = new FileWriter(file, true);
             this.bufferedWriter = new BufferedWriter(fileWriter);
+            this.recordConverter = converterFactory.converterFor(bufferedWriter, record, fileIsNew);
         }
 
-        private void appendLine(String data) throws IOException {
-            bufferedWriter.write(data);
-            bufferedWriter.write('\n');
+        private void writeRecord(GenericRecord record) throws IOException {
+            this.recordConverter.writeRecord(record);
             lastUse = System.nanoTime();
         }
 
         @Override
         public void close() throws IOException {
+            recordConverter.close();
             bufferedWriter.close();
             fileWriter.close();
         }
 
         @Override
         public void flush() throws IOException {
-            bufferedWriter.flush();
+            recordConverter.flush();
         }
 
         @Override
-        public int compareTo(SingleFileCache other) {
+        public int compareTo(@Nonnull SingleFileCache other) {
             return Long.compare(lastUse, other.lastUse);
         }
 

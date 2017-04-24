@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.StringWriter;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -20,7 +21,7 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.JsonDecoder;
 import org.junit.Test;
 
-public class AvroConverterTest {
+public class JsonAvroConverterTest {
     @Test
     public void fullAvroTest() throws IOException {
         Parser parser = new Parser();
@@ -29,7 +30,7 @@ public class AvroConverterTest {
         JsonDecoder decoder = DecoderFactory.get().jsonDecoder(schema, getClass().getResourceAsStream("full.json"));
         GenericRecord record = reader.read(null, decoder);
 
-        Map<String, Object> map = AvroConverter.convertRecord(record);
+        Map<String, Object> map = JsonAvroConverter.getFactory().converterFor(new StringWriter(), record, false).convertRecord(record);
         ObjectWriter writer = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT).writer();
         String result = writer.writeValueAsString(map);
 
