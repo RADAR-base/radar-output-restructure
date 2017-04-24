@@ -34,12 +34,11 @@ public class FileCache implements Flushable, Closeable {
     }
 
     /**
-     * Append a line to given file. This will append a line ending to given data.
-     * If the file handle and writer are already open in this cache,
+     * Append a record to given file. If the file handle and writer are already open in this cache,
      * those will be used. Otherwise, the file will be opened and the file handle cached.
      *
      * @param file file to append data to
-     * @param record data without line ending
+     * @param record data
      * @return true if the cache was used, false if a new file was opened.
      * @throws IOException when failing to open a file or writing to it.
      */

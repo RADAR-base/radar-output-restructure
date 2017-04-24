@@ -16,6 +16,10 @@ import java.io.FileWriter;
 import java.io.Flushable;
 import java.io.IOException;
 
+/**
+ * Accesses a OffsetRange file using the CSV format. On construction, this will create the file if
+ * not present.
+ */
 public class OffsetRangeFile implements Flushable, Closeable {
     private final CsvMapper mapper;
     private final CsvSchema schema;

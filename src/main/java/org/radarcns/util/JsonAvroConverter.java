@@ -18,6 +18,9 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 
+/**
+ * Writes an Avro record to JSON format.
+ */
 public final class JsonAvroConverter implements RecordConverter {
 
     public static RecordConverterFactory getFactory() {

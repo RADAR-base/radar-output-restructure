@@ -17,6 +17,11 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 
+/**
+ * Converts deep hierarchical Avro records into flat CSV format. It uses a simple dot syntax in the
+ * column names to indicate hierarchy. After the first data record is added, all following
+ * records need to have exactly the same hierarchy (or at least a subset of it.)
+ */
 public class CsvAvroConverter implements RecordConverter {
 
     public static RecordConverterFactory getFactory() {

@@ -73,6 +73,7 @@ public class OffsetRangeSet {
         return "OffsetRangeSet" + ranges;
     }
 
+    /** Whether the stored offsets is empty. */
     public boolean isEmpty() {
         return ranges.isEmpty();
     }
