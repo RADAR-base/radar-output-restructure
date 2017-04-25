@@ -16,6 +16,9 @@
 
 package org.radarcns;
 
+import java.nio.file.Files;
+import java.util.Objects;
+import javax.annotation.Nonnull;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.collections.MapIterator;
@@ -30,38 +33,46 @@ import org.slf4j.LoggerFactory;
 public class Frequency {
     private static final Logger logger = LoggerFactory.getLogger(Frequency.class);
 
-    private MultiKeyMap bins = new MultiKeyMap();
-    private File binFilePath;
+    private final MultiKeyMap bins;
+    private final File file;
 
-    public void setBinFilePath(File binFilePath) {
-        this.binFilePath = binFilePath;
+    public Frequency(@Nonnull File file, @Nonnull MultiKeyMap initialData) {
+        Objects.requireNonNull(file);
+        Objects.requireNonNull(initialData);
+        this.file = file;
+        this.bins = initialData;
     }
 
-    public MultiKeyMap getBins() {
-        return bins;
+    public static Frequency read(File file) {
+        MultiKeyMap map = new MultiKeyMap();
+        try {
+            // Read in all lines as multikeymap (key, key, key, value)
+            Files.readAllLines(file.toPath()).forEach(line -> {
+                String[] columns = line.split(",");
+                try {
+                    map.put(columns[0], columns[1], columns[2], Integer.valueOf(columns[3]));
+                } catch (ArrayIndexOutOfBoundsException ex) {
+                    logger.warn("Unable to row of the bins file. Skipping.");
+                }
+            });
+        } catch (IOException e) {
+            logger.warn("Could not read the file with bins. Creating new file when writing.");
+        }
+        return new Frequency(file, map);
     }
 
-    public void addToBin(String topicName, String id, String timestamp, int countToAdd) {
+    public void add(String topicName, String id, GenericRecord valueField, Field timeField) {
+        String timestamp = RestructureAvroRecords.createHourTimestamp(valueField, timeField);
+
         Integer count = (Integer) bins.get(topicName, id, timestamp);
         if (count == null) {
-            bins.put(topicName, id, timestamp, countToAdd);
+            bins.put(topicName, id, timestamp, 1);
         } else {
-            bins.put(topicName, id, timestamp, count + countToAdd);
+            bins.put(topicName, id, timestamp, count + 1);
         }
     }
 
-    public void addToBin(String topicName, String id, GenericRecord valueField, Field timeField, int countToAdd) {
-        // Hour resolution
-        String hourlyTimestamp = RestructureAvroRecords.createHourTimestamp(valueField, timeField);
-
-        addToBin(topicName, id, hourlyTimestamp, countToAdd);
-    }
-
-    public void addToBin(String topicName, String id, GenericRecord valueField, Field timeField) {
-        addToBin(topicName, id, valueField, timeField, 1);
-    }
-
-    public void printBins() {
+    public void print() {
         MapIterator mapIterator = bins.mapIterator();
 
         while (mapIterator.hasNext()) {
@@ -71,50 +82,24 @@ public class Frequency {
         }
     }
 
-    public void writeBins() {
-        // Read bins from file and add to current bins
-        // Creates new bins if not existing yet
-        addBinsFromFile();
-
+    public void write() {
         // Write all bins to csv
         MapIterator mapIterator = bins.mapIterator();
-        try(FileWriter fw = new FileWriter(binFilePath, false);
-            BufferedWriter bw = new BufferedWriter(fw);
-            PrintWriter out = new PrintWriter(bw))
-        {
+        try (FileWriter fw = new FileWriter(file, false);
+                BufferedWriter bw = new BufferedWriter(fw)) {
             String header = String.join(",","topic","device","timestamp","count");
-            out.println(header);
+            bw.write(header);
+            bw.write('\n');
 
             while (mapIterator.hasNext()) {
                 MultiKey key = (MultiKey) mapIterator.next();
                 Integer value = (Integer) mapIterator.getValue();
                 String data = String.join(",", key.getKey(0).toString(), key.getKey(1).toString(), key.getKey(2).toString(), value.toString());
-                out.println(data);
+                bw.write(data);
+                bw.write('\n');
             }
         } catch (IOException e) {
-            // TODO: exception handling
-            e.printStackTrace();
-        }
-
-        // Reset the map
-        bins = new MultiKeyMap();
-    }
-
-    private void addBinsFromFile() {
-        try (FileReader fr = new FileReader(binFilePath);
-             BufferedReader br = new BufferedReader(fr))
-        {
-            // Read in all lines as multikeymap (key, key, key, value)
-            String line;
-            br.readLine(); // Skip header
-            while ( (line = br.readLine()) != null ) {
-                String[] columns = line.split(",");
-                this.addToBin(columns[0], columns[1], columns[2], Integer.valueOf(columns[3]));
-            }
-        } catch (IOException e) {
-            logger.warn("Could not read the file with bins. Creating new file when writing.");
-        } catch (ArrayIndexOutOfBoundsException e) {
-            logger.warn("Unable to parse the contents of the bins file. Skipping reading.");
+            logger.error("Failed to write bins", e);
         }
     }
 }

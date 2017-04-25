@@ -24,7 +24,6 @@ import org.apache.avro.Schema.Field;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.io.DatumReader;
 import org.apache.avro.mapred.FsInput;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -52,16 +51,14 @@ public class RestructureAvroRecords {
     private File outputPath;
     private File offsetsPath;
     private OffsetRangeSet seenFiles;
-    private final Frequency bins = new Frequency();
+    private Frequency bins;
 
     private final Configuration conf = new Configuration();
-    private DatumReader<GenericRecord> datumReader;
 
     private int processedFileCount;
     private int processedRecordsCount;
 
     public static void main(String [] args) throws Exception {
-//        Thread.sleep(120_000);
         if (args.length != 3) {
             System.out.println("Usage: hadoop jar restructurehdfs-all-0.1.0.jar <webhdfs_url> <hdfs_topic> <output_folder>");
             System.exit(1);
@@ -106,7 +103,7 @@ public class RestructureAvroRecords {
         // Remove trailing backslash
         outputPath = new File(path.replaceAll("/$",""));
         offsetsPath = new File(outputPath, OFFSETS_FILE_NAME);
-        bins.setBinFilePath(new File(outputPath, BINS_FILE_NAME));
+        bins = Frequency.read(new File(outputPath, BINS_FILE_NAME));
     }
 
     public int getProcessedFileCount() {
@@ -154,7 +151,6 @@ public class RestructureAvroRecords {
         RemoteIterator<LocatedFileStatus> files = fs.listFiles(topicPath, true);
 
         String topicName = topicPath.getName();
-        datumReader = new GenericDatumReader<>();
 
         try (FileCache cache = new FileCache(converterFactory, 100)) {
             while (files.hasNext()) {
@@ -187,7 +183,8 @@ public class RestructureAvroRecords {
 
         // Read and parse avro file
         FsInput input = new FsInput(filePath, conf);
-        DataFileReader<GenericRecord> dataFileReader = new DataFileReader<>(input, datumReader);
+        DataFileReader<GenericRecord> dataFileReader = new DataFileReader<>(input,
+                new GenericDatumReader<>());
 
         GenericRecord record = null;
         while (dataFileReader.hasNext()) {
@@ -200,7 +197,7 @@ public class RestructureAvroRecords {
         // Write which file has been processed and update bins
         try {
             offsets.write(range);
-            bins.writeBins();
+            bins.write();
         } catch (IOException ex) {
             logger.warn("Failed to update status. Continuing processing.", ex);
         }
@@ -230,7 +227,7 @@ public class RestructureAvroRecords {
         cache.writeRecord(outputFile, record);
 
         // Count data (binned and total)
-        bins.addToBin(topicName, keyField.get("sourceId").toString(), valueField, timeField);
+        bins.add(topicName, keyField.get("sourceId").toString(), valueField, timeField);
         processedRecordsCount++;
     }
 
