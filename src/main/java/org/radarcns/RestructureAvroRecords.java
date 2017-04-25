@@ -49,13 +49,13 @@ public class RestructureAvroRecords {
 
     private final RecordConverterFactory converterFactory;
 
-    private File outputPath = new File(".");
-    private File offsetsPath = new File(outputPath, OFFSETS_FILE_NAME);
+    private File outputPath;
+    private File offsetsPath;
     private OffsetRangeSet seenFiles;
     private final Frequency bins = new Frequency();
 
     private final Configuration conf = new Configuration();
-    private final DatumReader<GenericRecord> datumReader;
+    private DatumReader<GenericRecord> datumReader;
 
     private int processedFileCount;
     private int processedRecordsCount;
@@ -88,7 +88,6 @@ public class RestructureAvroRecords {
     public RestructureAvroRecords(String inputPath, String outputPath) {
         this.setInputWebHdfsURL(inputPath);
         this.setOutputPath(outputPath);
-        datumReader = new GenericDatumReader<>();
 
         if (System.getProperty("org.radarcns.format", "csv").equalsIgnoreCase("json")) {
             converterFactory = JsonAvroConverter.getFactory();
@@ -155,6 +154,7 @@ public class RestructureAvroRecords {
         RemoteIterator<LocatedFileStatus> files = fs.listFiles(topicPath, true);
 
         String topicName = topicPath.getName();
+        datumReader = new GenericDatumReader<>();
 
         try (FileCache cache = new FileCache(converterFactory, 100)) {
             while (files.hasNext()) {
