@@ -1,5 +1,7 @@
 # Restructure HDFS files
 
+[![Build Status](https://travis-ci.org/RADAR-CNS/Restructure-HDFS-topic.svg?branch=master)](https://travis-ci.org/RADAR-CNS/Restructure-HDFS-topic)
+
 Build jar from source with
 
 ```shell
