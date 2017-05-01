@@ -2,11 +2,11 @@ apply plugin: 'java'
 apply plugin: 'application'
 
 group 'org.radarcns.restructurehdfs'
-version '0.1-SNAPSHOT'
+version '0.1'
 mainClassName = 'org.radarcns.RestructureAvroRecords'
 
 run {
-    args = ['webhdfs://radar-test.thehyve.net:50070', '/topicAndroidPhoneNew/android_phone_sensor_acceleration', "${projectDir}/data"]
+    args = ['webhdfs://localhost:50070', '/topicAndroidNew/android_phone_sensor_acceleration', "${projectDir}/data"]
 }
 
 sourceCompatibility = '1.8'
