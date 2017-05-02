@@ -20,6 +20,7 @@ import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.TimeZone;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.generic.GenericDatumReader;
@@ -45,6 +46,10 @@ public class RestructureAvroRecords {
     private static final String OFFSETS_FILE_NAME = "offsets.csv";
     private static final String BINS_FILE_NAME = "bins.csv";
     private static final SimpleDateFormat FILE_DATE_FORMAT = new SimpleDateFormat("yyyyMMdd_HH");
+
+    static {
+        FILE_DATE_FORMAT.setTimeZone(TimeZone.getTimeZone("UTC"));
+    }
 
     private final RecordConverterFactory converterFactory;
 

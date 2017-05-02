@@ -2,7 +2,7 @@ apply plugin: 'java'
 apply plugin: 'application'
 
 group 'org.radarcns.restructurehdfs'
-version '0.1'
+version '0.1.1-SNAPSHOT'
 mainClassName = 'org.radarcns.RestructureAvroRecords'
 
 run {
