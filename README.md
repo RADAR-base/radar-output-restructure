@@ -18,7 +18,7 @@ Build jar from source with
 and find the output JAR file as `build/libs/restructurehdfs-all-0.1.1.jar`. Then run with:
 
 ```shell
-java -jar restructurehdfs-all-0.1.1-SNAPSHOT.jar <webhdfs_url> <hdfs_topic_path> <output_folder>
+java -jar restructurehdfs-all-0.1.1.jar <webhdfs_url> <hdfs_topic_path> <output_folder>
 ```
 
 By default, this will output the data in CSV format. If JSON format is preferred, use the following instead:
