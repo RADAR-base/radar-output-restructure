@@ -17,6 +17,7 @@
 package org.radarcns;
 
 import java.nio.file.Files;
+import java.util.List;
 import java.util.Objects;
 import javax.annotation.Nonnull;
 import org.apache.avro.Schema.Field;
@@ -47,12 +48,13 @@ public class Frequency {
         MultiKeyMap map = new MultiKeyMap();
         try {
             // Read in all lines as multikeymap (key, key, key, value)
-            Files.readAllLines(file.toPath()).forEach(line -> {
+            List<String> lines = Files.readAllLines(file.toPath());
+            lines.subList(1, lines.size()).forEach(line -> {
                 String[] columns = line.split(",");
                 try {
                     map.put(columns[0], columns[1], columns[2], Integer.valueOf(columns[3]));
                 } catch (ArrayIndexOutOfBoundsException ex) {
-                    logger.warn("Unable to row of the bins file. Skipping.");
+                    logger.warn("Unable to read row of the bins file. Skipping.");
                 }
             });
         } catch (IOException e) {
