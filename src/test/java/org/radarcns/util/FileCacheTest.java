@@ -17,66 +17,145 @@
 package org.radarcns.util;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNull;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileReader;
 import java.io.IOException;
-import java.nio.file.Files;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.util.zip.GZIPInputStream;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
-import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericData.Record;
 import org.apache.avro.generic.GenericRecordBuilder;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
+/**
+ * Created by joris on 03/07/2017.
+ */
 public class FileCacheTest {
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
+    private File file;
+    private RecordConverterFactory csvFactory;
+    private Record exampleRecord;
 
-    @Test
-    public void appendLine() throws IOException {
-        File f1 = folder.newFile();
-        File f2 = folder.newFile();
-        File f3 = folder.newFile();
-        File d4 = folder.newFolder();
-        File f4 = new File(d4, "f4.txt");
-
-        assertTrue(f1.delete());
-        assertTrue(d4.delete());
-
-        RecordConverterFactory csvFactory = CsvAvroConverter.getFactory();
-        Schema simpleSchema = SchemaBuilder.record("simple").fields()
+    @Before
+    public void setUp() throws IOException {
+        this.file = folder.newFile("f");
+        this.csvFactory = CsvAvroConverter.getFactory();
+        Schema schema = SchemaBuilder.record("simple").fields()
                 .name("a").type("string").noDefault()
                 .endRecord();
+        this.exampleRecord = new GenericRecordBuilder(schema).set("a", "something").build();
+    }
 
-        GenericRecord record;
-
-        try (FileCache cache = new FileCache(csvFactory, 2)) {
-            record = new GenericRecordBuilder(simpleSchema).set("a", "something").build();
-            assertFalse(cache.writeRecord(f1, record));
-            record = new GenericRecordBuilder(simpleSchema).set("a", "somethingElse").build();
-            assertTrue(cache.writeRecord(f1, record));
-            record = new GenericRecordBuilder(simpleSchema).set("a", "something").build();
-            assertFalse(cache.writeRecord(f2, record));
-            record = new GenericRecordBuilder(simpleSchema).set("a", "third").build();
-            assertTrue(cache.writeRecord(f1, record));
-            record = new GenericRecordBuilder(simpleSchema).set("a", "f3").build();
-            assertFalse(cache.writeRecord(f3, record));
-            record = new GenericRecordBuilder(simpleSchema).set("a", "f2").build();
-            assertFalse(cache.writeRecord(f2, record));
-            record = new GenericRecordBuilder(simpleSchema).set("a", "f3").build();
-            assertTrue(cache.writeRecord(f3, record));
-            record = new GenericRecordBuilder(simpleSchema).set("a", "f4").build();
-            assertFalse(cache.writeRecord(f4, record));
-            record = new GenericRecordBuilder(simpleSchema).set("a", "f3").build();
-            assertTrue(cache.writeRecord(f3, record));
+    @Test
+    public void testGzip() throws IOException {
+        try (FileCache cache = new FileCache(csvFactory, file, exampleRecord, true)) {
+            cache.writeRecord(exampleRecord);
         }
 
-        assertEquals("a\nsomething\nsomethingElse\nthird\n", new String(Files.readAllBytes(f1.toPath())));
-        assertEquals("a\nsomething\nf2\n", new String(Files.readAllBytes(f2.toPath())));
-        assertEquals("a\nf3\nf3\nf3\n", new String(Files.readAllBytes(f3.toPath())));
-        assertEquals("a\nf4\n", new String(Files.readAllBytes(f4.toPath())));
+        System.out.println("Gzip: " + file.length());
+
+        try (FileInputStream fin = new FileInputStream(file);
+                GZIPInputStream gzipIn = new GZIPInputStream(fin);
+                Reader readerIn = new InputStreamReader(gzipIn);
+                BufferedReader reader = new BufferedReader(readerIn)) {
+            assertEquals("a", reader.readLine());
+            assertEquals("something", reader.readLine());
+            assertNull(reader.readLine());
+        }
+    }
+
+    @Test
+    public void testGzipAppend() throws IOException {
+        try (FileCache cache = new FileCache(csvFactory, file, exampleRecord, true)) {
+            cache.writeRecord(exampleRecord);
+        }
+
+        try (FileCache cache = new FileCache(csvFactory, file, exampleRecord, true)) {
+            cache.writeRecord(exampleRecord);
+        }
+
+        System.out.println("Gzip appended: " + file.length());
+
+        try (FileInputStream fin = new FileInputStream(file);
+                GZIPInputStream gzipIn = new GZIPInputStream(fin);
+                Reader readerIn = new InputStreamReader(gzipIn);
+                BufferedReader reader = new BufferedReader(readerIn)) {
+            assertEquals("a", reader.readLine());
+            assertEquals("something", reader.readLine());
+            assertEquals("something", reader.readLine());
+            assertNull(reader.readLine());
+        }
+    }
+
+
+    @Test
+    public void testPlain() throws IOException {
+        try (FileCache cache = new FileCache(csvFactory, file, exampleRecord, false)) {
+            cache.writeRecord(exampleRecord);
+        }
+
+        System.out.println("Plain: " + file.length());
+
+        try (FileReader readerIn = new FileReader(file);
+                BufferedReader reader = new BufferedReader(readerIn)) {
+            assertEquals("a", reader.readLine());
+            assertEquals("something", reader.readLine());
+            assertNull(reader.readLine());
+        }
+    }
+
+    @Test
+    public void testPlainAppend() throws IOException {
+        try (FileCache cache = new FileCache(csvFactory, file, exampleRecord, false)) {
+            cache.writeRecord(exampleRecord);
+        }
+
+        try (FileCache cache = new FileCache(csvFactory, file, exampleRecord, false)) {
+            cache.writeRecord(exampleRecord);
+        }
+
+        System.out.println("Plain appended: " + file.length());
+
+        try (FileReader readerIn = new FileReader(file);
+                BufferedReader reader = new BufferedReader(readerIn)) {
+            assertEquals("a", reader.readLine());
+            assertEquals("something", reader.readLine());
+            assertEquals("something", reader.readLine());
+            assertNull(reader.readLine());
+        }
+    }
+
+    @Test
+    public void compareTo() throws IOException {
+        File file3 = folder.newFile("g");
+
+        try (FileCache cache1 = new FileCache(csvFactory, file, exampleRecord, false);
+                FileCache cache2 = new FileCache(csvFactory, file, exampleRecord, false);
+                FileCache cache3 = new FileCache(csvFactory, file3, exampleRecord, false)) {
+            assertEquals(0, cache1.compareTo(cache2));
+            // filenames are not equal
+            assertEquals(-1, cache1.compareTo(cache3));
+            cache1.writeRecord(exampleRecord);
+            // last used
+            assertEquals(1, cache1.compareTo(cache2));
+            // last used takes precedence over filename
+            assertEquals(1, cache1.compareTo(cache3));
+
+            // last used reversal
+            cache2.writeRecord(exampleRecord);
+            cache3.writeRecord(exampleRecord);
+            assertEquals(-1, cache1.compareTo(cache2));
+            assertEquals(-1, cache1.compareTo(cache3));
+        }
     }
 }
