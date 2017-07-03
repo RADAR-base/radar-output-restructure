@@ -16,144 +16,87 @@
 
 package org.radarcns.util;
 
-import java.io.BufferedWriter;
+import java.io.BufferedOutputStream;
 import java.io.Closeable;
 import java.io.File;
-import java.io.FileWriter;
+import java.io.FileOutputStream;
 import java.io.Flushable;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.io.Writer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.zip.GZIPOutputStream;
 import javax.annotation.Nonnull;
 import org.apache.avro.generic.GenericRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-/**
- * Caches open file handles. If more than the limit is cached, the half of the files that were used
- * the longest ago cache are evicted from cache.
- */
-public class FileCache implements Flushable, Closeable {
-    private static final Logger logger = LoggerFactory.getLogger(FileCache.class);
-
-    private RecordConverterFactory converterFactory;
-    private final int maxFiles;
-    private final Map<File, SingleFileCache> caches;
-
-    public FileCache(RecordConverterFactory converterFactory, int maxFiles) {
-        this.converterFactory = converterFactory;
-        this.maxFiles = maxFiles;
-        this.caches = new HashMap<>(maxFiles * 4 / 3 + 1);
-    }
+/** Keeps file handles of a file. */
+public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
+    private final OutputStream[] streams;
+    private final Writer writer;
+    private final RecordConverter recordConverter;
+    private final File file;
+    private long lastUse;
 
     /**
-     * Append a record to given file. If the file handle and writer are already open in this cache,
-     * those will be used. Otherwise, the file will be opened and the file handle cached.
-     *
-     * @param file file to append data to
-     * @param record data
-     * @return true if the cache was used, false if a new file was opened.
-     * @throws IOException when failing to open a file or writing to it.
+     * File cache of given file, using given converter factory.
+     * @param converterFactory converter factory to create a converter to write files with.
+     * @param file file to cache.
+     * @param record example record to create converter from, this is not written to file.
+     * @param gzip whether to gzip the records
+     * @throws IOException
      */
-    public boolean writeRecord(File file, GenericRecord record) throws IOException {
-        SingleFileCache cache = caches.get(file);
-        if (cache != null) {
-            cache.writeRecord(record);
-            return true;
-        } else {
-            ensureCapacity();
+    public FileCache(RecordConverterFactory converterFactory, File file,
+            GenericRecord record, boolean gzip) throws IOException {
+        this.file = file;
+        boolean fileIsNew = !file.exists() || file.length() == 0;
 
-            File dir = file.getParentFile();
-            if (!dir.exists()){
-                if (dir.mkdirs()) {
-                    logger.debug("Created directory: {}", dir.getAbsolutePath());
-                } else {
-                    logger.warn("FAILED to create directory: {}", dir.getAbsolutePath());
-                }
-            }
-
-            cache = new SingleFileCache(file, record);
-            caches.put(file, cache);
-            cache.writeRecord(record);
-            return false;
+        this.streams = new OutputStream[gzip ? 3 : 2];
+        this.streams[0] = new FileOutputStream(file, true);
+        this.streams[1] = new BufferedOutputStream(this.streams[0]);
+        if (gzip) {
+            this.streams[2] = new GZIPOutputStream(this.streams[1]);
         }
+
+        this.writer = new OutputStreamWriter(this.streams[this.streams.length - 1]);
+        this.recordConverter = converterFactory.converterFor(writer, record, fileIsNew);
     }
 
-    /**
-     * Ensure that a new filecache can be added. Evict files used longest ago from cache if needed.
-     */
-    private void ensureCapacity() throws IOException {
-        if (caches.size() == maxFiles) {
-            ArrayList<SingleFileCache> cacheList = new ArrayList<>(caches.values());
-            Collections.sort(cacheList);
-            for (int i = 0; i < cacheList.size() / 2; i++) {
-                SingleFileCache rmCache = cacheList.get(i);
-                caches.remove(rmCache.getFile());
-                rmCache.close();
-            }
+    /** Write a record to the cache. */
+    public void writeRecord(GenericRecord record) throws IOException {
+        this.recordConverter.writeRecord(record);
+        lastUse = System.nanoTime();
+    }
+
+    @Override
+    public void close() throws IOException {
+        recordConverter.close();
+        writer.close();
+        for (int i = streams.length - 1; i >= 0; i--) {
+            streams[i].close();
         }
     }
 
     @Override
     public void flush() throws IOException {
-        for (SingleFileCache cache : caches.values()) {
-            cache.flush();
-        }
+        recordConverter.flush();
     }
 
+    /**
+     * Compares time that the filecaches were last used. If equal, it lexicographically compares
+     * the absolute path of the file.
+     * @param other FileCache to compare with.
+     */
     @Override
-    public void close() throws IOException {
-        try {
-            for (SingleFileCache cache : caches.values()) {
-                cache.close();
-            }
-        } finally {
-            caches.clear();
+    public int compareTo(@Nonnull FileCache other) {
+        int result = Long.compare(lastUse, other.lastUse);
+        if (result != 0) {
+            return result;
         }
+        return file.compareTo(other.file);
     }
 
-    private class SingleFileCache implements Closeable, Flushable, Comparable<SingleFileCache> {
-        private final BufferedWriter bufferedWriter;
-        private final Writer fileWriter;
-        private final RecordConverter recordConverter;
-        private final File file;
-        private long lastUse;
-
-        private SingleFileCache(File file, GenericRecord record) throws IOException {
-            this.file = file;
-            boolean fileIsNew = !file.exists() || file.length() == 0;
-            this.fileWriter = new FileWriter(file, true);
-            this.bufferedWriter = new BufferedWriter(fileWriter);
-            this.recordConverter = converterFactory.converterFor(bufferedWriter, record, fileIsNew);
-        }
-
-        private void writeRecord(GenericRecord record) throws IOException {
-            this.recordConverter.writeRecord(record);
-            lastUse = System.nanoTime();
-        }
-
-        @Override
-        public void close() throws IOException {
-            recordConverter.close();
-            bufferedWriter.close();
-            fileWriter.close();
-        }
-
-        @Override
-        public void flush() throws IOException {
-            recordConverter.flush();
-        }
-
-        @Override
-        public int compareTo(@Nonnull SingleFileCache other) {
-            return Long.compare(lastUse, other.lastUse);
-        }
-
-        private File getFile() {
-            return file;
-        }
+    /** File that the cache is maintaining. */
+    public File getFile() {
+        return file;
     }
 }

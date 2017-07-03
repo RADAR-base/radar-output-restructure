@@ -25,3 +25,8 @@ By default, this will output the data in CSV format. If JSON format is preferred
 ```
 java -Dorg.radarcns.format=json -jar restructurehdfs-all-0.1.1.jar <webhdfs_url> <hdfs_topic_path> <output_folder>
 ```
+
+Another option is to output the data in compressed form. All files will get the `gz` suffix, and can be decompressed with a GZIP decoder. Note that for a very small number of records, this may actually increase the file size.
+```
+java -Dorg.radarcns.compress=gzip -jar restructurehdfs-all-0.1.1.jar <webhdfs_url> <hdfs_topic_path> <output_folder>
+```

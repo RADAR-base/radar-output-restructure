@@ -33,7 +33,7 @@ import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.radarcns.util.CsvAvroConverter;
-import org.radarcns.util.FileCache;
+import org.radarcns.util.FileCacheStore;
 import org.radarcns.util.JsonAvroConverter;
 import org.radarcns.util.RecordConverterFactory;
 import org.slf4j.Logger;
@@ -62,6 +62,7 @@ public class RestructureAvroRecords {
 
     private int processedFileCount;
     private int processedRecordsCount;
+    private static final boolean USE_GZIP = "gzip".equalsIgnoreCase(System.getProperty("org.radarcns.compression"));
 
     public static void main(String [] args) throws Exception {
         if (args.length != 3) {
@@ -91,13 +92,21 @@ public class RestructureAvroRecords {
         this.setInputWebHdfsURL(inputPath);
         this.setOutputPath(outputPath);
 
+        String extension;
         if (System.getProperty("org.radarcns.format", "csv").equalsIgnoreCase("json")) {
+            logger.info("Writing output files in JSON format");
             converterFactory = JsonAvroConverter.getFactory();
-            outputFileExtension = "json";
+            extension = "json";
         } else {
+            logger.info("Writing output files in CSV format");
             converterFactory = CsvAvroConverter.getFactory();
-            outputFileExtension = "csv";
+            extension = "csv";
         }
+        if (USE_GZIP) {
+            logger.info("Compressing output files in GZIP format");
+            extension += ".gz";
+        }
+        outputFileExtension = extension;
     }
 
     public void setInputWebHdfsURL(String fileSystemURL) {
@@ -157,7 +166,7 @@ public class RestructureAvroRecords {
 
         String topicName = topicPath.getName();
 
-        try (FileCache cache = new FileCache(converterFactory, 100)) {
+        try (FileCacheStore cache = new FileCacheStore(converterFactory, 100, USE_GZIP)) {
             while (files.hasNext()) {
                 LocatedFileStatus locatedFileStatus = files.next();
 
@@ -168,7 +177,7 @@ public class RestructureAvroRecords {
         }
     }
 
-    private void processFile(Path filePath, String topicName, FileCache cache,
+    private void processFile(Path filePath, String topicName, FileCacheStore cache,
             OffsetRangeFile offsets) throws IOException {
         String fileName = filePath.getName();
 
@@ -209,7 +218,7 @@ public class RestructureAvroRecords {
         processedFileCount++;
     }
 
-    private void writeRecord(GenericRecord record, String topicName, FileCache cache)
+    private void writeRecord(GenericRecord record, String topicName, FileCacheStore cache)
             throws IOException {
         GenericRecord keyField = (GenericRecord) record.get("key");
         GenericRecord valueField = (GenericRecord) record.get("value");
