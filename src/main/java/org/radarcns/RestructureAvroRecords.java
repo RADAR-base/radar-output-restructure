@@ -197,6 +197,14 @@ public class RestructureAvroRecords {
 
         // Read and parse avro file
         FsInput input = new FsInput(filePath, conf);
+
+        // processing zero-length files may trigger a stall. See:
+        // https://github.com/RADAR-CNS/Restructure-HDFS-topic/issues/3
+        if (input.length() == 0) {
+            logger.warn("File {} has zero length, skipping.", filePath);
+            return;
+        }
+
         DataFileReader<GenericRecord> dataFileReader = new DataFileReader<>(input,
                 new GenericDatumReader<>());
 
