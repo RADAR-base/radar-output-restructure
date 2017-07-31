@@ -19,22 +19,26 @@ package org.radarcns;
 import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.TimeZone;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.mapred.FsInput;
-import org.apache.commons.io.FilenameUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.radarcns.util.CsvAvroConverter;
-import org.radarcns.util.FileCache;
+import org.radarcns.util.FileCacheStore;
 import org.radarcns.util.JsonAvroConverter;
+import org.radarcns.util.ProgressBar;
 import org.radarcns.util.RecordConverterFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,17 +59,17 @@ public class RestructureAvroRecords {
 
     private File outputPath;
     private File offsetsPath;
-    private OffsetRangeSet seenFiles;
     private Frequency bins;
 
     private final Configuration conf = new Configuration();
 
-    private int processedFileCount;
-    private int processedRecordsCount;
+    private long processedFileCount;
+    private long processedRecordsCount;
+    private static final boolean USE_GZIP = "gzip".equalsIgnoreCase(System.getProperty("org.radarcns.compression"));
 
     public static void main(String [] args) throws Exception {
         if (args.length != 3) {
-            System.out.println("Usage: hadoop jar restructurehdfs-all-0.1.0.jar <webhdfs_url> <hdfs_topic> <output_folder>");
+            System.out.println("Usage: hadoop jar restructurehdfs-all-0.2.jar <webhdfs_url> <hdfs_root_directory> <output_folder>");
             System.exit(1);
         }
 
@@ -91,13 +95,21 @@ public class RestructureAvroRecords {
         this.setInputWebHdfsURL(inputPath);
         this.setOutputPath(outputPath);
 
+        String extension;
         if (System.getProperty("org.radarcns.format", "csv").equalsIgnoreCase("json")) {
+            logger.info("Writing output files in JSON format");
             converterFactory = JsonAvroConverter.getFactory();
-            outputFileExtension = "json";
+            extension = "json";
         } else {
+            logger.info("Writing output files in CSV format");
             converterFactory = CsvAvroConverter.getFactory();
-            outputFileExtension = "csv";
+            extension = "csv";
         }
+        if (USE_GZIP) {
+            logger.info("Compressing output files in GZIP format");
+            extension += ".gz";
+        }
+        outputFileExtension = extension;
     }
 
     public void setInputWebHdfsURL(String fileSystemURL) {
@@ -111,11 +123,11 @@ public class RestructureAvroRecords {
         bins = Frequency.read(new File(outputPath, BINS_FILE_NAME));
     }
 
-    public int getProcessedFileCount() {
+    public long getProcessedFileCount() {
         return processedFileCount;
     }
 
-    public int getProcessedRecordsCount() {
+    public long getProcessedRecordsCount() {
         return processedRecordsCount;
     }
 
@@ -123,71 +135,88 @@ public class RestructureAvroRecords {
         // Get files and directories
         Path path = new Path(directoryName);
         FileSystem fs = FileSystem.get(conf);
-        RemoteIterator<LocatedFileStatus> files = fs.listLocatedStatus(path);
+
 
         try (OffsetRangeFile offsets = new OffsetRangeFile(offsetsPath)) {
+            OffsetRangeSet seenFiles;
             try {
                 seenFiles = offsets.read();
             } catch (IOException ex) {
                 logger.error("Error reading offsets file. Processing all offsets.");
                 seenFiles = new OffsetRangeSet();
             }
-            // Process the directories topics
-            processedFileCount = 0;
+            logger.info("Retrieving file list from {}", path);
+            // Get filenames to process
+            Map<String, List<Path>> topicPaths = new HashMap<>();
+            long toProcessFileCount = 0L;
+            processedFileCount = 0L;
+            RemoteIterator<LocatedFileStatus> files = fs.listFiles(path, true);
             while (files.hasNext()) {
                 LocatedFileStatus locatedFileStatus = files.next();
-                Path filePath = locatedFileStatus.getPath();
-
-                if (filePath.toString().contains("+tmp")) {
+                if (locatedFileStatus.isDirectory()) {
                     continue;
                 }
+                Path filePath = locatedFileStatus.getPath();
 
-                if (locatedFileStatus.isDirectory()) {
-                    processTopic(filePath, converterFactory, offsets);
+                String topic = getTopic(filePath, seenFiles);
+                if (topic != null) {
+                    topicPaths.computeIfAbsent(topic, k -> new ArrayList<>()).add(filePath);
+                    toProcessFileCount++;
+                }
+            }
+
+            logger.info("Converting {} files", toProcessFileCount);
+
+            ProgressBar progressBar = new ProgressBar(toProcessFileCount, 10);
+            progressBar.update(0);
+
+            // Actually process the files
+            for (Map.Entry<String, List<Path>> entry : topicPaths.entrySet()) {
+                try (FileCacheStore cache = new FileCacheStore(converterFactory, 100, USE_GZIP)) {
+                    for (Path filePath : entry.getValue()) {
+                        this.processFile(filePath, entry.getKey(), cache, offsets);
+                        progressBar.update(++processedFileCount);
+                    }
                 }
             }
         }
     }
 
-    private void processTopic(Path topicPath, RecordConverterFactory converterFactory,
-            OffsetRangeFile offsets) throws IOException {
-        // Get files in this topic directory
-        FileSystem fs = FileSystem.get(conf);
-        RemoteIterator<LocatedFileStatus> files = fs.listFiles(topicPath, true);
-
-        String topicName = topicPath.getName();
-
-        try (FileCache cache = new FileCache(converterFactory, 100)) {
-            while (files.hasNext()) {
-                LocatedFileStatus locatedFileStatus = files.next();
-
-                if (locatedFileStatus.isFile()) {
-                    this.processFile(locatedFileStatus.getPath(), topicName, cache, offsets);
-                }
-            }
+    private static String getTopic(Path filePath, OffsetRangeSet seenFiles) {
+        if (filePath.toString().contains("+tmp")) {
+            return null;
         }
-    }
 
-    private void processFile(Path filePath, String topicName, FileCache cache,
-            OffsetRangeFile offsets) throws IOException {
         String fileName = filePath.getName();
-
         // Skip if extension is not .avro
-        if (!FilenameUtils.getExtension(fileName).equals("avro")) {
-            logger.info("Skipped non-avro file: {}", fileName);
-            return;
+        if (!fileName.endsWith(".avro")) {
+            logger.info("Skipping non-avro file: {}", fileName);
+            return null;
         }
 
         OffsetRange range = OffsetRange.parse(fileName);
         // Skip already processed avro files
         if (seenFiles.contains(range)) {
-            return;
+            return null;
         }
 
-        logger.info("{}", filePath);
+        return filePath.getParent().getParent().getName();
+    }
+
+    private void processFile(Path filePath, String topicName, FileCacheStore cache,
+            OffsetRangeFile offsets) throws IOException {
+        logger.debug("Reading {}", filePath);
 
         // Read and parse avro file
         FsInput input = new FsInput(filePath, conf);
+
+        // processing zero-length files may trigger a stall. See:
+        // https://github.com/RADAR-CNS/Restructure-HDFS-topic/issues/3
+        if (input.length() == 0) {
+            logger.warn("File {} has zero length, skipping.", filePath);
+            return;
+        }
+
         DataFileReader<GenericRecord> dataFileReader = new DataFileReader<>(input,
                 new GenericDatumReader<>());
 
@@ -201,15 +230,15 @@ public class RestructureAvroRecords {
 
         // Write which file has been processed and update bins
         try {
+            OffsetRange range = OffsetRange.parse(filePath.getName());
             offsets.write(range);
             bins.write();
         } catch (IOException ex) {
             logger.warn("Failed to update status. Continuing processing.", ex);
         }
-        processedFileCount++;
     }
 
-    private void writeRecord(GenericRecord record, String topicName, FileCache cache)
+    private void writeRecord(GenericRecord record, String topicName, FileCacheStore cache)
             throws IOException {
         GenericRecord keyField = (GenericRecord) record.get("key");
         GenericRecord valueField = (GenericRecord) record.get("value");
@@ -256,4 +285,5 @@ public class RestructureAvroRecords {
         Date date = new Date((long) (time * 1000d));
         return FILE_DATE_FORMAT.format(date);
     }
+
 }

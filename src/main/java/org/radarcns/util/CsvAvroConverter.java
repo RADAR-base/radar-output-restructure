@@ -67,7 +67,9 @@ public class CsvAvroConverter implements RecordConverter {
 
     @Override
     public void writeRecord(GenericRecord record) throws IOException {
-        csvWriter.writeValue(generator, convertRecord(record));
+        Map<String, Object> localMap = convertRecord(record);
+        csvWriter.writeValue(generator, localMap);
+        localMap.clear();
     }
 
     public Map<String, Object> convertRecord(GenericRecord record) {
