@@ -17,6 +17,7 @@
 package org.radarcns;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -49,6 +50,7 @@ public class RestructureAvroRecords {
     private final String outputFileExtension;
     private static final String OFFSETS_FILE_NAME = "offsets.csv";
     private static final String BINS_FILE_NAME = "bins.csv";
+    private static final String SCHEMA_OUTPUT_FILE_NAME = "schema.json";
     private static final SimpleDateFormat FILE_DATE_FORMAT = new SimpleDateFormat("yyyyMMdd_HH");
 
     static {
@@ -252,13 +254,20 @@ public class RestructureAvroRecords {
         String outputFileName = createFilename(valueField, timeField);
 
         // Clean user id and create final output pathname
-        String userId = keyField.get("userId").toString().replaceAll("\\W+", "");
+        String userId = keyField.get("userId").toString().replaceAll("[^a-zA-Z0-9_-]+", "");
         File userDir = new File(this.outputPath, userId);
         File userTopicDir = new File(userDir, topicName);
         File outputFile = new File(userTopicDir, outputFileName);
 
         // Write data
         cache.writeRecord(outputFile, record);
+
+        File schemaFile = new File(userTopicDir, SCHEMA_OUTPUT_FILE_NAME);
+        if (!schemaFile.exists()) {
+            try (FileWriter writer = new FileWriter(schemaFile, false)) {
+                writer.write(record.getSchema().toString(true));
+            }
+        }
 
         // Count data (binned and total)
         bins.add(topicName, keyField.get("sourceId").toString(), valueField, timeField);
