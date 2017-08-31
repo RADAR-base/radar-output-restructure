@@ -16,45 +16,53 @@
 
 package org.radarcns;
 
+import javax.annotation.Nonnull;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.SortedMap;
 import java.util.SortedSet;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 /** Encompasses a range of offsets. */
-public class OffsetRangeSet {
-    private final Map<String, SortedSet<OffsetRange>> ranges;
+public class OffsetRangeSet implements Iterable<OffsetRange> {
+    private final SortedMap<String, SortedSet<OffsetRange>> ranges;
 
     public OffsetRangeSet() {
-        ranges = new HashMap<>();
+        ranges = new TreeMap<>();
     }
 
     /** Add given offset range to seen offsets. */
     public void add(OffsetRange range) {
         SortedSet<OffsetRange> topicRanges = ranges.computeIfAbsent(
-                range.getTopic() + '+' + range.getPartition(), k -> new TreeSet<>());
+                key(range.getTopic(), range.getPartition()), k -> new TreeSet<>());
 
         SortedSet<OffsetRange> tail = topicRanges.tailSet(range);
         SortedSet<OffsetRange> head = topicRanges.headSet(range);
 
-        if (!tail.isEmpty()) {
-            if (tail.first().equals(range)) {
+        OffsetRange next = !tail.isEmpty() ? tail.first() : null;
+        OffsetRange previous = !head.isEmpty() ? head.last() : null;
+
+        if (next != null) {
+            if (next.equals(range)) {
                 return;
             }
 
-            if (tail.first().getOffsetFrom() <= range.getOffsetTo() + 1) {
-                if (!head.isEmpty() && head.last().getOffsetTo() >= range.getOffsetFrom() - 1) {
-                    tail.first().setOffsetFrom(head.last().getOffsetFrom());
-                    topicRanges.remove(head.last());
+            if (next.getOffsetFrom() <= range.getOffsetTo() + 1) {
+                if (previous != null && previous.getOffsetTo() >= range.getOffsetFrom() - 1) {
+                    next.setOffsetFrom(previous.getOffsetFrom());
+                    topicRanges.remove(previous);
                 } else {
-                    tail.first().setOffsetFrom(range.getOffsetFrom());
+                    next.setOffsetFrom(range.getOffsetFrom());
                 }
                 return;
             }
         }
 
-        if (!head.isEmpty() && head.last().getOffsetTo() >= range.getOffsetFrom() - 1) {
-            head.last().setOffsetTo(range.getOffsetTo());
+        if (previous != null && previous.getOffsetTo() >= range.getOffsetFrom() - 1) {
+            previous.setOffsetTo(range.getOffsetTo());
             return;
         }
 
@@ -63,8 +71,7 @@ public class OffsetRangeSet {
 
     /** Whether this range set completely contains the given range. */
     public boolean contains(OffsetRange range) {
-        String key = range.getTopic() + '+' + range.getPartition();
-        SortedSet<OffsetRange> topicRanges = ranges.get(key);
+        SortedSet<OffsetRange> topicRanges = ranges.get(key(range.getTopic(), range.getPartition()));
         if (topicRanges == null) {
             return false;
         }
@@ -74,14 +81,26 @@ public class OffsetRangeSet {
         }
 
         SortedSet<OffsetRange> tail = topicRanges.tailSet(range);
-        if (!tail.isEmpty()
-                && tail.first().getOffsetFrom() == range.getOffsetFrom()
-                && tail.first().getOffsetTo() >= range.getOffsetTo()) {
+        OffsetRange next = !tail.isEmpty() ? tail.first() : null;
+
+        if (next != null
+                && next.getOffsetFrom() == range.getOffsetFrom()
+                && next.getOffsetTo() >= range.getOffsetTo()) {
             return true;
         }
 
         SortedSet<OffsetRange> head = topicRanges.headSet(range);
-        return !head.isEmpty() && head.last().getOffsetTo() >= range.getOffsetTo();
+        OffsetRange previous = !head.isEmpty() ? head.last() : null;
+        return previous != null && previous.getOffsetTo() >= range.getOffsetTo();
+    }
+
+    public int size(String topic, int partition) {
+        SortedSet<OffsetRange> rangeSet = ranges.get(key(topic, partition));
+        if (rangeSet != null) {
+            return rangeSet.size();
+        } else {
+            return 0;
+        }
     }
 
     @Override
@@ -92,5 +111,49 @@ public class OffsetRangeSet {
     /** Whether the stored offsets is empty. */
     public boolean isEmpty() {
         return ranges.isEmpty();
+    }
+
+    private static String key(String topic, int partition) {
+        return topic + '+' + partition;
+    }
+
+    @Override
+    @Nonnull
+    public Iterator<OffsetRange> iterator() {
+        final Iterator<SortedSet<OffsetRange>> partitionIterator = ranges.values().iterator();
+        return new Iterator<OffsetRange>() {
+            Iterator<OffsetRange> rangeIterator;
+            @Override
+            public boolean hasNext() {
+                while (rangeIterator == null || !rangeIterator.hasNext()) {
+                    if (!partitionIterator.hasNext()) {
+                        return false;
+                    }
+                    rangeIterator = partitionIterator.next().iterator();
+                }
+                return rangeIterator.hasNext();
+            }
+
+            @Override
+            public OffsetRange next() {
+                if (!hasNext()) {
+                    throw new NoSuchElementException();
+                }
+                return rangeIterator.next();
+            }
+        };
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        return o == this
+                || o != null
+                && getClass().equals(o.getClass())
+                && ranges.equals(((OffsetRangeSet) o).ranges);
+    }
+
+    @Override
+    public int hashCode() {
+        return ranges.hashCode();
     }
 }
