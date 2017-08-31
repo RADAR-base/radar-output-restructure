@@ -18,6 +18,7 @@ package org.radarcns;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -42,6 +43,8 @@ import org.radarcns.util.ProgressBar;
 import org.radarcns.util.RecordConverterFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 public class RestructureAvroRecords {
     private static final Logger logger = LoggerFactory.getLogger(RestructureAvroRecords.class);
@@ -136,11 +139,10 @@ public class RestructureAvroRecords {
         Path path = new Path(directoryName);
         FileSystem fs = FileSystem.get(conf);
 
-
-        try (OffsetRangeFile offsets = new OffsetRangeFile(offsetsPath)) {
+        try (OffsetRangeFile.Writer offsets = new OffsetRangeFile.Writer(offsetsPath)) {
             OffsetRangeSet seenFiles;
             try {
-                seenFiles = offsets.read();
+                seenFiles = OffsetRangeFile.read(offsetsPath);
             } catch (IOException ex) {
                 logger.error("Error reading offsets file. Processing all offsets.");
                 seenFiles = new OffsetRangeSet();
@@ -180,6 +182,9 @@ public class RestructureAvroRecords {
                 }
             }
         }
+
+        logger.info("Cleaning offset file");
+        OffsetRangeFile.cleanUp(outputPath);
     }
 
     private static String getTopic(Path filePath, OffsetRangeSet seenFiles) {
@@ -194,7 +199,7 @@ public class RestructureAvroRecords {
             return null;
         }
 
-        OffsetRange range = OffsetRange.parse(fileName);
+        OffsetRange range = OffsetRange.parseFilename(fileName);
         // Skip already processed avro files
         if (seenFiles.contains(range)) {
             return null;
@@ -204,10 +209,10 @@ public class RestructureAvroRecords {
     }
 
     private void processFile(Path filePath, String topicName, FileCacheStore cache,
-            OffsetRangeFile offsets) throws IOException {
+            OffsetRangeFile.Writer offsets) throws IOException {
         logger.debug("Reading {}", filePath);
 
-        // Read and parse avro file
+        // Read and parseFilename avro file
         FsInput input = new FsInput(filePath, conf);
 
         // processing zero-length files may trigger a stall. See:
@@ -230,7 +235,7 @@ public class RestructureAvroRecords {
 
         // Write which file has been processed and update bins
         try {
-            OffsetRange range = OffsetRange.parse(filePath.getName());
+            OffsetRange range = OffsetRange.parseFilename(filePath.getName());
             offsets.write(range);
             bins.write();
         } catch (IOException ex) {

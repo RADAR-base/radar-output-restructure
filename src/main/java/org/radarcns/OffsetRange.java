@@ -16,42 +16,47 @@
 
 package org.radarcns;
 
-import java.util.Objects;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import javax.annotation.Nonnull;
 
 /** POJO class for storing offsets. */
 public class OffsetRange implements Comparable<OffsetRange> {
-    private String topic;
-    private int partition;
+    private final String topic;
+    private final int partition;
     private long offsetFrom;
     private long offsetTo;
 
-    public static OffsetRange parse(String filename) throws NumberFormatException, IndexOutOfBoundsException {
+    public static OffsetRange parseFilename(String filename) throws NumberFormatException, IndexOutOfBoundsException {
         String[] fileNameParts = filename.split("[+.]");
 
-        OffsetRange range = new OffsetRange();
-        range.topic = fileNameParts[0];
-        range.partition = Integer.parseInt(fileNameParts[1]);
-        range.offsetFrom = Long.parseLong(fileNameParts[2]);
-        range.offsetTo = Long.parseLong(fileNameParts[3]);
-        return range;
+        return new OffsetRange(
+                fileNameParts[0],
+                Integer.parseInt(fileNameParts[1]),
+                Long.parseLong(fileNameParts[2]),
+                Long.parseLong(fileNameParts[3]));
+    }
+
+    /** Full constructor. */
+    @JsonCreator
+    public OffsetRange(
+            @JsonProperty("topic") String topic,
+            @JsonProperty("partition") int partition,
+            @JsonProperty("offsetFrom") long offsetFrom,
+            @JsonProperty("offsetTo") long offsetTo) {
+        this.topic = topic;
+        this.partition = partition;
+        this.offsetFrom = offsetFrom;
+        this.offsetTo = offsetTo;
     }
 
     public String getTopic() {
         return topic;
     }
 
-    public void setTopic(@Nonnull String topic) {
-        Objects.requireNonNull(topic);
-        this.topic = topic;
-    }
-
     public int getPartition() {
         return partition;
-    }
-
-    public void setPartition(int partition) {
-        this.partition = partition;
     }
 
     public long getOffsetFrom() {
@@ -97,7 +102,7 @@ public class OffsetRange implements Comparable<OffsetRange> {
     }
 
     @Override
-    public int compareTo(OffsetRange o) {
+    public int compareTo(@Nonnull OffsetRange o) {
         int ret = Long.compare(offsetFrom, o.offsetFrom);
         if (ret != 0) {
             return ret;

@@ -106,7 +106,7 @@ public final class JsonAvroConverter implements RecordConverter {
             case NULL:
                 return data;
             default:
-                throw new IllegalArgumentException("Cannot parse field type " + schema.getType());
+                throw new IllegalArgumentException("Cannot parseFilename field type " + schema.getType());
         }
     }
 

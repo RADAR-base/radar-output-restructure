@@ -134,7 +134,7 @@ public class CsvAvroConverter implements RecordConverter {
                 map.put(prefix, data);
                 break;
             default:
-                throw new IllegalArgumentException("Cannot parse field type " + schema.getType());
+                throw new IllegalArgumentException("Cannot parseFilename field type " + schema.getType());
         }
     }
 
