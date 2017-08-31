@@ -41,10 +41,10 @@ import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
  */
 public final class OffsetRangeFile {
     private static final CsvSchema SCHEMA = CsvSchema.builder()
-            .addColumn("topic")
-            .addNumberColumn("partition")
-            .addNumberColumn("offsetTo")
             .addNumberColumn("offsetFrom")
+            .addNumberColumn("offsetTo")
+            .addNumberColumn("partition")
+            .addColumn("topic")
             .build();
 
     private static final CsvFactory CSV_FACTORY = new CsvFactory();
