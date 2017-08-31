@@ -184,7 +184,7 @@ public class RestructureAvroRecords {
         }
 
         logger.info("Cleaning offset file");
-        OffsetRangeFile.cleanUp(outputPath);
+        OffsetRangeFile.cleanUp(offsetsPath);
     }
 
     private static String getTopic(Path filePath, OffsetRangeSet seenFiles) {
