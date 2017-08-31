@@ -17,6 +17,7 @@
 package org.radarcns;
 
 import java.nio.file.Files;
+import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 import javax.annotation.Nonnull;
@@ -63,8 +64,8 @@ public class Frequency {
         return new Frequency(file, map);
     }
 
-    public void add(String topicName, String id, GenericRecord valueField, Field timeField) {
-        String timestamp = RestructureAvroRecords.createHourTimestamp(valueField, timeField);
+    public void add(String topicName, String id, Date date) {
+        String timestamp = RestructureAvroRecords.createHourTimestamp(date);
 
         Integer count = (Integer) bins.get(topicName, id, timestamp);
         if (count == null) {
