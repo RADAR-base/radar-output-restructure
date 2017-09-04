@@ -2,7 +2,7 @@ apply plugin: 'java'
 apply plugin: 'application'
 
 group 'org.radarcns.restructurehdfs'
-version '0.2'
+version '0.2.1'
 mainClassName = 'org.radarcns.RestructureAvroRecords'
 
 run {
@@ -56,6 +56,6 @@ artifacts {
 }
 
 task wrapper(type: Wrapper) {
-    gradleVersion = '3.5'
+    gradleVersion = '4.1'
     distributionType 'all'
 }

@@ -16,15 +16,6 @@
 
 package org.radarcns;
 
-import java.io.File;
-import java.io.IOException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.TimeZone;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.generic.GenericDatumReader;
@@ -43,12 +34,24 @@ import org.radarcns.util.RecordConverterFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TimeZone;
+
 public class RestructureAvroRecords {
     private static final Logger logger = LoggerFactory.getLogger(RestructureAvroRecords.class);
 
     private final String outputFileExtension;
     private static final String OFFSETS_FILE_NAME = "offsets.csv";
     private static final String BINS_FILE_NAME = "bins.csv";
+    private static final String SCHEMA_OUTPUT_FILE_NAME = "schema.json";
     private static final SimpleDateFormat FILE_DATE_FORMAT = new SimpleDateFormat("yyyyMMdd_HH");
 
     static {
@@ -136,11 +139,10 @@ public class RestructureAvroRecords {
         Path path = new Path(directoryName);
         FileSystem fs = FileSystem.get(conf);
 
-
-        try (OffsetRangeFile offsets = new OffsetRangeFile(offsetsPath)) {
+        try (OffsetRangeFile.Writer offsets = new OffsetRangeFile.Writer(offsetsPath)) {
             OffsetRangeSet seenFiles;
             try {
-                seenFiles = offsets.read();
+                seenFiles = OffsetRangeFile.read(offsetsPath);
             } catch (IOException ex) {
                 logger.error("Error reading offsets file. Processing all offsets.");
                 seenFiles = new OffsetRangeSet();
@@ -180,6 +182,9 @@ public class RestructureAvroRecords {
                 }
             }
         }
+
+        logger.info("Cleaning offset file");
+        OffsetRangeFile.cleanUp(offsetsPath);
     }
 
     private static String getTopic(Path filePath, OffsetRangeSet seenFiles) {
@@ -194,7 +199,7 @@ public class RestructureAvroRecords {
             return null;
         }
 
-        OffsetRange range = OffsetRange.parse(fileName);
+        OffsetRange range = OffsetRange.parseFilename(fileName);
         // Skip already processed avro files
         if (seenFiles.contains(range)) {
             return null;
@@ -204,11 +209,19 @@ public class RestructureAvroRecords {
     }
 
     private void processFile(Path filePath, String topicName, FileCacheStore cache,
-            OffsetRangeFile offsets) throws IOException {
+            OffsetRangeFile.Writer offsets) throws IOException {
         logger.debug("Reading {}", filePath);
 
-        // Read and parse avro file
+        // Read and parseFilename avro file
         FsInput input = new FsInput(filePath, conf);
+
+        // processing zero-length files may trigger a stall. See:
+        // https://github.com/RADAR-CNS/Restructure-HDFS-topic/issues/3
+        if (input.length() == 0) {
+            logger.warn("File {} has zero length, skipping.", filePath);
+            return;
+        }
+
         DataFileReader<GenericRecord> dataFileReader = new DataFileReader<>(input,
                 new GenericDatumReader<>());
 
@@ -222,7 +235,7 @@ public class RestructureAvroRecords {
 
         // Write which file has been processed and update bins
         try {
-            OffsetRange range = OffsetRange.parse(filePath.getName());
+            OffsetRange range = OffsetRange.parseFilename(filePath.getName());
             offsets.write(range);
             bins.write();
         } catch (IOException ex) {
@@ -240,11 +253,11 @@ public class RestructureAvroRecords {
             throw new IOException("Failed to process " + record + "; no key or value");
         }
 
-        Field timeField = valueField.getSchema().getField("time");
-        String outputFileName = createFilename(valueField, timeField);
+        Date time = getDate(keyField, valueField);
+        String outputFileName = createFilename(time);
 
         // Clean user id and create final output pathname
-        String userId = keyField.get("userId").toString().replaceAll("\\W+", "");
+        String userId = keyField.get("userId").toString().replaceAll("[^a-zA-Z0-9_-]+", "");
         File userDir = new File(this.outputPath, userId);
         File userTopicDir = new File(userDir, topicName);
         File outputFile = new File(userTopicDir, outputFileName);
@@ -252,30 +265,50 @@ public class RestructureAvroRecords {
         // Write data
         cache.writeRecord(outputFile, record);
 
+        File schemaFile = new File(userTopicDir, SCHEMA_OUTPUT_FILE_NAME);
+        if (!schemaFile.exists()) {
+            try (FileWriter writer = new FileWriter(schemaFile, false)) {
+                writer.write(record.getSchema().toString(true));
+            }
+        }
+
         // Count data (binned and total)
-        bins.add(topicName, keyField.get("sourceId").toString(), valueField, timeField);
+        bins.add(topicName, keyField.get("sourceId").toString(), time);
         processedRecordsCount++;
     }
 
-    private String createFilename(GenericRecord valueField, Field timeField) {
-        if (timeField == null) {
-            logger.warn("Time field of record valueField " + valueField + " is not set");
-            return "unknown." + outputFileExtension;
+    private String createFilename(Date date) {
+        if (date == null) {
+            logger.warn("Time field of record valueField is not set");
+            return "unknown_date." + outputFileExtension;
         }
         // Make a timestamped filename YYYYMMDD_HH00.json
-        String hourlyTimestamp = createHourTimestamp(valueField, timeField);
+        String hourlyTimestamp = createHourTimestamp(date);
         return hourlyTimestamp + "00." + outputFileExtension;
     }
 
-    public static String createHourTimestamp(GenericRecord valueField, Field timeField) {
-        if (timeField == null) {
-            return "unknown";
+    public static String createHourTimestamp(Date date) {
+        if (date == null) {
+            return "unknown_date";
         }
 
-        double time = (Double) valueField.get(timeField.pos());
-        // Convert from millis to date and apply dateFormat
-        Date date = new Date((long) (time * 1000d));
         return FILE_DATE_FORMAT.format(date);
     }
 
+    public static Date getDate(GenericRecord keyField, GenericRecord valueField) {
+        Field timeField = valueField.getSchema().getField("time");
+        if (timeField != null) {
+            double time = (Double) valueField.get(timeField.pos());
+            // Convert from millis to date and apply dateFormat
+            return new Date((long) (time * 1000d));
+        }
+
+        // WindowedKey
+        timeField = keyField.getSchema().getField("start");
+        if (timeField == null) {
+            return null;
+        }
+        long time = (Long) keyField.get("start");
+        return new Date(time);
+    }
 }
