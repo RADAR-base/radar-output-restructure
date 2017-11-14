@@ -15,20 +15,20 @@ Build jar from source with
 ```shell
 ./gradlew build
 ```
-and find the output JAR file as `build/libs/restructurehdfs-0.2.1-all.jar`. Then run with:
+and find the output JAR file as `build/libs/restructurehdfs-0.3-all.jar`. Then run with:
 
 ```shell
-java -jar restructurehdfs-0.2.1-all.jar <webhdfs_url> <hdfs_topic_path> <output_folder>
+java -jar restructurehdfs-0.3-all.jar <webhdfs_url> <hdfs_topic_path> <output_folder>
 ```
 
 By default, this will output the data in CSV format. If JSON format is preferred, use the following instead:
 ```
-java -Dorg.radarcns.format=json -jar restructurehdfs-0.2.1-all.jar <webhdfs_url> <hdfs_topic_path> <output_folder>
+java -Dorg.radarcns.format=json -jar restructurehdfs-0.3-all.jar <webhdfs_url> <hdfs_topic_path> <output_folder>
 ```
 
 Another option is to output the data in compressed form. All files will get the `gz` suffix, and can be decompressed with a GZIP decoder. Note that for a very small number of records, this may actually increase the file size.
 ```
-java -Dorg.radarcns.compress=gzip -jar restructurehdfs-0.2.1-all.jar <webhdfs_url> <hdfs_topic_path> <output_folder>
+java -Dorg.radarcns.compress=gzip -jar restructurehdfs-0.3-all.jar <webhdfs_url> <hdfs_topic_path> <output_folder>
 ```
 
 Finally, files records are deduplicated after writing. To disable this behaviour, specify the option `-Dorg.radarcns.deduplicate=false`.
