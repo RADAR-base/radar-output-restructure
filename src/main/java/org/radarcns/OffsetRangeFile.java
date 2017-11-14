@@ -23,15 +23,15 @@ import com.fasterxml.jackson.dataformat.csv.CsvFactory;
 import com.fasterxml.jackson.dataformat.csv.CsvGenerator;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.Closeable;
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.Flushable;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
@@ -56,19 +56,18 @@ public final class OffsetRangeFile {
         // utility class
     }
 
-    public static void cleanUp(File file) throws IOException {
-        File tmpFile = File.createTempFile("offsets", ".csv.tmp");
-        try (OffsetRangeFile.Writer offsets = new OffsetRangeFile.Writer(tmpFile)) {
-            offsets.write(OffsetRangeFile.read(file));
+    public static void cleanUp(Path path) throws IOException {
+        Path tmpPath = Files.createTempFile("offsets", ".csv.tmp");
+        try (OffsetRangeFile.Writer offsets = new OffsetRangeFile.Writer(tmpPath)) {
+            offsets.write(OffsetRangeFile.read(path));
         }
-        Files.move(tmpFile.toPath(), file.toPath(), REPLACE_EXISTING);
+        Files.move(tmpPath, path, REPLACE_EXISTING);
     }
 
-    public static OffsetRangeSet read(File inputFile) throws IOException {
+    public static OffsetRangeSet read(Path path) throws IOException {
         OffsetRangeSet set = new OffsetRangeSet();
 
-        try (FileReader fr = new FileReader(inputFile);
-                BufferedReader br = new BufferedReader(fr)) {
+        try (BufferedReader br = Files.newBufferedReader(path)) {
             MappingIterator<OffsetRange> ranges = CSV_READER.readValues(br);
             while(ranges.hasNext()) {
                 set.add(ranges.next());
@@ -78,15 +77,13 @@ public final class OffsetRangeFile {
     }
 
     public static class Writer implements Flushable, Closeable {
-        private final FileWriter fileWriter;
         private final BufferedWriter bufferedWriter;
         private final CsvGenerator generator;
         private final ObjectWriter writer;
 
-        public Writer(File outputFile) throws IOException {
-            boolean fileIsNew = !outputFile.exists() || outputFile.length() == 0;
-            this.fileWriter = new FileWriter(outputFile, true);
-            this.bufferedWriter = new BufferedWriter(this.fileWriter);
+        public Writer(Path path) throws IOException {
+            boolean fileIsNew = !Files.exists(path) || Files.size(path) == 0;
+            this.bufferedWriter = Files.newBufferedWriter(path, StandardOpenOption.APPEND, StandardOpenOption.CREATE);
             this.generator = CSV_FACTORY.createGenerator(bufferedWriter);
             this.writer = CSV_MAPPER.writerFor(OffsetRange.class)
                     .with(fileIsNew ? SCHEMA.withHeader() : SCHEMA);
@@ -111,7 +108,6 @@ public final class OffsetRangeFile {
         public void close() throws IOException {
             generator.close();
             bufferedWriter.close();
-            fileWriter.close();
         }
     }
 }

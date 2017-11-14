@@ -34,9 +34,10 @@ import org.radarcns.util.RecordConverterFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
+import java.io.Writer;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -49,9 +50,9 @@ public class RestructureAvroRecords {
     private static final Logger logger = LoggerFactory.getLogger(RestructureAvroRecords.class);
 
     private final String outputFileExtension;
-    private static final String OFFSETS_FILE_NAME = "offsets.csv";
-    private static final String BINS_FILE_NAME = "bins.csv";
-    private static final String SCHEMA_OUTPUT_FILE_NAME = "schema.json";
+    private static final java.nio.file.Path OFFSETS_FILE_NAME = Paths.get("offsets.csv");
+    private static final java.nio.file.Path BINS_FILE_NAME = Paths.get("bins.csv");
+    private static final java.nio.file.Path SCHEMA_OUTPUT_FILE_NAME = Paths.get("schema.json");
     private static final SimpleDateFormat FILE_DATE_FORMAT = new SimpleDateFormat("yyyyMMdd_HH");
 
     static {
@@ -60,8 +61,8 @@ public class RestructureAvroRecords {
 
     private final RecordConverterFactory converterFactory;
 
-    private File outputPath;
-    private File offsetsPath;
+    private java.nio.file.Path outputPath;
+    private java.nio.file.Path offsetsPath;
     private Frequency bins;
 
     private final Configuration conf = new Configuration();
@@ -69,6 +70,7 @@ public class RestructureAvroRecords {
     private long processedFileCount;
     private long processedRecordsCount;
     private static final boolean USE_GZIP = "gzip".equalsIgnoreCase(System.getProperty("org.radarcns.compression"));
+    private static final boolean DO_DEDUPLICATE = "true".equalsIgnoreCase(System.getProperty("org.radarcns.deduplicate", "true"));
 
     public static void main(String [] args) throws Exception {
         if (args.length != 3) {
@@ -121,9 +123,9 @@ public class RestructureAvroRecords {
 
     public void setOutputPath(String path) {
         // Remove trailing backslash
-        outputPath = new File(path.replaceAll("/$",""));
-        offsetsPath = new File(outputPath, OFFSETS_FILE_NAME);
-        bins = Frequency.read(new File(outputPath, BINS_FILE_NAME));
+        outputPath = Paths.get(path.replaceAll("/$", ""));
+        offsetsPath = outputPath.resolve(OFFSETS_FILE_NAME);
+        bins = Frequency.read(outputPath.resolve(BINS_FILE_NAME));
     }
 
     public long getProcessedFileCount() {
@@ -174,7 +176,7 @@ public class RestructureAvroRecords {
 
             // Actually process the files
             for (Map.Entry<String, List<Path>> entry : topicPaths.entrySet()) {
-                try (FileCacheStore cache = new FileCacheStore(converterFactory, 100, USE_GZIP)) {
+                try (FileCacheStore cache = new FileCacheStore(converterFactory, 100, USE_GZIP, DO_DEDUPLICATE)) {
                     for (Path filePath : entry.getValue()) {
                         this.processFile(filePath, entry.getKey(), cache, offsets);
                         progressBar.update(++processedFileCount);
@@ -258,16 +260,16 @@ public class RestructureAvroRecords {
 
         // Clean user id and create final output pathname
         String userId = keyField.get("userId").toString().replaceAll("[^a-zA-Z0-9_-]+", "");
-        File userDir = new File(this.outputPath, userId);
-        File userTopicDir = new File(userDir, topicName);
-        File outputFile = new File(userTopicDir, outputFileName);
+        java.nio.file.Path userDir = this.outputPath.resolve(userId);
+        java.nio.file.Path userTopicDir = userDir.resolve(topicName);
+        java.nio.file.Path outputPath = userTopicDir.resolve(outputFileName);
 
         // Write data
-        cache.writeRecord(outputFile, record);
+        cache.writeRecord(outputPath, record);
 
-        File schemaFile = new File(userTopicDir, SCHEMA_OUTPUT_FILE_NAME);
-        if (!schemaFile.exists()) {
-            try (FileWriter writer = new FileWriter(schemaFile, false)) {
+        java.nio.file.Path schemaPath = userTopicDir.resolve(SCHEMA_OUTPUT_FILE_NAME);
+        if (!Files.exists(schemaPath)) {
+            try (Writer writer = Files.newBufferedWriter(schemaPath)) {
                 writer.write(record.getSchema().toString(true));
             }
         }

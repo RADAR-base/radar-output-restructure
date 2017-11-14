@@ -16,65 +16,60 @@
 
 package org.radarcns.util;
 
+import org.apache.avro.generic.GenericRecord;
+
 import java.io.Closeable;
-import java.io.File;
 import java.io.Flushable;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import org.apache.avro.generic.GenericRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Caches open file handles. If more than the limit is cached, the half of the files that were used
  * the longest ago cache are evicted from cache.
  */
 public class FileCacheStore implements Flushable, Closeable {
-    private static final Logger logger = LoggerFactory.getLogger(FileCacheStore.class);
     private final boolean gzip;
+    private final boolean deduplicate;
 
     private RecordConverterFactory converterFactory;
     private final int maxFiles;
-    private final Map<File, FileCache> caches;
+    private final Map<Path, FileCache> caches;
 
-    public FileCacheStore(RecordConverterFactory converterFactory, int maxFiles, boolean gzip) {
+    public FileCacheStore(RecordConverterFactory converterFactory, int maxFiles, boolean gzip, boolean deduplicate) {
         this.converterFactory = converterFactory;
         this.maxFiles = maxFiles;
         this.caches = new HashMap<>(maxFiles * 4 / 3 + 1);
         this.gzip = gzip;
+        this.deduplicate = deduplicate;
     }
 
     /**
      * Append a record to given file. If the file handle and writer are already open in this cache,
      * those will be used. Otherwise, the file will be opened and the file handle cached.
      *
-     * @param file file to append data to
+     * @param path file to append data to
      * @param record data
      * @return true if the cache was used, false if a new file was opened.
      * @throws IOException when failing to open a file or writing to it.
      */
-    public boolean writeRecord(File file, GenericRecord record) throws IOException {
-        FileCache cache = caches.get(file);
+    public boolean writeRecord(Path path, GenericRecord record) throws IOException {
+        FileCache cache = caches.get(path);
         if (cache != null) {
             cache.writeRecord(record);
             return true;
         } else {
             ensureCapacity();
 
-            File dir = file.getParentFile();
-            if (!dir.exists()){
-                if (dir.mkdirs()) {
-                    logger.debug("Created directory: {}", dir.getAbsolutePath());
-                } else {
-                    logger.warn("FAILED to create directory: {}", dir.getAbsolutePath());
-                }
-            }
+            Path dir = path.getParent();
+            Files.createDirectories(dir);
 
-            cache = new FileCache(converterFactory, file, record, gzip);
-            caches.put(file, cache);
+            cache = new FileCache(converterFactory, path, record, gzip);
+            caches.put(path, cache);
             cache.writeRecord(record);
             return false;
         }
@@ -89,8 +84,11 @@ public class FileCacheStore implements Flushable, Closeable {
             Collections.sort(cacheList);
             for (int i = 0; i < cacheList.size() / 2; i++) {
                 FileCache rmCache = cacheList.get(i);
-                caches.remove(rmCache.getFile());
+                caches.remove(rmCache.getPath());
                 rmCache.close();
+                if (deduplicate) {
+                    converterFactory.sortUnique(rmCache.getPath());
+                }
             }
         }
     }
@@ -107,6 +105,9 @@ public class FileCacheStore implements Flushable, Closeable {
         try {
             for (FileCache cache : caches.values()) {
                 cache.close();
+                if (deduplicate) {
+                    converterFactory.sortUnique(cache.getPath());
+                }
             }
         } finally {
             caches.clear();

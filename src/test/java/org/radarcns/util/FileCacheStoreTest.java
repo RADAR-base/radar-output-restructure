@@ -23,6 +23,8 @@ import static org.junit.Assert.assertTrue;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericRecord;
@@ -37,14 +39,14 @@ public class FileCacheStoreTest {
 
     @Test
     public void appendLine() throws IOException {
-        File f1 = folder.newFile();
-        File f2 = folder.newFile();
-        File f3 = folder.newFile();
-        File d4 = folder.newFolder();
-        File f4 = new File(d4, "f4.txt");
+        Path f1 = folder.newFile().toPath();
+        Path f2 = folder.newFile().toPath();
+        Path f3 = folder.newFile().toPath();
+        Path d4 = folder.newFolder().toPath();
+        Path f4 = d4.resolve("f4.txt");
 
-        assertTrue(f1.delete());
-        assertTrue(d4.delete());
+        Files.delete(f1);
+        Files.delete(d4);
 
         RecordConverterFactory csvFactory = CsvAvroConverter.getFactory();
         Schema simpleSchema = SchemaBuilder.record("simple").fields()
@@ -53,7 +55,7 @@ public class FileCacheStoreTest {
 
         GenericRecord record;
 
-        try (FileCacheStore cache = new FileCacheStore(csvFactory, 2, false)) {
+        try (FileCacheStore cache = new FileCacheStore(csvFactory, 2, false, false)) {
             record = new GenericRecordBuilder(simpleSchema).set("a", "something").build();
             assertFalse(cache.writeRecord(f1, record));
             record = new GenericRecordBuilder(simpleSchema).set("a", "somethingElse").build();
@@ -74,9 +76,9 @@ public class FileCacheStoreTest {
             assertTrue(cache.writeRecord(f3, record));
         }
 
-        assertEquals("a\nsomething\nsomethingElse\nthird\n", new String(Files.readAllBytes(f1.toPath())));
-        assertEquals("a\nsomething\nf2\n", new String(Files.readAllBytes(f2.toPath())));
-        assertEquals("a\nf3\nf3\nf3\n", new String(Files.readAllBytes(f3.toPath())));
-        assertEquals("a\nf4\n", new String(Files.readAllBytes(f4.toPath())));
+        assertEquals("a\nsomething\nsomethingElse\nthird\n", new String(Files.readAllBytes(f1)));
+        assertEquals("a\nsomething\nf2\n", new String(Files.readAllBytes(f2)));
+        assertEquals("a\nf3\nf3\nf3\n", new String(Files.readAllBytes(f3)));
+        assertEquals("a\nf4\n", new String(Files.readAllBytes(f4)));
     }
 }

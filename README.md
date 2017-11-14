@@ -30,3 +30,5 @@ Another option is to output the data in compressed form. All files will get the 
 ```
 java -Dorg.radarcns.compress=gzip -jar restructurehdfs-0.2.1-all.jar <webhdfs_url> <hdfs_topic_path> <output_folder>
 ```
+
+Finally, files records are deduplicated after writing. To disable this behaviour, specify the option `-Dorg.radarcns.deduplicate=false`.

@@ -21,17 +21,18 @@ import com.fasterxml.jackson.dataformat.csv.CsvFactory;
 import com.fasterxml.jackson.dataformat.csv.CsvGenerator;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
+import org.apache.avro.Schema;
+import org.apache.avro.Schema.Field;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericFixed;
+import org.apache.avro.generic.GenericRecord;
+
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericFixed;
-import org.apache.avro.generic.GenericRecord;
 
 /**
  * Converts deep hierarchical Avro records into flat CSV format. It uses a simple dot syntax in the
@@ -42,7 +43,17 @@ public class CsvAvroConverter implements RecordConverter {
 
     public static RecordConverterFactory getFactory() {
         CsvFactory factory = new CsvFactory();
-        return (writer, record, writeHeader) -> new CsvAvroConverter(factory, writer, record, writeHeader);
+        return new RecordConverterFactory() {
+            @Override
+            public RecordConverter converterFor(Writer writer, GenericRecord record, boolean writeHeader) throws IOException {
+                return new CsvAvroConverter(factory, writer, record, writeHeader);
+            }
+
+            @Override
+            public boolean hasHeader() {
+                return true;
+            }
+        };
     }
 
     private final ObjectWriter csvWriter;
