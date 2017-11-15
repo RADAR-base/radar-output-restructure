@@ -29,9 +29,10 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.SortedSet;
-import java.util.TreeSet;
+import java.util.Collections;
+import java.util.List;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -55,7 +56,8 @@ public interface RecordConverterFactory {
     }
 
     default void sortUnique(Path path) throws IOException {
-        SortedSet<String> sortedLines = new TreeSet<>();
+        // read all lines into memory; assume a 100-byte line length
+        List<String> sortedLines = new ArrayList<>((int)(Files.size(path) / 100));
         Path tempOut = Files.createTempFile("tempfile", ".tmp");
         String header;
         if (path.getFileName().endsWith(".gz")) {
@@ -105,14 +107,22 @@ public interface RecordConverterFactory {
         return header;
     }
 
-    static void writeFile(Writer writer, String header, Iterable<String> lines) throws IOException {
+    static void writeFile(Writer writer, String header, List<String> lines) throws IOException {
         if (header != null) {
             writer.write(header);
             writer.write("\n");
         }
+        // in a sorted collection, the duplicate lines will follow another
+        // only need to keep the previous unique line in memory
+        Collections.sort(lines);
+        String previousLine = null;
         for (String line : lines) {
+            if (line.equals(previousLine)) {
+                continue;
+            }
             writer.write(line);
             writer.write("\n");
+            previousLine = line;
         }
     }
 }
