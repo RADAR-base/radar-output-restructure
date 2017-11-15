@@ -19,6 +19,7 @@ package org.radarcns.util;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonMappingException;
@@ -26,7 +27,13 @@ import com.fasterxml.jackson.databind.JsonMappingException;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Reader;
 import java.io.StringWriter;
+import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -36,6 +43,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
+
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Parser;
 import org.apache.avro.SchemaBuilder;
@@ -146,19 +156,46 @@ public class CsvAvroConverterTest {
         System.out.println(writer.toString());
     }
 
+    static void writeTestNumbers(Writer writer) throws IOException {
+        writer.write("a,b\n");
+        writer.write("1,2\n");
+        writer.write("3,4\n");
+        writer.write("1,3\n");
+        writer.write("3,4\n");
+        writer.write("1,2\n");
+        writer.write("a,a\n");
+    }
+
     @Test
     public void deduplicate() throws IOException {
         Path path = folder.newFile().toPath();
         try (BufferedWriter writer = Files.newBufferedWriter(path)) {
-            writer.write("a,b\n");
-            writer.write("1,2\n");
-            writer.write("3,4\n");
-            writer.write("1,3\n");
-            writer.write("3,4\n");
-            writer.write("1,2\n");
-            writer.write("a,a\n");
+            writeTestNumbers(writer);
         }
         CsvAvroConverter.getFactory().sortUnique(path);
         assertEquals(Arrays.asList("a,b", "1,2", "1,3", "3,4", "a,a"), Files.readAllLines(path));
+    }
+
+
+    @Test
+    public void deduplicateGzip() throws IOException {
+        Path path = folder.newFile("test.csv.gz").toPath();
+        try (OutputStream out = Files.newOutputStream(path);
+             GZIPOutputStream gzipOut = new GZIPOutputStream(out);
+             Writer writer = new OutputStreamWriter(gzipOut)) {
+            writeTestNumbers(writer);
+        }
+        CsvAvroConverter.getFactory().sortUnique(path);
+        try (InputStream in = Files.newInputStream(path);
+                GZIPInputStream gzipIn = new GZIPInputStream(in);
+                Reader inReader = new InputStreamReader(gzipIn);
+                BufferedReader reader = new BufferedReader(inReader)) {
+            assertEquals("a,b", reader.readLine());
+            assertEquals("1,2", reader.readLine());
+            assertEquals("1,3", reader.readLine());
+            assertEquals("3,4", reader.readLine());
+            assertEquals("a,a", reader.readLine());
+            assertNull(reader.readLine());
+        }
     }
 }

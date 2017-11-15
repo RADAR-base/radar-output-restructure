@@ -256,7 +256,7 @@ public class RestructureAvroRecords {
         }
 
         Date time = getDate(keyField, valueField);
-        String outputFileName = createFilename(time);
+        java.nio.file.Path outputFileName = createFilename(time);
 
         // Clean user id and create final output pathname
         String userId = keyField.get("userId").toString().replaceAll("[^a-zA-Z0-9_-]+", "");
@@ -279,14 +279,14 @@ public class RestructureAvroRecords {
         processedRecordsCount++;
     }
 
-    private String createFilename(Date date) {
+    private java.nio.file.Path createFilename(Date date) {
         if (date == null) {
             logger.warn("Time field of record valueField is not set");
-            return "unknown_date." + outputFileExtension;
+            return Paths.get("unknown_date." + outputFileExtension);
         }
         // Make a timestamped filename YYYYMMDD_HH00.json
         String hourlyTimestamp = createHourTimestamp(date);
-        return hourlyTimestamp + "00." + outputFileExtension;
+        return Paths.get(hourlyTimestamp + "00." + outputFileExtension);
     }
 
     public static String createHourTimestamp(Date date) {

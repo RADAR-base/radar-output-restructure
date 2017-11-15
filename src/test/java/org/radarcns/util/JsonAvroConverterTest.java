@@ -17,6 +17,7 @@
 package org.radarcns.util;
 
 import static org.junit.Assert.assertEquals;
+import static org.radarcns.util.CsvAvroConverterTest.writeTestNumbers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
@@ -81,15 +82,9 @@ public class JsonAvroConverterTest {
     public void deduplicate() throws IOException {
         Path path = folder.newFile().toPath();
         try (BufferedWriter writer = Files.newBufferedWriter(path)) {
-            writer.write("\"a,b\"\n");
-            writer.write("\"1,2\"\n");
-            writer.write("\"3,4\"\n");
-            writer.write("\"1,3\"\n");
-            writer.write("\"3,4\"\n");
-            writer.write("\"1,2\"\n");
-            writer.write("\"a,a\"\n");
+            writeTestNumbers(writer);
         }
         JsonAvroConverter.getFactory().sortUnique(path);
-        assertEquals(Arrays.asList("\"1,2\"", "\"1,3\"", "\"3,4\"", "\"a,a\"", "\"a,b\""), Files.readAllLines(path));
+        assertEquals(Arrays.asList("1,2", "1,3", "3,4", "a,a", "a,b"), Files.readAllLines(path));
     }
 }
