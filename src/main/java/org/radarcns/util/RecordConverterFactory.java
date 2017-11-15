@@ -60,12 +60,21 @@ public interface RecordConverterFactory {
         List<String> sortedLines = new ArrayList<>((int)(Files.size(path) / 100));
         Path tempOut = Files.createTempFile("tempfile", ".tmp");
         String header;
+        boolean withHeader = hasHeader();
         if (path.getFileName().endsWith(".gz")) {
             try (InputStream fileIn = Files.newInputStream(path);
                  GZIPInputStream gzipIn = new GZIPInputStream(fileIn);
                  Reader inReader = new InputStreamReader(gzipIn);
                  BufferedReader reader = new BufferedReader(inReader)) {
-                header = readFile(reader, sortedLines, hasHeader());
+                if (testSortedAndUnique(reader, withHeader)) {
+                    return;
+                }
+            }
+            try (InputStream fileIn = Files.newInputStream(path);
+                 GZIPInputStream gzipIn = new GZIPInputStream(fileIn);
+                 Reader inReader = new InputStreamReader(gzipIn);
+                 BufferedReader reader = new BufferedReader(inReader)) {
+                header = readFile(reader, sortedLines, withHeader);
             }
             try (OutputStream fileOut = Files.newOutputStream(tempOut);
                  GZIPOutputStream gzipOut = new GZIPOutputStream(fileOut);
@@ -74,7 +83,12 @@ public interface RecordConverterFactory {
             }
         } else {
             try (BufferedReader reader = Files.newBufferedReader(path)) {
-                header = readFile(reader, sortedLines, hasHeader());
+                if (testSortedAndUnique(reader, withHeader)) {
+                    return;
+                }
+            }
+            try (BufferedReader reader = Files.newBufferedReader(path)) {
+                header = readFile(reader, sortedLines, withHeader);
             }
             try (BufferedWriter writer = Files.newBufferedWriter(tempOut)) {
                 writeFile(writer, header, sortedLines);
@@ -92,9 +106,6 @@ public interface RecordConverterFactory {
         String line = reader.readLine();
         String header;
         if (withHeader) {
-            if (line == null) {
-                throw new IOException("CSV file does not have header");
-            }
             header = line;
             line = reader.readLine();
         } else {
@@ -124,5 +135,32 @@ public interface RecordConverterFactory {
             writer.write("\n");
             previousLine = line;
         }
+    }
+
+    static boolean testSortedAndUnique(BufferedReader reader, boolean withHeader) throws IOException {
+        String line = reader.readLine();
+        if (withHeader) {
+            if (line == null) {
+                throw new IOException("header expected but not found");
+            }
+            line = reader.readLine();
+        }
+
+        // no lines -> sorted & unique
+        if (line == null) {
+            return true;
+        }
+
+        String previousLine = line;
+        line = reader.readLine();
+
+        while (line != null) {
+            if (line.compareTo(previousLine) <= 0) {
+                return false;
+            }
+            previousLine = line;
+            line = reader.readLine();
+        }
+        return true;
     }
 }
