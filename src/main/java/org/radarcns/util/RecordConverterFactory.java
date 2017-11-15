@@ -27,8 +27,10 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.Writer;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.PathMatcher;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -40,6 +42,8 @@ import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 @FunctionalInterface
 public interface RecordConverterFactory {
+    PathMatcher GZ_FILE_MATCHER = FileSystems.getDefault().getPathMatcher("glob:**.gz");
+
     /**
      * Create a converter to write records of given type to given writer. A header is needed only
      * in certain converters. The given record is not converted yet, it is only used as an example.
@@ -61,7 +65,7 @@ public interface RecordConverterFactory {
         Path tempOut = Files.createTempFile("tempfile", ".tmp");
         String header;
         boolean withHeader = hasHeader();
-        if (path.getFileName().endsWith(".gz")) {
+        if (GZ_FILE_MATCHER.matches(path)) {
             try (InputStream fileIn = Files.newInputStream(path);
                  GZIPInputStream gzipIn = new GZIPInputStream(fileIn);
                  Reader inReader = new InputStreamReader(gzipIn);
