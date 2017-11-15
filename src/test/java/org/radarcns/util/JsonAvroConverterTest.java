@@ -22,9 +22,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.StringWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -35,9 +38,14 @@ import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.JsonDecoder;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 public class JsonAvroConverterTest {
+    @Rule
+    public TemporaryFolder folder = new TemporaryFolder();
+
     @Test
     public void fullAvroTest() throws IOException {
         Parser parser = new Parser();
@@ -67,5 +75,21 @@ public class JsonAvroConverterTest {
             }
             assertEquals(expectedLines[i], resultLines[i]);
         }
+    }
+
+    @Test
+    public void deduplicate() throws IOException {
+        Path path = folder.newFile().toPath();
+        try (BufferedWriter writer = Files.newBufferedWriter(path)) {
+            writer.write("\"a,b\"\n");
+            writer.write("\"1,2\"\n");
+            writer.write("\"3,4\"\n");
+            writer.write("\"1,3\"\n");
+            writer.write("\"3,4\"\n");
+            writer.write("\"1,2\"\n");
+            writer.write("\"a,a\"\n");
+        }
+        JsonAvroConverter.getFactory().sortUnique(path);
+        assertEquals(Arrays.asList("\"1,2\"", "\"1,3\"", "\"3,4\"", "\"a,a\"", "\"a,b\""), Files.readAllLines(path));
     }
 }

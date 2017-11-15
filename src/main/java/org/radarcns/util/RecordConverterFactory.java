@@ -16,10 +16,29 @@
 
 package org.radarcns.util;
 
-import java.io.IOException;
-import java.io.Writer;
 import org.apache.avro.generic.GenericRecord;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Reader;
+import java.io.Writer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
+
+import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
+
+@FunctionalInterface
 public interface RecordConverterFactory {
     /**
      * Create a converter to write records of given type to given writer. A header is needed only
@@ -31,4 +50,117 @@ public interface RecordConverterFactory {
      * @throws IOException if the converter could not be created
      */
     RecordConverter converterFor(Writer writer, GenericRecord record, boolean writeHeader) throws IOException;
+
+    default boolean hasHeader() {
+        return false;
+    }
+
+    default void sortUnique(Path path) throws IOException {
+        // read all lines into memory; assume a 100-byte line length
+        List<String> sortedLines = new ArrayList<>((int)(Files.size(path) / 100));
+        Path tempOut = Files.createTempFile("tempfile", ".tmp");
+        String header;
+        boolean withHeader = hasHeader();
+        if (path.getFileName().endsWith(".gz")) {
+            try (InputStream fileIn = Files.newInputStream(path);
+                 GZIPInputStream gzipIn = new GZIPInputStream(fileIn);
+                 Reader inReader = new InputStreamReader(gzipIn);
+                 BufferedReader reader = new BufferedReader(inReader)) {
+                if (testSortedAndUnique(reader, withHeader)) {
+                    return;
+                }
+            }
+            try (InputStream fileIn = Files.newInputStream(path);
+                 GZIPInputStream gzipIn = new GZIPInputStream(fileIn);
+                 Reader inReader = new InputStreamReader(gzipIn);
+                 BufferedReader reader = new BufferedReader(inReader)) {
+                header = readFile(reader, sortedLines, withHeader);
+            }
+            try (OutputStream fileOut = Files.newOutputStream(tempOut);
+                 GZIPOutputStream gzipOut = new GZIPOutputStream(fileOut);
+                 Writer writer = new OutputStreamWriter(gzipOut)) {
+                writeFile(writer, header, sortedLines);
+            }
+        } else {
+            try (BufferedReader reader = Files.newBufferedReader(path)) {
+                if (testSortedAndUnique(reader, withHeader)) {
+                    return;
+                }
+            }
+            try (BufferedReader reader = Files.newBufferedReader(path)) {
+                header = readFile(reader, sortedLines, withHeader);
+            }
+            try (BufferedWriter writer = Files.newBufferedWriter(tempOut)) {
+                writeFile(writer, header, sortedLines);
+            }
+        }
+        Files.move(tempOut, path, REPLACE_EXISTING);
+    }
+
+    /**
+     * @param reader file to read from
+     * @param lines lines in the file to add to
+     * @return header
+     */
+    static String readFile(BufferedReader reader, Collection<String> lines, boolean withHeader) throws IOException {
+        String line = reader.readLine();
+        String header;
+        if (withHeader) {
+            header = line;
+            line = reader.readLine();
+        } else {
+            header = null;
+        }
+        while (line != null) {
+            lines.add(line);
+            line = reader.readLine();
+        }
+        return header;
+    }
+
+    static void writeFile(Writer writer, String header, List<String> lines) throws IOException {
+        if (header != null) {
+            writer.write(header);
+            writer.write("\n");
+        }
+        // in a sorted collection, the duplicate lines will follow another
+        // only need to keep the previous unique line in memory
+        Collections.sort(lines);
+        String previousLine = null;
+        for (String line : lines) {
+            if (line.equals(previousLine)) {
+                continue;
+            }
+            writer.write(line);
+            writer.write("\n");
+            previousLine = line;
+        }
+    }
+
+    static boolean testSortedAndUnique(BufferedReader reader, boolean withHeader) throws IOException {
+        String line = reader.readLine();
+        if (withHeader) {
+            if (line == null) {
+                throw new IOException("header expected but not found");
+            }
+            line = reader.readLine();
+        }
+
+        // no lines -> sorted & unique
+        if (line == null) {
+            return true;
+        }
+
+        String previousLine = line;
+        line = reader.readLine();
+
+        while (line != null) {
+            if (line.compareTo(previousLine) <= 0) {
+                return false;
+            }
+            previousLine = line;
+            line = reader.readLine();
+        }
+        return true;
+    }
 }

@@ -17,9 +17,7 @@
 package org.radarcns;
 
 import javax.annotation.Nonnull;
-import java.util.HashMap;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.SortedMap;
 import java.util.SortedSet;

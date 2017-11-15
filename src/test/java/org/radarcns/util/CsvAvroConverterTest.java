@@ -22,8 +22,14 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonMappingException;
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.StringWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -42,10 +48,14 @@ import org.apache.avro.io.JsonDecoder;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.junit.rules.TemporaryFolder;
 
 public class CsvAvroConverterTest {
     @Rule
     public ExpectedException exception = ExpectedException.none();
+
+    @Rule
+    public TemporaryFolder folder = new TemporaryFolder();
 
     @Test
     public void writeRecord() throws IOException {
@@ -134,5 +144,21 @@ public class CsvAvroConverterTest {
         converter.writeRecord(recordC);
 
         System.out.println(writer.toString());
+    }
+
+    @Test
+    public void deduplicate() throws IOException {
+        Path path = folder.newFile().toPath();
+        try (BufferedWriter writer = Files.newBufferedWriter(path)) {
+            writer.write("a,b\n");
+            writer.write("1,2\n");
+            writer.write("3,4\n");
+            writer.write("1,3\n");
+            writer.write("3,4\n");
+            writer.write("1,2\n");
+            writer.write("a,a\n");
+        }
+        CsvAvroConverter.getFactory().sortUnique(path);
+        assertEquals(Arrays.asList("a,b", "1,2", "1,3", "3,4", "a,a"), Files.readAllLines(path));
     }
 }

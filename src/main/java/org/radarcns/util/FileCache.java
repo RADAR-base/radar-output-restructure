@@ -18,47 +18,62 @@ package org.radarcns.util;
 
 import java.io.BufferedOutputStream;
 import java.io.Closeable;
-import java.io.File;
 import java.io.FileOutputStream;
 import java.io.Flushable;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.zip.GZIPOutputStream;
 import javax.annotation.Nonnull;
 import org.apache.avro.generic.GenericRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-/** Keeps file handles of a file. */
+/** Keeps path handles of a path. */
 public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
-    private final OutputStream[] streams;
+    private static final Logger logger = LoggerFactory.getLogger(FileCache.class);
+
     private final Writer writer;
     private final RecordConverter recordConverter;
-    private final File file;
+    private final Path path;
     private long lastUse;
 
     /**
-     * File cache of given file, using given converter factory.
+     * File cache of given path, using given converter factory.
      * @param converterFactory converter factory to create a converter to write files with.
-     * @param file file to cache.
-     * @param record example record to create converter from, this is not written to file.
+     * @param path path to cache.
+     * @param record example record to create converter from, this is not written to path.
      * @param gzip whether to gzip the records
      * @throws IOException
      */
-    public FileCache(RecordConverterFactory converterFactory, File file,
+    public FileCache(RecordConverterFactory converterFactory, Path path,
             GenericRecord record, boolean gzip) throws IOException {
-        this.file = file;
-        boolean fileIsNew = !file.exists() || file.length() == 0;
+        this.path = path;
+        boolean fileIsNew = !Files.exists(path) || Files.size(path) == 0;
 
-        this.streams = new OutputStream[gzip ? 3 : 2];
-        this.streams[0] = new FileOutputStream(file, true);
-        this.streams[1] = new BufferedOutputStream(this.streams[0]);
+        OutputStream outFile = Files.newOutputStream(path,
+                StandardOpenOption.APPEND, StandardOpenOption.CREATE);
+        OutputStream bufOut = new BufferedOutputStream(outFile);
         if (gzip) {
-            this.streams[2] = new GZIPOutputStream(this.streams[1]);
+            bufOut = new GZIPOutputStream(bufOut);
         }
 
-        this.writer = new OutputStreamWriter(this.streams[this.streams.length - 1]);
-        this.recordConverter = converterFactory.converterFor(writer, record, fileIsNew);
+        this.writer = new OutputStreamWriter(bufOut);
+
+        try {
+            this.recordConverter = converterFactory.converterFor(writer, record, fileIsNew);
+        } catch (IOException ex) {
+            try {
+                writer.close();
+            } catch (IOException exClose) {
+                logger.error("Failed to close writer for {}", path, ex);
+            }
+            throw ex;
+        }
     }
 
     /** Write a record to the cache. */
@@ -71,9 +86,6 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
     public void close() throws IOException {
         recordConverter.close();
         writer.close();
-        for (int i = streams.length - 1; i >= 0; i--) {
-            streams[i].close();
-        }
     }
 
     @Override
@@ -83,7 +95,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
 
     /**
      * Compares time that the filecaches were last used. If equal, it lexicographically compares
-     * the absolute path of the file.
+     * the absolute path of the path.
      * @param other FileCache to compare with.
      */
     @Override
@@ -92,11 +104,11 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
         if (result != 0) {
             return result;
         }
-        return file.compareTo(other.file);
+        return path.compareTo(other.path);
     }
 
     /** File that the cache is maintaining. */
-    public File getFile() {
-        return file;
+    public Path getPath() {
+        return path;
     }
 }

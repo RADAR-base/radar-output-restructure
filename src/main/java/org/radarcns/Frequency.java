@@ -16,40 +16,40 @@
 
 package org.radarcns;
 
-import java.nio.file.Files;
-import java.util.Date;
-import java.util.List;
-import java.util.Objects;
-import javax.annotation.Nonnull;
-import org.apache.avro.Schema.Field;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.collections.MapIterator;
 import org.apache.commons.collections.keyvalue.MultiKey;
 import org.apache.commons.collections.map.MultiKeyMap;
-
-import java.io.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nonnull;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Date;
+import java.util.List;
+import java.util.Objects;
 
 
 public class Frequency {
     private static final Logger logger = LoggerFactory.getLogger(Frequency.class);
 
     private final MultiKeyMap bins;
-    private final File file;
+    private final Path path;
 
-    public Frequency(@Nonnull File file, @Nonnull MultiKeyMap initialData) {
-        Objects.requireNonNull(file);
+    public Frequency(@Nonnull Path path, @Nonnull MultiKeyMap initialData) {
+        Objects.requireNonNull(path);
         Objects.requireNonNull(initialData);
-        this.file = file;
+        this.path = path;
         this.bins = initialData;
     }
 
-    public static Frequency read(File file) {
+    public static Frequency read(Path path) {
         MultiKeyMap map = new MultiKeyMap();
         try {
             // Read in all lines as multikeymap (key, key, key, value)
-            List<String> lines = Files.readAllLines(file.toPath());
+            List<String> lines = Files.readAllLines(path);
             lines.subList(1, lines.size()).forEach(line -> {
                 String[] columns = line.split(",");
                 try {
@@ -61,7 +61,7 @@ public class Frequency {
         } catch (IOException e) {
             logger.warn("Could not read the file with bins. Creating new file when writing.");
         }
-        return new Frequency(file, map);
+        return new Frequency(path, map);
     }
 
     public void add(String topicName, String id, Date date) {
@@ -88,8 +88,7 @@ public class Frequency {
     public void write() {
         // Write all bins to csv
         MapIterator mapIterator = bins.mapIterator();
-        try (FileWriter fw = new FileWriter(file, false);
-                BufferedWriter bw = new BufferedWriter(fw)) {
+        try (BufferedWriter bw = Files.newBufferedWriter(path)) {
             String header = String.join(",","topic","device","timestamp","count");
             bw.write(header);
             bw.write('\n');
