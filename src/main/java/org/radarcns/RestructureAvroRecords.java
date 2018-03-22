@@ -266,11 +266,13 @@ public class RestructureAvroRecords {
         Date time = getDate(keyField, valueField);
         java.nio.file.Path outputFileName = createFilename(time);
 
-        // Clean Project id for use in final pathname
-        String projectId = keyField.get("projectId").toString().replaceAll("[^a-zA-Z0-9_-]+", "");
+        String projectId;
 
-        if (projectId == null) {
+        if(keyField.get("projectId") == null) {
             projectId = "unknown-project";
+        } else {
+            // Clean Project id for use in final pathname
+            projectId = keyField.get("projectId").toString().replaceAll("[^a-zA-Z0-9_-]+", "");
         }
 
         // Clean user id and create final output pathname
