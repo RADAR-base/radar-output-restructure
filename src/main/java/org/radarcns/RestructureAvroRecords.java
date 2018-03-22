@@ -71,7 +71,9 @@ public class RestructureAvroRecords {
     private long processedFileCount;
     private long processedRecordsCount;
     private static final boolean USE_GZIP = "gzip".equalsIgnoreCase(System.getProperty("org.radarcns.compression"));
-    private static final boolean DO_DEDUPLICATE = "true".equalsIgnoreCase(System.getProperty("org.radarcns.deduplicate", "true"));
+
+    // Default set to false because causes loss of records from Biovotion data. https://github.com/RADAR-base/Restructure-HDFS-topic/issues/16
+    private static final boolean DO_DEDUPLICATE = "true".equalsIgnoreCase(System.getProperty("org.radarcns.deduplicate", "false"));
 
     public static void main(String [] args) throws Exception {
         if (args.length != 3) {
@@ -179,7 +181,7 @@ public class RestructureAvroRecords {
             for (Map.Entry<String, List<Path>> entry : topicPaths.entrySet()) {
                 try (FileCacheStore cache = new FileCacheStore(converterFactory, 100, USE_GZIP, DO_DEDUPLICATE)) {
                     for (Path filePath : entry.getValue()) {
-                        // If Json Mapping exception occurs log error and continue with other files
+                        // If JsonMappingException occurs, log the error and continue with other files
                         try {
                             this.processFile(filePath, entry.getKey(), cache, offsets);
                         } catch (JsonMappingException exc) {
