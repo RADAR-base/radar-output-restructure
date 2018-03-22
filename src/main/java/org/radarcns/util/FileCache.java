@@ -77,9 +77,10 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
     }
 
     /** Write a record to the cache. */
-    public void writeRecord(GenericRecord record) throws IOException {
-        this.recordConverter.writeRecord(record);
+    public boolean writeRecord(GenericRecord record) throws IOException {
+        boolean result = this.recordConverter.writeRecord(record);
         lastUse = System.nanoTime();
+        return result;
     }
 
     @Override

@@ -59,6 +59,7 @@ public class CsvAvroConverter implements RecordConverter {
     private final ObjectWriter csvWriter;
     private final Map<String, Object> map;
     private final CsvGenerator generator;
+    private int numOfColumns;
 
     public CsvAvroConverter(CsvFactory factory, Writer writer, GenericRecord record, boolean writeHeader)
             throws IOException {
@@ -72,15 +73,22 @@ public class CsvAvroConverter implements RecordConverter {
         if (writeHeader) {
             schema = schema.withHeader();
         }
+        numOfColumns = schema.size();
         generator = factory.createGenerator(writer);
         csvWriter = new CsvMapper(factory).writer(schema);
     }
 
     @Override
-    public void writeRecord(GenericRecord record) throws IOException {
+    public boolean writeRecord(GenericRecord record) throws IOException {
         Map<String, Object> localMap = convertRecord(record);
+
+        if(localMap.size() > numOfColumns) {
+            // Cannot write to same file so return false
+            return false;
+        }
         csvWriter.writeValue(generator, localMap);
         localMap.clear();
+        return true;
     }
 
     public Map<String, Object> convertRecord(GenericRecord record) {

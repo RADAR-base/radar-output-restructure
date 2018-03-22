@@ -57,23 +57,23 @@ public class FileCacheStoreTest {
 
         try (FileCacheStore cache = new FileCacheStore(csvFactory, 2, false, false)) {
             record = new GenericRecordBuilder(simpleSchema).set("a", "something").build();
-            assertFalse(cache.writeRecord(f1, record));
+            assertEquals(cache.writeRecord(f1, record), FileCacheStore.NO_CACHE_AND_WRITE);
             record = new GenericRecordBuilder(simpleSchema).set("a", "somethingElse").build();
-            assertTrue(cache.writeRecord(f1, record));
+            assertEquals(cache.writeRecord(f1, record), FileCacheStore.CACHE_AND_WRITE);
             record = new GenericRecordBuilder(simpleSchema).set("a", "something").build();
-            assertFalse(cache.writeRecord(f2, record));
+            assertEquals(cache.writeRecord(f2, record), FileCacheStore.NO_CACHE_AND_WRITE);
             record = new GenericRecordBuilder(simpleSchema).set("a", "third").build();
-            assertTrue(cache.writeRecord(f1, record));
+            assertEquals(cache.writeRecord(f1, record), FileCacheStore.CACHE_AND_WRITE);
             record = new GenericRecordBuilder(simpleSchema).set("a", "f3").build();
-            assertFalse(cache.writeRecord(f3, record));
+            assertEquals(cache.writeRecord(f3, record), FileCacheStore.NO_CACHE_AND_WRITE);
             record = new GenericRecordBuilder(simpleSchema).set("a", "f2").build();
-            assertFalse(cache.writeRecord(f2, record));
+            assertEquals(cache.writeRecord(f2, record), FileCacheStore.NO_CACHE_AND_WRITE);
             record = new GenericRecordBuilder(simpleSchema).set("a", "f3").build();
-            assertTrue(cache.writeRecord(f3, record));
+            assertEquals(cache.writeRecord(f3, record), FileCacheStore.CACHE_AND_WRITE);
             record = new GenericRecordBuilder(simpleSchema).set("a", "f4").build();
-            assertFalse(cache.writeRecord(f4, record));
+            assertEquals(cache.writeRecord(f4, record), FileCacheStore.NO_CACHE_AND_WRITE);
             record = new GenericRecordBuilder(simpleSchema).set("a", "f3").build();
-            assertTrue(cache.writeRecord(f3, record));
+            assertEquals(cache.writeRecord(f3, record), FileCacheStore.CACHE_AND_WRITE);
         }
 
         assertEquals("a\nsomething\nsomethingElse\nthird\n", new String(Files.readAllBytes(f1)));

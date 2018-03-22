@@ -54,8 +54,9 @@ public final class JsonAvroConverter implements RecordConverter {
     }
 
     @Override
-    public void writeRecord(GenericRecord record) throws IOException {
+    public boolean writeRecord(GenericRecord record) throws IOException {
         jsonWriter.writeValue(generator, convertRecord(record));
+        return true;
     }
 
     public Map<String, Object> convertRecord(GenericRecord record) {

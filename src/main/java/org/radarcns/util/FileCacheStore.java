@@ -40,6 +40,13 @@ public class FileCacheStore implements Flushable, Closeable {
     private final int maxFiles;
     private final Map<Path, FileCache> caches;
 
+    // Response codes for each write record case
+    public static final int CACHE_AND_WRITE = 1; //used cache and write successful
+    public static final int NO_CACHE_AND_WRITE= 2;
+    public static final int CACHE_AND_NO_WRITE =3;
+    public static final int NO_CACHE_AND_NO_WRITE =4;
+
+
     public FileCacheStore(RecordConverterFactory converterFactory, int maxFiles, boolean gzip, boolean deduplicate) {
         this.converterFactory = converterFactory;
         this.maxFiles = maxFiles;
@@ -54,14 +61,19 @@ public class FileCacheStore implements Flushable, Closeable {
      *
      * @param path file to append data to
      * @param record data
-     * @return true if the cache was used, false if a new file was opened.
+     * @return integer according to one of the response codes.
      * @throws IOException when failing to open a file or writing to it.
      */
-    public boolean writeRecord(Path path, GenericRecord record) throws IOException {
+    public int writeRecord(Path path, GenericRecord record) throws IOException {
         FileCache cache = caches.get(path);
         if (cache != null) {
-            cache.writeRecord(record);
-            return true;
+            if(cache.writeRecord(record)){
+                return CACHE_AND_WRITE;
+            } else {
+                // This is the case when cache is used but write is unsuccessful
+                // because of different number columns in same topic
+                return CACHE_AND_NO_WRITE;
+            }
         } else {
             ensureCapacity();
 
@@ -70,8 +82,12 @@ public class FileCacheStore implements Flushable, Closeable {
 
             cache = new FileCache(converterFactory, path, record, gzip);
             caches.put(path, cache);
-            cache.writeRecord(record);
-            return false;
+            if(cache.writeRecord(record)) {
+                return NO_CACHE_AND_WRITE;
+            } else {
+                return NO_CACHE_AND_NO_WRITE;
+            }
+
         }
     }
 
