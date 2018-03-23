@@ -1,6 +1,6 @@
 # Restructure HDFS files
 
-[![Build Status](https://travis-ci.org/RADAR-CNS/Restructure-HDFS-topic.svg?branch=master)](https://travis-ci.org/RADAR-CNS/Restructure-HDFS-topic)
+[![Build Status](https://travis-ci.org/RADAR-base/Restructure-HDFS-topic.svg?branch=master)](https://travis-ci.org/RADAR-base/Restructure-HDFS-topic)
 
 Data streamed to HDFS using the [RADAR HDFS sink connector](https://github.com/RADAR-CNS/RADAR-HDFS-Sink-Connector) is streamed to files based on sensor only. This package can transform that output to a local directory structure as follows: `userId/topic/date_hour.csv`. The date and hour is extracted from the `time` field of each record, and is formatted in UTC time.
 
