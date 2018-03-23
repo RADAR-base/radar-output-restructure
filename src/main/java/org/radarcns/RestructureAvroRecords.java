@@ -16,6 +16,7 @@
 
 package org.radarcns;
 
+import com.fasterxml.jackson.databind.JsonMappingException;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.generic.GenericDatumReader;
@@ -70,7 +71,9 @@ public class RestructureAvroRecords {
     private long processedFileCount;
     private long processedRecordsCount;
     private static final boolean USE_GZIP = "gzip".equalsIgnoreCase(System.getProperty("org.radarcns.compression"));
-    private static final boolean DO_DEDUPLICATE = "true".equalsIgnoreCase(System.getProperty("org.radarcns.deduplicate", "true"));
+
+    // Default set to false because causes loss of records from Biovotion data. https://github.com/RADAR-base/Restructure-HDFS-topic/issues/16
+    private static final boolean DO_DEDUPLICATE = "true".equalsIgnoreCase(System.getProperty("org.radarcns.deduplicate", "false"));
 
     public static void main(String [] args) throws Exception {
         if (args.length != 3) {
@@ -178,7 +181,12 @@ public class RestructureAvroRecords {
             for (Map.Entry<String, List<Path>> entry : topicPaths.entrySet()) {
                 try (FileCacheStore cache = new FileCacheStore(converterFactory, 100, USE_GZIP, DO_DEDUPLICATE)) {
                     for (Path filePath : entry.getValue()) {
-                        this.processFile(filePath, entry.getKey(), cache, offsets);
+                        // If JsonMappingException occurs, log the error and continue with other files
+                        try {
+                            this.processFile(filePath, entry.getKey(), cache, offsets);
+                        } catch (JsonMappingException exc) {
+                            logger.error("Cannot map values", exc);
+                        }
                         progressBar.update(++processedFileCount);
                     }
                 }
@@ -258,9 +266,20 @@ public class RestructureAvroRecords {
         Date time = getDate(keyField, valueField);
         java.nio.file.Path outputFileName = createFilename(time);
 
+        String projectId;
+
+        if(keyField.get("projectId") == null) {
+            projectId = "unknown-project";
+        } else {
+            // Clean Project id for use in final pathname
+            projectId = keyField.get("projectId").toString().replaceAll("[^a-zA-Z0-9_-]+", "");
+        }
+
         // Clean user id and create final output pathname
         String userId = keyField.get("userId").toString().replaceAll("[^a-zA-Z0-9_-]+", "");
-        java.nio.file.Path userDir = this.outputPath.resolve(userId);
+
+        java.nio.file.Path projectDir = this.outputPath.resolve(projectId);
+        java.nio.file.Path userDir = projectDir.resolve(userId);
         java.nio.file.Path userTopicDir = userDir.resolve(topicName);
         java.nio.file.Path outputPath = userTopicDir.resolve(outputFileName);
 
