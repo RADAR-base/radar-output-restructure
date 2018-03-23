@@ -53,6 +53,11 @@ public class FileCacheStoreTest {
                 .name("a").type("string").noDefault()
                 .endRecord();
 
+        Schema conflictSchema = SchemaBuilder.record("simple").fields()
+                .name("a").type("string").noDefault()
+                .name("b").type("string").noDefault()
+                .endRecord();
+
         GenericRecord record;
 
         try (FileCacheStore cache = new FileCacheStore(csvFactory, 2, false, false)) {
@@ -74,9 +79,13 @@ public class FileCacheStoreTest {
             assertEquals(cache.writeRecord(f4, record), FileCacheStore.NO_CACHE_AND_WRITE);
             record = new GenericRecordBuilder(simpleSchema).set("a", "f3").build();
             assertEquals(cache.writeRecord(f3, record), FileCacheStore.CACHE_AND_WRITE);
+            record = new GenericRecordBuilder(conflictSchema).set("a", "f3"). set("b", "conflict").build();
+            assertEquals(cache.writeRecord(f3, record), FileCacheStore.CACHE_AND_NO_WRITE);
+            record = new GenericRecordBuilder(conflictSchema).set("a", "f1"). set("b", "conflict").build();
+            assertEquals(cache.writeRecord(f1, record), FileCacheStore.NO_CACHE_AND_WRITE);
         }
 
-        assertEquals("a\nsomething\nsomethingElse\nthird\n", new String(Files.readAllBytes(f1)));
+        assertEquals("a\nsomething\nsomethingElse\nthird\nf1,conflict\n", new String(Files.readAllBytes(f1)));
         assertEquals("a\nsomething\nf2\n", new String(Files.readAllBytes(f2)));
         assertEquals("a\nf3\nf3\nf3\n", new String(Files.readAllBytes(f3)));
         assertEquals("a\nf4\n", new String(Files.readAllBytes(f4)));
