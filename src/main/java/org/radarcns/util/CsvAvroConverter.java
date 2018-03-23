@@ -30,6 +30,7 @@ import org.apache.avro.generic.GenericRecord;
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.ByteBuffer;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,7 +60,7 @@ public class CsvAvroConverter implements RecordConverter {
     private final ObjectWriter csvWriter;
     private final Map<String, Object> map;
     private final CsvGenerator generator;
-    private int numOfColumns;
+    private final int numOfColumns;
 
     public CsvAvroConverter(CsvFactory factory, Writer writer, GenericRecord record, boolean writeHeader)
             throws IOException {
@@ -78,6 +79,12 @@ public class CsvAvroConverter implements RecordConverter {
         csvWriter = new CsvMapper(factory).writer(schema);
     }
 
+    /**
+     * Write AVRO record to CSV file.
+     * @param record the AVRO record to be written to CSV file
+     * @return true if write was successful, false if cannot write record to the current CSV file
+     * @throws IOException for other IO and Mapping errors
+     */
     @Override
     public boolean writeRecord(GenericRecord record) throws IOException {
         Map<String, Object> localMap = convertRecord(record);

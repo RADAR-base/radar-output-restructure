@@ -76,7 +76,12 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
         }
     }
 
-    /** Write a record to the cache. */
+    /**
+     * Write a record to the cache.
+     * @param record AVRO record
+     * @return true or false based on {@link RecordConverter} write result
+     * @throws IOException
+     */
     public boolean writeRecord(GenericRecord record) throws IOException {
         boolean result = this.recordConverter.writeRecord(record);
         lastUse = System.nanoTime();

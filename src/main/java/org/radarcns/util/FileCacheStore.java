@@ -61,7 +61,7 @@ public class FileCacheStore implements Flushable, Closeable {
      *
      * @param path file to append data to
      * @param record data
-     * @return integer according to one of the response codes.
+     * @return Integer value according to one of the response codes.
      * @throws IOException when failing to open a file or writing to it.
      */
     public int writeRecord(Path path, GenericRecord record) throws IOException {
