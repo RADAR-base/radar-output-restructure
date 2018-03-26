@@ -286,7 +286,7 @@ public class RestructureAvroRecords {
         // Write data
         int response = cache.writeRecord(outputPath, record);
 
-        if (response == FileCacheStore.CACHE_AND_NO_WRITE) {
+        if (response == FileCacheStore.CACHE_AND_NO_WRITE || response == FileCacheStore.NO_CACHE_AND_NO_WRITE) {
             // Write was unsuccessful due to different number of columns,
             // try again with new file name
             writeRecord(record, topicName, cache, ++suffix);

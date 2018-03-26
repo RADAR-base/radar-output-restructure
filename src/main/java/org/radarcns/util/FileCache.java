@@ -16,17 +16,11 @@
 
 package org.radarcns.util;
 
-import java.io.BufferedOutputStream;
-import java.io.Closeable;
-import java.io.FileOutputStream;
-import java.io.Flushable;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 import javax.annotation.Nonnull;
 import org.apache.avro.generic.GenericRecord;
@@ -57,15 +51,19 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
 
         OutputStream outFile = Files.newOutputStream(path,
                 StandardOpenOption.APPEND, StandardOpenOption.CREATE);
+        InputStream inputStream = new BufferedInputStream(Files.newInputStream(path));
         OutputStream bufOut = new BufferedOutputStream(outFile);
         if (gzip) {
             bufOut = new GZIPOutputStream(bufOut);
+            if (!fileIsNew) {
+                inputStream = new GZIPInputStream(inputStream);
+            }
         }
 
         this.writer = new OutputStreamWriter(bufOut);
 
-        try {
-            this.recordConverter = converterFactory.converterFor(writer, record, fileIsNew);
+        try (Reader reader = new InputStreamReader(inputStream)) {
+            this.recordConverter = converterFactory.converterFor(writer, record, fileIsNew, reader);
         } catch (IOException ex) {
             try {
                 writer.close();

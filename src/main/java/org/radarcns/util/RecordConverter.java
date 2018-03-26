@@ -17,11 +17,8 @@
 package org.radarcns.util;
 
 import java.io.Closeable;
-import java.io.File;
 import java.io.Flushable;
 import java.io.IOException;
-import java.nio.file.Path;
-import java.util.List;
 import java.util.Map;
 import org.apache.avro.generic.GenericRecord;
 

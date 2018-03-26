@@ -16,6 +16,8 @@
 
 package org.radarcns.util;
 
+import com.fasterxml.jackson.databind.MappingIterator;
+import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.dataformat.csv.CsvFactory;
 import com.fasterxml.jackson.dataformat.csv.CsvGenerator;
@@ -28,9 +30,9 @@ import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
+import java.io.Reader;
 import java.io.Writer;
 import java.nio.ByteBuffer;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,8 +48,8 @@ public class CsvAvroConverter implements RecordConverter {
         CsvFactory factory = new CsvFactory();
         return new RecordConverterFactory() {
             @Override
-            public RecordConverter converterFor(Writer writer, GenericRecord record, boolean writeHeader) throws IOException {
-                return new CsvAvroConverter(factory, writer, record, writeHeader);
+            public RecordConverter converterFor(Writer writer, GenericRecord record, boolean writeHeader, Reader reader) throws IOException {
+                return new CsvAvroConverter(factory, writer, record, writeHeader, reader);
             }
 
             @Override
@@ -62,21 +64,37 @@ public class CsvAvroConverter implements RecordConverter {
     private final CsvGenerator generator;
     private final int numOfColumns;
 
-    public CsvAvroConverter(CsvFactory factory, Writer writer, GenericRecord record, boolean writeHeader)
+    public CsvAvroConverter(CsvFactory factory, Writer writer, GenericRecord record, boolean writeHeader, Reader reader)
             throws IOException {
         map = new LinkedHashMap<>();
-        Map<String, Object> value = convertRecord(record);
+
+        CsvMapper mapper = new CsvMapper(factory);
+        Map<String, Object> value;
+
+        CsvSchema schema = CsvSchema.emptySchema().withHeader();
+        if (!writeHeader) {
+            // If file already exists read the schema from the CSV file
+            ObjectReader objectReader = mapper.readerFor(Map.class).with(schema);
+            MappingIterator<Map<String,Object>> iterator = objectReader.readValues(reader);
+            value = iterator.next();
+        } else {
+            value = convertRecord(record);
+        }
+
         CsvSchema.Builder builder = new CsvSchema.Builder();
         for (String key : value.keySet()) {
             builder.addColumn(key);
         }
-        CsvSchema schema = builder.build();
+        schema = builder.build();
+
         if (writeHeader) {
             schema = schema.withHeader();
         }
-        numOfColumns = schema.size();
+
         generator = factory.createGenerator(writer);
-        csvWriter = new CsvMapper(factory).writer(schema);
+        csvWriter = mapper.writer(schema);
+        numOfColumns = schema.size();
+
     }
 
     /**

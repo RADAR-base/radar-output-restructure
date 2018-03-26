@@ -53,7 +53,7 @@ public interface RecordConverterFactory {
      * @return RecordConverter that is ready to be used
      * @throws IOException if the converter could not be created
      */
-    RecordConverter converterFor(Writer writer, GenericRecord record, boolean writeHeader) throws IOException;
+    RecordConverter converterFor(Writer writer, GenericRecord record, boolean writeHeader, Reader reader) throws IOException;
 
     default boolean hasHeader() {
         return false;

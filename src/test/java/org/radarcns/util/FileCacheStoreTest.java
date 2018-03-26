@@ -17,10 +17,7 @@
 package org.radarcns.util;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -44,6 +41,7 @@ public class FileCacheStoreTest {
         Path f3 = folder.newFile().toPath();
         Path d4 = folder.newFolder().toPath();
         Path f4 = d4.resolve("f4.txt");
+        Path newFile = folder.newFile().toPath();
 
         Files.delete(f1);
         Files.delete(d4);
@@ -82,12 +80,16 @@ public class FileCacheStoreTest {
             record = new GenericRecordBuilder(conflictSchema).set("a", "f3"). set("b", "conflict").build();
             assertEquals(cache.writeRecord(f3, record), FileCacheStore.CACHE_AND_NO_WRITE);
             record = new GenericRecordBuilder(conflictSchema).set("a", "f1"). set("b", "conflict").build();
-            assertEquals(cache.writeRecord(f1, record), FileCacheStore.NO_CACHE_AND_WRITE);
+            // Cannot write to file even though the file is not in cache since schema is different
+            assertEquals(cache.writeRecord(f1, record), FileCacheStore.NO_CACHE_AND_NO_WRITE);
+            // Can write the same record to a new file
+            assertEquals(cache.writeRecord(newFile, record), FileCacheStore.NO_CACHE_AND_WRITE);
         }
 
-        assertEquals("a\nsomething\nsomethingElse\nthird\nf1,conflict\n", new String(Files.readAllBytes(f1)));
+        assertEquals("a\nsomething\nsomethingElse\nthird\n", new String(Files.readAllBytes(f1)));
         assertEquals("a\nsomething\nf2\n", new String(Files.readAllBytes(f2)));
         assertEquals("a\nf3\nf3\nf3\n", new String(Files.readAllBytes(f3)));
         assertEquals("a\nf4\n", new String(Files.readAllBytes(f4)));
+        assertEquals("a,b\nf1,conflict\n", new String(Files.readAllBytes(newFile)));
     }
 }

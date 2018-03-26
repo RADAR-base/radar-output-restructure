@@ -85,6 +85,8 @@ public class FileCacheStore implements Flushable, Closeable {
             if(cache.writeRecord(record)) {
                 return NO_CACHE_AND_WRITE;
             } else {
+                // The file path was not in cache but the file exists and this write is
+                // unsuccessful because of different number of columns
                 return NO_CACHE_AND_NO_WRITE;
             }
 

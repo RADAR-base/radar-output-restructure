@@ -42,7 +42,7 @@ public final class JsonAvroConverter implements RecordConverter {
 
     public static RecordConverterFactory getFactory() {
         JsonFactory factory = new JsonFactory();
-        return (writer, record, writeHeader) -> new JsonAvroConverter(factory, writer);
+        return (writer, record, writeHeader, reader) -> new JsonAvroConverter(factory, writer);
     }
 
     private final ObjectWriter jsonWriter;
