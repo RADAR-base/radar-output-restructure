@@ -116,8 +116,31 @@ public class CsvAvroConverterTest {
         Schema schemaB = SchemaBuilder.record("B").fields().name("b").type("string").noDefault().endRecord();
         GenericRecord recordB = new GenericRecordBuilder(schemaB).set("b", "something").build();
 
-        exception.expect(JsonMappingException.class);
-        converter.writeRecord(recordB);
+        /* Same number of columns but different schema, so CsvAvroConverter.write() will return false
+        signifying that a new CSV file must be used to write this record
+         */
+        assertFalse(converter.writeRecord(recordB));
+        System.out.println(writer.toString());
+    }
+
+
+    @Test
+    public void differentSchema2() throws IOException {
+        Schema schemaA = SchemaBuilder.record("A").fields().name("a").type("string").noDefault().name("b").type("string").noDefault().endRecord();
+        GenericRecord recordA = new GenericRecordBuilder(schemaA).set("a", "something").set("b", "2nd something").build();
+
+        StringWriter writer = new StringWriter();
+        RecordConverter converter = CsvAvroConverter.getFactory().converterFor(writer, recordA, true, new StringReader("test"));
+        converter.writeRecord(recordA);
+
+        Schema schemaB = SchemaBuilder.record("B").fields().name("b").type("string").noDefault().name("a").type("string").noDefault().endRecord();
+        GenericRecord recordB = new GenericRecordBuilder(schemaB).set("b", "something").set("a", "2nd something").build();
+
+        /* Same number of columns and same header but different order,
+        so CsvAvroConverter.write() will return false signifying that
+        a new CSV file must be used to write this record
+         */
+        assertFalse(converter.writeRecord(recordB));
         System.out.println(writer.toString());
     }
 

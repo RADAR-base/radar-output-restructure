@@ -16,6 +16,7 @@
 
 package org.radarcns.util;
 
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.MappingIterator;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
@@ -33,9 +34,7 @@ import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.ByteBuffer;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Converts deep hierarchical Avro records into flat CSV format. It uses a simple dot syntax in the
@@ -62,7 +61,7 @@ public class CsvAvroConverter implements RecordConverter {
     private final ObjectWriter csvWriter;
     private final Map<String, Object> map;
     private final CsvGenerator generator;
-    private final int numOfColumns;
+    private CsvSchema schema;
 
     public CsvAvroConverter(CsvFactory factory, Writer writer, GenericRecord record, boolean writeHeader, Reader reader)
             throws IOException {
@@ -71,7 +70,7 @@ public class CsvAvroConverter implements RecordConverter {
         CsvMapper mapper = new CsvMapper(factory);
         Map<String, Object> value;
 
-        CsvSchema schema = CsvSchema.emptySchema().withHeader();
+        schema = CsvSchema.emptySchema().withHeader();
         if (!writeHeader) {
             // If file already exists read the schema from the CSV file
             ObjectReader objectReader = mapper.readerFor(Map.class).with(schema);
@@ -93,7 +92,6 @@ public class CsvAvroConverter implements RecordConverter {
 
         generator = factory.createGenerator(writer);
         csvWriter = mapper.writer(schema);
-        numOfColumns = schema.size();
 
     }
 
@@ -107,10 +105,21 @@ public class CsvAvroConverter implements RecordConverter {
     public boolean writeRecord(GenericRecord record) throws IOException {
         Map<String, Object> localMap = convertRecord(record);
 
-        if(localMap.size() > numOfColumns) {
+        if(localMap.size() > schema.size()) {
             // Cannot write to same file so return false
             return false;
+        } else {
+            Iterator<String> localColumnIterator = localMap.keySet().iterator();
+            for(int i = 0; i < schema.size(); i++) {
+                if (!schema.columnName(i).equals(localColumnIterator.next())) {
+                    /* The order or name of columns is different and
+                    thus cannot write to this csv file. return false.
+                     */
+                    return false;
+                }
+            }
         }
+
         csvWriter.writeValue(generator, localMap);
         localMap.clear();
         return true;
