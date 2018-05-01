@@ -16,6 +16,9 @@
 
 package org.radarcns.util;
 
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.MappingIterator;
+import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.dataformat.csv.CsvFactory;
 import com.fasterxml.jackson.dataformat.csv.CsvGenerator;
@@ -28,11 +31,10 @@ import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
+import java.io.Reader;
 import java.io.Writer;
 import java.nio.ByteBuffer;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Converts deep hierarchical Avro records into flat CSV format. It uses a simple dot syntax in the
@@ -45,8 +47,8 @@ public class CsvAvroConverter implements RecordConverter {
         CsvFactory factory = new CsvFactory();
         return new RecordConverterFactory() {
             @Override
-            public RecordConverter converterFor(Writer writer, GenericRecord record, boolean writeHeader) throws IOException {
-                return new CsvAvroConverter(factory, writer, record, writeHeader);
+            public RecordConverter converterFor(Writer writer, GenericRecord record, boolean writeHeader, Reader reader) throws IOException {
+                return new CsvAvroConverter(factory, writer, record, writeHeader, reader);
             }
 
             @Override
@@ -59,28 +61,68 @@ public class CsvAvroConverter implements RecordConverter {
     private final ObjectWriter csvWriter;
     private final Map<String, Object> map;
     private final CsvGenerator generator;
+    private CsvSchema schema;
 
-    public CsvAvroConverter(CsvFactory factory, Writer writer, GenericRecord record, boolean writeHeader)
+    public CsvAvroConverter(CsvFactory factory, Writer writer, GenericRecord record, boolean writeHeader, Reader reader)
             throws IOException {
         map = new LinkedHashMap<>();
-        Map<String, Object> value = convertRecord(record);
+
+        CsvMapper mapper = new CsvMapper(factory);
+        Map<String, Object> value;
+
+        schema = CsvSchema.emptySchema().withHeader();
+        if (!writeHeader) {
+            // If file already exists read the schema from the CSV file
+            ObjectReader objectReader = mapper.readerFor(Map.class).with(schema);
+            MappingIterator<Map<String,Object>> iterator = objectReader.readValues(reader);
+            value = iterator.next();
+        } else {
+            value = convertRecord(record);
+        }
+
         CsvSchema.Builder builder = new CsvSchema.Builder();
         for (String key : value.keySet()) {
             builder.addColumn(key);
         }
-        CsvSchema schema = builder.build();
+        schema = builder.build();
+
         if (writeHeader) {
             schema = schema.withHeader();
         }
+
         generator = factory.createGenerator(writer);
-        csvWriter = new CsvMapper(factory).writer(schema);
+        csvWriter = mapper.writer(schema);
+
     }
 
+    /**
+     * Write AVRO record to CSV file.
+     * @param record the AVRO record to be written to CSV file
+     * @return true if write was successful, false if cannot write record to the current CSV file
+     * @throws IOException for other IO and Mapping errors
+     */
     @Override
-    public void writeRecord(GenericRecord record) throws IOException {
+    public boolean writeRecord(GenericRecord record) throws IOException {
         Map<String, Object> localMap = convertRecord(record);
+
+        if(localMap.size() > schema.size()) {
+            // Cannot write to same file so return false
+            return false;
+        } else {
+            Iterator<String> localColumnIterator = localMap.keySet().iterator();
+            for(int i = 0; i < schema.size(); i++) {
+                if (!schema.columnName(i).equals(localColumnIterator.next())) {
+                    /* The order or name of columns is different and
+                    thus cannot write to this csv file. return false.
+                     */
+                    return false;
+                }
+            }
+        }
+
         csvWriter.writeValue(generator, localMap);
         localMap.clear();
+        return true;
     }
 
     public Map<String, Object> convertRecord(GenericRecord record) {

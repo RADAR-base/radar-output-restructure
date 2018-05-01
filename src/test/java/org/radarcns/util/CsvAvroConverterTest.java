@@ -24,19 +24,9 @@ import static org.junit.Assert.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonMappingException;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.Reader;
-import java.io.StringWriter;
-import java.io.Writer;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -77,7 +67,7 @@ public class CsvAvroConverterTest {
 
         StringWriter writer = new StringWriter();
         RecordConverterFactory factory = CsvAvroConverter.getFactory();
-        RecordConverter converter = factory.converterFor(writer, record, true);
+        RecordConverter converter = factory.converterFor(writer, record, true, new StringReader("test"));
 
         Map<String, Object> map = converter.convertRecord(record);
         List<String> keys = Arrays.asList("a", "b", "c", "d", "e", "f", "g", "h", "i.some",
@@ -120,14 +110,37 @@ public class CsvAvroConverterTest {
         GenericRecord recordA = new GenericRecordBuilder(schemaA).set("a", "something").build();
 
         StringWriter writer = new StringWriter();
-        RecordConverter converter = CsvAvroConverter.getFactory().converterFor(writer, recordA, true);
+        RecordConverter converter = CsvAvroConverter.getFactory().converterFor(writer, recordA, true, new StringReader("test"));
         converter.writeRecord(recordA);
 
         Schema schemaB = SchemaBuilder.record("B").fields().name("b").type("string").noDefault().endRecord();
         GenericRecord recordB = new GenericRecordBuilder(schemaB).set("b", "something").build();
 
-        exception.expect(JsonMappingException.class);
-        converter.writeRecord(recordB);
+        /* Same number of columns but different schema, so CsvAvroConverter.write() will return false
+        signifying that a new CSV file must be used to write this record
+         */
+        assertFalse(converter.writeRecord(recordB));
+        System.out.println(writer.toString());
+    }
+
+
+    @Test
+    public void differentSchema2() throws IOException {
+        Schema schemaA = SchemaBuilder.record("A").fields().name("a").type("string").noDefault().name("b").type("string").noDefault().endRecord();
+        GenericRecord recordA = new GenericRecordBuilder(schemaA).set("a", "something").set("b", "2nd something").build();
+
+        StringWriter writer = new StringWriter();
+        RecordConverter converter = CsvAvroConverter.getFactory().converterFor(writer, recordA, true, new StringReader("test"));
+        converter.writeRecord(recordA);
+
+        Schema schemaB = SchemaBuilder.record("B").fields().name("b").type("string").noDefault().name("a").type("string").noDefault().endRecord();
+        GenericRecord recordB = new GenericRecordBuilder(schemaB).set("b", "something").set("a", "2nd something").build();
+
+        /* Same number of columns and same header but different order,
+        so CsvAvroConverter.write() will return false signifying that
+        a new CSV file must be used to write this record
+         */
+        assertFalse(converter.writeRecord(recordB));
         System.out.println(writer.toString());
     }
 
@@ -140,7 +153,7 @@ public class CsvAvroConverterTest {
                 .build();
 
         StringWriter writer = new StringWriter();
-        RecordConverter converter = CsvAvroConverter.getFactory().converterFor(writer, recordA, true);
+        RecordConverter converter = CsvAvroConverter.getFactory().converterFor(writer, recordA, true, new StringReader("test"));
         converter.writeRecord(recordA);
 
         Schema schemaB = SchemaBuilder.record("B").fields().name("b").type("string").noDefault().endRecord();

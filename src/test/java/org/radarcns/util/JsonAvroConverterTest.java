@@ -22,11 +22,8 @@ import static org.radarcns.util.CsvAvroConverterTest.writeTestNumbers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.StringWriter;
+
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -55,7 +52,7 @@ public class JsonAvroConverterTest {
         JsonDecoder decoder = DecoderFactory.get().jsonDecoder(schema, getClass().getResourceAsStream("full.json"));
         GenericRecord record = reader.read(null, decoder);
 
-        Map<String, Object> map = JsonAvroConverter.getFactory().converterFor(new StringWriter(), record, false).convertRecord(record);
+        Map<String, Object> map = JsonAvroConverter.getFactory().converterFor(new StringWriter(), record, false, new StringReader("test")).convertRecord(record);
         ObjectWriter writer = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT).writer();
         String result = writer.writeValueAsString(map);
 

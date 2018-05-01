@@ -16,6 +16,7 @@
 
 package org.radarcns;
 
+import com.fasterxml.jackson.databind.JsonMappingException;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.generic.GenericDatumReader;
@@ -70,7 +71,9 @@ public class RestructureAvroRecords {
     private long processedFileCount;
     private long processedRecordsCount;
     private static final boolean USE_GZIP = "gzip".equalsIgnoreCase(System.getProperty("org.radarcns.compression"));
-    private static final boolean DO_DEDUPLICATE = "true".equalsIgnoreCase(System.getProperty("org.radarcns.deduplicate", "true"));
+
+    // Default set to false because causes loss of records from Biovotion data. https://github.com/RADAR-base/Restructure-HDFS-topic/issues/16
+    private static final boolean DO_DEDUPLICATE = "true".equalsIgnoreCase(System.getProperty("org.radarcns.deduplicate", "false"));
 
     public static void main(String [] args) throws Exception {
         if (args.length != 3) {
@@ -178,7 +181,12 @@ public class RestructureAvroRecords {
             for (Map.Entry<String, List<Path>> entry : topicPaths.entrySet()) {
                 try (FileCacheStore cache = new FileCacheStore(converterFactory, 100, USE_GZIP, DO_DEDUPLICATE)) {
                     for (Path filePath : entry.getValue()) {
-                        this.processFile(filePath, entry.getKey(), cache, offsets);
+                        // If JsonMappingException occurs, log the error and continue with other files
+                        try {
+                            this.processFile(filePath, entry.getKey(), cache, offsets);
+                        } catch (JsonMappingException exc) {
+                            logger.error("Cannot map values", exc);
+                        }
                         progressBar.update(++processedFileCount);
                     }
                 }
@@ -232,7 +240,7 @@ public class RestructureAvroRecords {
             record = dataFileReader.next(record);
 
             // Get the fields
-            this.writeRecord(record, topicName, cache);
+            this.writeRecord(record, topicName, cache, 0);
         }
 
         // Write which file has been processed and update bins
@@ -245,7 +253,7 @@ public class RestructureAvroRecords {
         }
     }
 
-    private void writeRecord(GenericRecord record, String topicName, FileCacheStore cache)
+    private void writeRecord(GenericRecord record, String topicName, FileCacheStore cache, int suffix)
             throws IOException {
         GenericRecord keyField = (GenericRecord) record.get("key");
         GenericRecord valueField = (GenericRecord) record.get("value");
@@ -256,37 +264,63 @@ public class RestructureAvroRecords {
         }
 
         Date time = getDate(keyField, valueField);
-        java.nio.file.Path outputFileName = createFilename(time);
+        java.nio.file.Path outputFileName = createFilename(time, suffix);
+
+        String projectId;
+
+        if(keyField.get("projectId") == null) {
+            projectId = "unknown-project";
+        } else {
+            // Clean Project id for use in final pathname
+            projectId = keyField.get("projectId").toString().replaceAll("[^a-zA-Z0-9_-]+", "");
+        }
 
         // Clean user id and create final output pathname
         String userId = keyField.get("userId").toString().replaceAll("[^a-zA-Z0-9_-]+", "");
-        java.nio.file.Path userDir = this.outputPath.resolve(userId);
+
+        java.nio.file.Path projectDir = this.outputPath.resolve(projectId);
+        java.nio.file.Path userDir = projectDir.resolve(userId);
         java.nio.file.Path userTopicDir = userDir.resolve(topicName);
         java.nio.file.Path outputPath = userTopicDir.resolve(outputFileName);
 
         // Write data
-        cache.writeRecord(outputPath, record);
+        int response = cache.writeRecord(outputPath, record);
 
-        java.nio.file.Path schemaPath = userTopicDir.resolve(SCHEMA_OUTPUT_FILE_NAME);
-        if (!Files.exists(schemaPath)) {
-            try (Writer writer = Files.newBufferedWriter(schemaPath)) {
-                writer.write(record.getSchema().toString(true));
+        if (response == FileCacheStore.CACHE_AND_NO_WRITE || response == FileCacheStore.NO_CACHE_AND_NO_WRITE) {
+            // Write was unsuccessful due to different number of columns,
+            // try again with new file name
+            writeRecord(record, topicName, cache, ++suffix);
+        } else {
+            // Write was successful, finalize the write
+            java.nio.file.Path schemaPath = userTopicDir.resolve(SCHEMA_OUTPUT_FILE_NAME);
+            if (!Files.exists(schemaPath)) {
+                try (Writer writer = Files.newBufferedWriter(schemaPath)) {
+                    writer.write(record.getSchema().toString(true));
+                }
             }
-        }
 
-        // Count data (binned and total)
-        bins.add(topicName, keyField.get("sourceId").toString(), time);
-        processedRecordsCount++;
+            // Count data (binned and total)
+            bins.add(topicName, keyField.get("sourceId").toString(), time);
+            processedRecordsCount++;
+        }
     }
 
-    private java.nio.file.Path createFilename(Date date) {
+    private java.nio.file.Path createFilename(Date date, int suffix) {
         if (date == null) {
             logger.warn("Time field of record valueField is not set");
             return Paths.get("unknown_date." + outputFileExtension);
         }
+
+        String finalSuffix;
+        if(suffix == 0) {
+            finalSuffix = "";
+        } else {
+            finalSuffix = "_" + suffix;
+        }
+
         // Make a timestamped filename YYYYMMDD_HH00.json
         String hourlyTimestamp = createHourTimestamp(date);
-        return Paths.get(hourlyTimestamp + "00." + outputFileExtension);
+        return Paths.get(hourlyTimestamp + "00" + finalSuffix +"." + outputFileExtension);
     }
 
     public static String createHourTimestamp(Date date) {
