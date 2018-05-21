@@ -28,7 +28,7 @@ java -Dorg.radarcns.format=json -jar restructurehdfs-0.3.1-all.jar <webhdfs_url>
 
 Another option is to output the data in compressed form. All files will get the `gz` suffix, and can be decompressed with a GZIP decoder. Note that for a very small number of records, this may actually increase the file size.
 ```
-java -Dorg.radarcns.compress=gzip -jar restructurehdfs-0.3.1-all.jar <webhdfs_url> <hdfs_topic_path> <output_folder>
+java -Dorg.radarcns.compression=gzip -jar restructurehdfs-0.3.1-all.jar <webhdfs_url> <hdfs_topic_path> <output_folder>
 ```
 
 Finally, by default, files records are not deduplicated after writing. To enable this behaviour, specify the option `-Dorg.radarcns.deduplicate=true`. This set to false by default because of an issue with Biovotion data. Please see - [issue #16](https://github.com/RADAR-base/Restructure-HDFS-topic/issues/16) before enabling it.
