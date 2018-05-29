@@ -2,7 +2,7 @@ apply plugin: 'java'
 apply plugin: 'application'
 
 group 'org.radarcns.restructurehdfs'
-version '0.3.2'
+version '0.3.3-SNAPSHOT'
 mainClassName = 'org.radarcns.RestructureAvroRecords'
 
 run {
@@ -15,6 +15,7 @@ targetCompatibility = '1.8'
 ext.avroVersion = '1.8.2'
 ext.jacksonVersion = '2.8.9'
 ext.hadoopVersion = '2.7.3'
+ext.jCommanderVersion = '1.72'
 
 repositories {
     jcenter()
@@ -26,6 +27,8 @@ dependencies {
     compile group: 'org.apache.avro', name: 'avro-mapred', version: avroVersion
     compile group: 'com.fasterxml.jackson.core' , name: 'jackson-databind', version: jacksonVersion
     compile group: 'com.fasterxml.jackson.dataformat' , name: 'jackson-dataformat-csv', version: jacksonVersion
+
+    compile group: 'com.beust', name: 'jcommander', version: jCommanderVersion
 
     runtime group: 'org.apache.hadoop', name: 'hadoop-hdfs', version: hadoopVersion
 

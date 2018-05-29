@@ -16,6 +16,7 @@
 
 package org.radarcns;
 
+import com.beust.jcommander.JCommander;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.file.DataFileReader;
@@ -32,6 +33,7 @@ import org.radarcns.util.FileCacheStore;
 import org.radarcns.util.JsonAvroConverter;
 import org.radarcns.util.ProgressBar;
 import org.radarcns.util.RecordConverterFactory;
+import org.radarcns.util.commandline.CommandLineArgs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,27 +72,30 @@ public class RestructureAvroRecords {
 
     private long processedFileCount;
     private long processedRecordsCount;
-    private static final boolean USE_GZIP = "gzip".equalsIgnoreCase(System.getProperty("org.radarcns.compression"));
+    private static boolean USE_GZIP;
+    private static boolean DO_DEDUPLICATE;
 
-    // Default set to false because causes loss of records from Biovotion data. https://github.com/RADAR-base/Restructure-HDFS-topic/issues/16
-    private static final boolean DO_DEDUPLICATE = "true".equalsIgnoreCase(System.getProperty("org.radarcns.deduplicate", "false"));
+    private static final CommandLineArgs commandLineArgs = new CommandLineArgs();
+    private static final JCommander parser = JCommander.newBuilder().addObject(commandLineArgs).build();
 
     public static void main(String [] args) throws Exception {
-        if (args.length != 3) {
-            System.out.println("Usage: hadoop jar restructurehdfs-all-0.2.jar <webhdfs_url> <hdfs_root_directory> <output_folder>");
-            System.exit(1);
-        }
+
+        parser.setProgramName("hadoop jar restructurehdfs-all-0.3.2.jar");
+        parser.parse(args);
+        USE_GZIP = "gzip".equalsIgnoreCase(commandLineArgs.compression);
+        DO_DEDUPLICATE = commandLineArgs.deduplicate;
 
         logger.info(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
         logger.info("Starting...");
-        logger.info("In:  " + args[0] + args[1]);
-        logger.info("Out: " + args[2]);
+        logger.info("In:  " + commandLineArgs.hdfsUri + commandLineArgs.hdfsRootDirectory);
+        logger.info("Out: " + commandLineArgs.outputDirectory);
+        logger.info("Deduplicate set to {}", DO_DEDUPLICATE);
 
         long time1 = System.currentTimeMillis();
 
-        RestructureAvroRecords restr = new RestructureAvroRecords(args[0], args[2]);
+        RestructureAvroRecords restr = new RestructureAvroRecords(commandLineArgs.hdfsUri, commandLineArgs.outputDirectory);
         try {
-            restr.start(args[1]);
+            restr.start(commandLineArgs.hdfsRootDirectory);
         } catch (IOException ex) {
             logger.error("Processing failed", ex);
         }
