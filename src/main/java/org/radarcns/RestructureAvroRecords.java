@@ -115,7 +115,7 @@ public class RestructureAvroRecords {
         this.setOutputPath(outputPath);
 
         String extension;
-        if (System.getProperty("org.radarcns.format", "csv").equalsIgnoreCase("json")) {
+        if (commandLineArgs.format.equalsIgnoreCase("json")) {
             logger.info("Writing output files in JSON format");
             converterFactory = JsonAvroConverter.getFactory();
             extension = "json";

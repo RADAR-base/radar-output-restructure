@@ -3,6 +3,10 @@ package org.radarcns.util.commandline;
 import com.beust.jcommander.Parameter;
 
 public class CommandLineArgs {
+
+    @Parameter(names = { "-f", "--format" }, description = "Format to use when converting the files. JSON and CSV is available.")
+    public String format = "csv";
+
     @Parameter(names = { "-c", "--compression" }, description = "Compression to use when converting the files. Gzip is available.")
     public String compression = "none";
 
