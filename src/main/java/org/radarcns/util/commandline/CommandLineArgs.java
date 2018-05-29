@@ -3,7 +3,7 @@ package org.radarcns.util.commandline;
 import com.beust.jcommander.Parameter;
 
 public class CommandLineArgs {
-    @Parameter(names = { "-c", "--compression" }, description = "Compression to use when converting the files. Default is none. Gzip is available.")
+    @Parameter(names = { "-c", "--compression" }, description = "Compression to use when converting the files. Gzip is available.")
     public String compression = "none";
 
     // Default set to false because causes loss of records from Biovotion data. https://github.com/RADAR-base/Restructure-HDFS-topic/issues/16
@@ -19,6 +19,6 @@ public class CommandLineArgs {
     @Parameter(names = { "-o", "--output-directory"}, description = "The output folder where the files are to be extracted.", required = true, validateWith = PathValidator.class)
     public String outputDirectory;
 
-    @Parameter(names = { "-h", "--help"}, help = true)
+    @Parameter(names = { "-h", "--help"}, help = true, description = "Display the usage of the program with available options.")
     public boolean help;
 }

@@ -7,10 +7,11 @@ public class BooleanValidator implements IParameterValidator{
 
     @Override
     public void validate(String name, String value) throws ParameterException {
-        if(!value.equalsIgnoreCase("true") && !value.equalsIgnoreCase("false")) {
-            ParameterException exc = new ParameterException("Parameter " + name + " can only be true or false (found " + value +")");
-            exc.usage();
-            throw exc;
+        if(!value.equalsIgnoreCase("true")
+                && !value.equalsIgnoreCase("false")) {
+            throw new ParameterException("Parameter " + name + " can only be true or "
+                    + "false (found " + value +"). "
+                    + "Please run with --help or -h for more information.");
         }
     }
 }

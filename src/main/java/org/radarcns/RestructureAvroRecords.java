@@ -80,8 +80,14 @@ public class RestructureAvroRecords {
 
     public static void main(String [] args) throws Exception {
 
-        parser.setProgramName("hadoop jar restructurehdfs-all-0.3.2.jar");
+        parser.setProgramName("hadoop jar restructurehdfs-all-0.3.3.jar");
         parser.parse(args);
+
+        if(commandLineArgs.help) {
+            parser.usage();
+            System.exit(0);
+        }
+
         USE_GZIP = "gzip".equalsIgnoreCase(commandLineArgs.compression);
         DO_DEDUPLICATE = commandLineArgs.deduplicate;
 
