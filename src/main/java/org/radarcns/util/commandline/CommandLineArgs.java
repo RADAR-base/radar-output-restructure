@@ -11,8 +11,8 @@ public class CommandLineArgs {
     public String compression = "none";
 
     // Default set to false because causes loss of records from Biovotion data. https://github.com/RADAR-base/Restructure-HDFS-topic/issues/16
-    @Parameter(names = { "-d", "--deduplicate" }, description = "Boolean to define if to use deduplication or not.", validateWith = BooleanValidator.class)
-    public Boolean deduplicate = false;
+    @Parameter(names = { "-d", "--deduplicate" }, description = "Boolean to define if to use deduplication or not.")
+    public boolean deduplicate;
 
     @Parameter(names = { "-u", "--hdfs-uri" }, description = "The HDFS uri to connect to. Eg - 'hdfs://<HOST>:<RPC_PORT>/<PATH>'.", required = true, validateWith = { HdfsUriValidator.class, PathValidator.class })
     public String hdfsUri;

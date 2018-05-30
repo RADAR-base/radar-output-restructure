@@ -72,8 +72,8 @@ public class RestructureAvroRecords {
 
     private long processedFileCount;
     private long processedRecordsCount;
-    private static boolean USE_GZIP;
-    private static boolean DO_DEDUPLICATE;
+    private boolean useGzip;
+    private boolean doDeduplicate;
 
     private static final CommandLineArgs commandLineArgs = new CommandLineArgs();
     private static final JCommander parser = JCommander.newBuilder().addObject(commandLineArgs).build();
@@ -88,18 +88,20 @@ public class RestructureAvroRecords {
             System.exit(0);
         }
 
-        USE_GZIP = "gzip".equalsIgnoreCase(commandLineArgs.compression);
-        DO_DEDUPLICATE = commandLineArgs.deduplicate;
-
         logger.info(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
         logger.info("Starting...");
         logger.info("In:  " + commandLineArgs.hdfsUri + commandLineArgs.hdfsRootDirectory);
         logger.info("Out: " + commandLineArgs.outputDirectory);
-        logger.info("Deduplicate set to {}", DO_DEDUPLICATE);
+
 
         long time1 = System.currentTimeMillis();
 
-        RestructureAvroRecords restr = new RestructureAvroRecords(commandLineArgs.hdfsUri, commandLineArgs.outputDirectory);
+        RestructureAvroRecords restr = new RestructureAvroRecords.Builder(commandLineArgs.hdfsUri,
+                commandLineArgs.outputDirectory)
+                .useGzip("gzip".equalsIgnoreCase(commandLineArgs.compression))
+                .doDeuplicate(commandLineArgs.deduplicate).format(commandLineArgs.format)
+                .build();
+
         try {
             restr.start(commandLineArgs.hdfsRootDirectory);
         } catch (IOException ex) {
@@ -110,12 +112,16 @@ public class RestructureAvroRecords {
         logger.info("Time taken: {} seconds", (System.currentTimeMillis() - time1)/1000d);
     }
 
-    public RestructureAvroRecords(String inputPath, String outputPath) {
-        this.setInputWebHdfsURL(inputPath);
+    private RestructureAvroRecords(String hdfsUri, String outputPath, boolean gzip, boolean dedup, String format) {
+        this.setInputWebHdfsURL(hdfsUri);
         this.setOutputPath(outputPath);
 
+        this.useGzip = gzip;
+        this.doDeduplicate = dedup;
+        logger.info("Deduplicate set to {}", doDeduplicate);
+
         String extension;
-        if (commandLineArgs.format.equalsIgnoreCase("json")) {
+        if (format.equalsIgnoreCase("json")) {
             logger.info("Writing output files in JSON format");
             converterFactory = JsonAvroConverter.getFactory();
             extension = "json";
@@ -124,7 +130,7 @@ public class RestructureAvroRecords {
             converterFactory = CsvAvroConverter.getFactory();
             extension = "csv";
         }
-        if (USE_GZIP) {
+        if (this.useGzip) {
             logger.info("Compressing output files in GZIP format");
             extension += ".gz";
         }
@@ -190,7 +196,7 @@ public class RestructureAvroRecords {
 
             // Actually process the files
             for (Map.Entry<String, List<Path>> entry : topicPaths.entrySet()) {
-                try (FileCacheStore cache = new FileCacheStore(converterFactory, 100, USE_GZIP, DO_DEDUPLICATE)) {
+                try (FileCacheStore cache = new FileCacheStore(converterFactory, 100, useGzip, doDeduplicate)) {
                     for (Path filePath : entry.getValue()) {
                         // If JsonMappingException occurs, log the error and continue with other files
                         try {
@@ -357,5 +363,38 @@ public class RestructureAvroRecords {
         }
         long time = (Long) keyField.get("start");
         return new Date(time);
+    }
+
+    public static class Builder {
+        private boolean useGzip;
+        private boolean doDeduplicate;
+        private String hdfsUri;
+        private String outputPath;
+        private String format;
+
+        public Builder(final String uri, final String outputPath) {
+            this.hdfsUri = uri;
+            this.outputPath = outputPath;
+        }
+
+        public Builder useGzip(final boolean gzip) {
+            this.useGzip = gzip;
+            return this;
+        }
+
+        public Builder doDeuplicate(final boolean dedup) {
+            this.doDeduplicate = dedup;
+            return this;
+        }
+
+        public Builder format(final String format) {
+            this.format = format;
+            return this;
+        }
+
+        public RestructureAvroRecords build() {
+            return new RestructureAvroRecords(hdfsUri, outputPath, useGzip, doDeduplicate, format);
+        }
+
     }
 }
