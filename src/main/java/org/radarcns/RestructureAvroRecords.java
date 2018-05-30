@@ -72,13 +72,13 @@ public class RestructureAvroRecords {
 
     private long processedFileCount;
     private long processedRecordsCount;
-    private boolean useGzip;
-    private boolean doDeduplicate;
-
-    private static final CommandLineArgs commandLineArgs = new CommandLineArgs();
-    private static final JCommander parser = JCommander.newBuilder().addObject(commandLineArgs).build();
+    private final boolean useGzip;
+    private final boolean doDeduplicate;
 
     public static void main(String [] args) throws Exception {
+
+        final CommandLineArgs commandLineArgs = new CommandLineArgs();
+        final JCommander parser = JCommander.newBuilder().addObject(commandLineArgs).build();
 
         parser.setProgramName("hadoop jar restructurehdfs-all-0.3.3.jar");
         parser.parse(args);
@@ -90,9 +90,6 @@ public class RestructureAvroRecords {
 
         logger.info(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
         logger.info("Starting...");
-        logger.info("In:  " + commandLineArgs.hdfsUri + commandLineArgs.hdfsRootDirectory);
-        logger.info("Out: " + commandLineArgs.outputDirectory);
-
 
         long time1 = System.currentTimeMillis();
 
@@ -103,7 +100,11 @@ public class RestructureAvroRecords {
                 .build();
 
         try {
-            restr.start(commandLineArgs.hdfsRootDirectory);
+            for(String input : commandLineArgs.inputPaths) {
+                logger.info("In:  " + commandLineArgs.hdfsUri + input);
+                logger.info("Out: " + commandLineArgs.outputDirectory);
+                restr.start(input);
+            }
         } catch (IOException ex) {
             logger.error("Processing failed", ex);
         }
