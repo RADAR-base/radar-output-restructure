@@ -96,7 +96,7 @@ public class RestructureAvroRecords {
         RestructureAvroRecords restr = new RestructureAvroRecords.Builder(commandLineArgs.hdfsUri,
                 commandLineArgs.outputDirectory)
                 .useGzip("gzip".equalsIgnoreCase(commandLineArgs.compression))
-                .doDeuplicate(commandLineArgs.deduplicate).format(commandLineArgs.format)
+                .doDeduplicate(commandLineArgs.deduplicate).format(commandLineArgs.format)
                 .build();
 
         try {
@@ -113,16 +113,16 @@ public class RestructureAvroRecords {
         logger.info("Time taken: {} seconds", (System.currentTimeMillis() - time1)/1000d);
     }
 
-    private RestructureAvroRecords(String hdfsUri, String outputPath, boolean gzip, boolean dedup, String format) {
-        this.setInputWebHdfsURL(hdfsUri);
-        this.setOutputPath(outputPath);
+    private RestructureAvroRecords(RestructureAvroRecords.Builder builder) {
+        this.setInputWebHdfsURL(builder.hdfsUri);
+        this.setOutputPath(builder.outputPath);
 
-        this.useGzip = gzip;
-        this.doDeduplicate = dedup;
+        this.useGzip = builder.useGzip;
+        this.doDeduplicate = builder.doDeduplicate;
         logger.info("Deduplicate set to {}", doDeduplicate);
 
         String extension;
-        if (format.equalsIgnoreCase("json")) {
+        if (builder.format.equalsIgnoreCase("json")) {
             logger.info("Writing output files in JSON format");
             converterFactory = JsonAvroConverter.getFactory();
             extension = "json";
@@ -383,7 +383,7 @@ public class RestructureAvroRecords {
             return this;
         }
 
-        public Builder doDeuplicate(final boolean dedup) {
+        public Builder doDeduplicate(final boolean dedup) {
             this.doDeduplicate = dedup;
             return this;
         }
@@ -394,7 +394,7 @@ public class RestructureAvroRecords {
         }
 
         public RestructureAvroRecords build() {
-            return new RestructureAvroRecords(hdfsUri, outputPath, useGzip, doDeduplicate, format);
+            return new RestructureAvroRecords(this);
         }
 
     }
