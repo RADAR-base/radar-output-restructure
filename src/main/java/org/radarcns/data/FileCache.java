@@ -144,11 +144,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
     }
 
     private static InputStream inputStream(InputStream in, boolean gzip) throws IOException {
-        if (gzip) {
-            return new GZIPInputStream(in);
-        } else {
-            return in;
-        }
+        return gzip ? new GZIPInputStream(in) : in;
     }
 
     /**
