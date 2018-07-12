@@ -3,7 +3,7 @@ apply plugin: 'application'
 
 group 'org.radarcns.restructurehdfs'
 version '0.4.0'
-mainClassName = 'org.radarcns.RestructureAvroRecords'
+mainClassName = 'org.radarcns.hdfs.RestructureAvroRecords'
 
 sourceCompatibility = '1.8'
 targetCompatibility = '1.8'
