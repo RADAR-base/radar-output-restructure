@@ -14,15 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarcns.util;
-
-import static org.junit.Assert.assertEquals;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.Collection;
+package org.radarcns.data;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
@@ -33,9 +25,14 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
-import org.radarcns.data.CsvAvroConverter;
-import org.radarcns.data.FileCacheStore;
-import org.radarcns.data.RecordConverterFactory;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Collection;
+
+import static org.junit.Assert.assertEquals;
 
 @RunWith(Parameterized.class)
 public class FileCacheStoreTest {

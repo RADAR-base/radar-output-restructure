@@ -1,8 +1,8 @@
 package org.radarcns.util.commandline;
 
 
-import com.beust.jcommander.ParameterException;
 import com.beust.jcommander.IParameterValidator;
+import com.beust.jcommander.ParameterException;
 
 public class HdfsUriValidator implements IParameterValidator{
     @Override

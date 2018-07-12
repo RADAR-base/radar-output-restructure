@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarcns.util;
+package org.radarcns.data;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
@@ -26,9 +26,6 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
-import org.radarcns.data.CsvAvroConverter;
-import org.radarcns.data.FileCache;
-import org.radarcns.data.RecordConverterFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -39,8 +36,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
 import java.util.zip.GZIPInputStream;
 
 import static org.junit.Assert.assertEquals;

@@ -16,18 +16,15 @@
 
 package org.radarcns;
 
-import static org.junit.Assert.*;
-
-import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.TimeZone;
 import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.junit.Test;
+
+import java.util.Date;
+
+import static org.junit.Assert.assertEquals;
 
 public class RestructureAvroRecordsTest {
     @Test
