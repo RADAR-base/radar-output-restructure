@@ -204,7 +204,7 @@ public class RestructureAvroRecords {
 
             logger.info("Converting {} files", toProcessFileCount);
 
-            ProgressBar progressBar = new ProgressBar(toProcessFileCount, 10);
+            ProgressBar progressBar = new ProgressBar(toProcessFileCount, 80);
             progressBar.update(0);
 
             // Actually process the files
