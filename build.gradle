@@ -12,40 +12,41 @@ run {
 sourceCompatibility = '1.8'
 targetCompatibility = '1.8'
 
-ext.avroVersion = '1.8.2'
-ext.jacksonVersion = '2.8.9'
-ext.hadoopVersion = '2.7.3'
-ext.jCommanderVersion = '1.72'
+ext {
+    avroVersion = '1.8.2'
+    jacksonVersion = '2.9.6'
+    hadoopVersion = '2.7.6'
+    jCommanderVersion = '1.72'
+}
 
 repositories {
     jcenter()
 }
 
 dependencies {
-    compile group: 'org.apache.hadoop', name: 'hadoop-common', version: hadoopVersion
-    compile group: 'org.apache.avro', name: 'avro', version: avroVersion
-    compile group: 'org.apache.avro', name: 'avro-mapred', version: avroVersion
-    compile group: 'com.fasterxml.jackson.core' , name: 'jackson-databind', version: jacksonVersion
-    compile group: 'com.fasterxml.jackson.dataformat' , name: 'jackson-dataformat-csv', version: jacksonVersion
+    implementation group: 'org.apache.avro', name: 'avro', version: avroVersion
+    implementation group: 'com.fasterxml.jackson.core' , name: 'jackson-databind', version: jacksonVersion
+    implementation group: 'com.fasterxml.jackson.dataformat' , name: 'jackson-dataformat-csv', version: jacksonVersion
+    implementation group: 'com.beust', name: 'jcommander', version: jCommanderVersion
 
-    compile group: 'com.beust', name: 'jcommander', version: jCommanderVersion
+    implementation group: 'org.apache.avro', name: 'avro-mapred', version: avroVersion
+    implementation group: 'org.apache.hadoop', name: 'hadoop-common', version: hadoopVersion
 
-    runtime group: 'org.apache.hadoop', name: 'hadoop-hdfs', version: hadoopVersion
+    runtimeOnly group: 'org.apache.hadoop', name: 'hadoop-hdfs', version: hadoopVersion
 
-    testCompile group: 'junit', name: 'junit', version: '4.12'
+    testImplementation group: 'junit', name: 'junit', version: '4.12'
 }
 
 //create a single Jar with all dependencies
 task fatJar(type: Jar) {
-    dependsOn configurations.runtime
     manifest {
         attributes 'Implementation-Title': 'radar-restructure-hdfs',
                 'Implementation-Version': version,
                 'Main-Class': mainClassName
     }
-    baseName = project.name + '-all'
+    classifier = 'all'
     from {
-        configurations.runtime.collect {
+        configurations.runtimeClasspath.collect {
             it.isDirectory() ? it : zipTree(it)
         }
     } {
@@ -58,7 +59,6 @@ artifacts {
     archives fatJar
 }
 
-task wrapper(type: Wrapper) {
-    gradleVersion = '4.1'
-    distributionType 'all'
+wrapper {
+    gradleVersion '4.8'
 }

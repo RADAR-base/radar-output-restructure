@@ -75,7 +75,7 @@ public class RestructureAvroRecords {
     private final boolean useGzip;
     private final boolean doDeduplicate;
 
-    public static void main(String [] args) throws Exception {
+    public static void main(String [] args) {
 
         final CommandLineArgs commandLineArgs = new CommandLineArgs();
         final JCommander parser = JCommander.newBuilder().addObject(commandLineArgs).build();
