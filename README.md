@@ -41,4 +41,6 @@ Another option is to output the data in compressed form. All files will get the 
 java -jar restructurehdfs-0.3.3-all.jar --compression gzip  --hdfs-uri <webhdfs_url> --output-directory <output_folder> <input_path_1> [<input_path_2> ...]
 ```
 
-Finally, by default, files records are not deduplicated after writing. To enable this behaviour, specify the option `--deduplicate` or `-d`. This set to false by default because of an issue with Biovotion data. Please see - [issue #16](https://github.com/RADAR-base/Restructure-HDFS-topic/issues/16) before enabling it.
+By default, files records are not deduplicated after writing. To enable this behaviour, specify the option `--deduplicate` or `-d`. This set to false by default because of an issue with Biovotion data. Please see - [issue #16](https://github.com/RADAR-base/Restructure-HDFS-topic/issues/16) before enabling it.
+
+Finally, while processing, files are staged to a temporary directory and moved to the output directory afterwards. This has the advantage of less chance of data corruption, but it may result in slower performance. Disable staging using the `--no-stage` option.

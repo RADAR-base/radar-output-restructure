@@ -1,7 +1,7 @@
 package org.radarcns.util.commandline;
 
-import com.beust.jcommander.ParameterException;
 import com.beust.jcommander.IParameterValidator;
+import com.beust.jcommander.ParameterException;
 
 public class PathValidator implements IParameterValidator{
     @Override

@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-package org.radarcns.util;
+package org.radarcns.data;
+
+import org.apache.avro.generic.GenericRecord;
 
 import java.io.Closeable;
 import java.io.Flushable;
 import java.io.IOException;
 import java.util.Map;
-import org.apache.avro.generic.GenericRecord;
 
 /** Converts a GenericRecord to Java primitives or writes it to file. */
 public interface RecordConverter extends Flushable, Closeable {

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarcns.util;
+package org.radarcns.data;
 
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;

@@ -28,11 +28,11 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.radarcns.util.CsvAvroConverter;
-import org.radarcns.util.FileCacheStore;
-import org.radarcns.util.JsonAvroConverter;
+import org.radarcns.data.CsvAvroConverter;
+import org.radarcns.data.FileCacheStore;
+import org.radarcns.data.JsonAvroConverter;
+import org.radarcns.data.RecordConverterFactory;
 import org.radarcns.util.ProgressBar;
-import org.radarcns.util.RecordConverterFactory;
 import org.radarcns.util.commandline.CommandLineArgs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +48,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+import java.util.regex.Pattern;
 
 public class RestructureAvroRecords {
     private static final Logger logger = LoggerFactory.getLogger(RestructureAvroRecords.class);
@@ -57,12 +58,14 @@ public class RestructureAvroRecords {
     private static final java.nio.file.Path BINS_FILE_NAME = Paths.get("bins.csv");
     private static final java.nio.file.Path SCHEMA_OUTPUT_FILE_NAME = Paths.get("schema.json");
     private static final SimpleDateFormat FILE_DATE_FORMAT = new SimpleDateFormat("yyyyMMdd_HH");
+    private static final Pattern ILLEGAL_CHARACTER_PATTERN = Pattern.compile("[^a-zA-Z0-9_-]+");
 
     static {
         FILE_DATE_FORMAT.setTimeZone(TimeZone.getTimeZone("UTC"));
     }
 
     private final RecordConverterFactory converterFactory;
+    private final boolean doStage;
 
     private java.nio.file.Path outputPath;
     private java.nio.file.Path offsetsPath;
@@ -97,6 +100,7 @@ public class RestructureAvroRecords {
                 commandLineArgs.outputDirectory)
                 .useGzip("gzip".equalsIgnoreCase(commandLineArgs.compression))
                 .doDeduplicate(commandLineArgs.deduplicate).format(commandLineArgs.format)
+                .doStage(!commandLineArgs.noStage)
                 .build();
 
         try {
@@ -119,6 +123,7 @@ public class RestructureAvroRecords {
 
         this.useGzip = builder.useGzip;
         this.doDeduplicate = builder.doDeduplicate;
+        this.doStage = builder.doStage;
         logger.info("Deduplicate set to {}", doDeduplicate);
 
         String extension;
@@ -197,7 +202,7 @@ public class RestructureAvroRecords {
 
             // Actually process the files
             for (Map.Entry<String, List<Path>> entry : topicPaths.entrySet()) {
-                try (FileCacheStore cache = new FileCacheStore(converterFactory, 100, useGzip, doDeduplicate)) {
+                try (FileCacheStore cache = new FileCacheStore(converterFactory, 100, useGzip, doDeduplicate, doStage)) {
                     for (Path filePath : entry.getValue()) {
                         // If JsonMappingException occurs, log the error and continue with other files
                         try {
@@ -284,17 +289,8 @@ public class RestructureAvroRecords {
         Date time = getDate(keyField, valueField);
         java.nio.file.Path outputFileName = createFilename(time, suffix);
 
-        String projectId;
-
-        if(keyField.get("projectId") == null) {
-            projectId = "unknown-project";
-        } else {
-            // Clean Project id for use in final pathname
-            projectId = keyField.get("projectId").toString().replaceAll("[^a-zA-Z0-9_-]+", "");
-        }
-
-        // Clean user id and create final output pathname
-        String userId = keyField.get("userId").toString().replaceAll("[^a-zA-Z0-9_-]+", "");
+        String projectId = sanitizeId(keyField.get("projectId"), "unknown-project");
+        String userId = sanitizeId(keyField.get("userId"), "unknown-user");
 
         java.nio.file.Path projectDir = this.outputPath.resolve(projectId);
         java.nio.file.Path userDir = projectDir.resolve(userId);
@@ -302,9 +298,9 @@ public class RestructureAvroRecords {
         java.nio.file.Path outputPath = userTopicDir.resolve(outputFileName);
 
         // Write data
-        int response = cache.writeRecord(outputPath, record);
+        FileCacheStore.WriteResponse response = cache.writeRecord(outputPath, record);
 
-        if (response == FileCacheStore.CACHE_AND_NO_WRITE || response == FileCacheStore.NO_CACHE_AND_NO_WRITE) {
+        if (!response.isSuccessful()) {
             // Write was unsuccessful due to different number of columns,
             // try again with new file name
             writeRecord(record, topicName, cache, ++suffix);
@@ -317,8 +313,9 @@ public class RestructureAvroRecords {
                 }
             }
 
+            String sourceId = sanitizeId(keyField.get("sourceId"), "unknown-source");
             // Count data (binned and total)
-            bins.add(topicName, keyField.get("sourceId").toString(), time);
+            bins.add(topicName, sourceId, time);
             processedRecordsCount++;
         }
     }
@@ -366,12 +363,25 @@ public class RestructureAvroRecords {
         return new Date(time);
     }
 
+    private static String sanitizeId(Object id, String defaultValue) {
+        if (id == null) {
+            return defaultValue;
+        }
+        String idString = ILLEGAL_CHARACTER_PATTERN.matcher(id.toString()).replaceAll("");
+        if (idString.isEmpty()) {
+            return defaultValue;
+        } else {
+            return idString;
+        }
+    }
+
     public static class Builder {
         private boolean useGzip;
         private boolean doDeduplicate;
         private String hdfsUri;
         private String outputPath;
         private String format;
+        private boolean doStage;
 
         public Builder(final String uri, final String outputPath) {
             this.hdfsUri = uri;
@@ -397,5 +407,9 @@ public class RestructureAvroRecords {
             return new RestructureAvroRecords(this);
         }
 
+        public Builder doStage(boolean stage) {
+            this.doStage = stage;
+            return this;
+        }
     }
 }
