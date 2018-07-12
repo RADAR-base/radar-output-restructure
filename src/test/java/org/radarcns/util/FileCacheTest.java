@@ -24,6 +24,9 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.radarcns.data.CsvAvroConverter;
+import org.radarcns.data.FileCache;
+import org.radarcns.data.RecordConverterFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -46,10 +49,13 @@ public class FileCacheTest {
     private Path path;
     private RecordConverterFactory csvFactory;
     private Record exampleRecord;
+    private Path tmpDir;
 
     @Before
     public void setUp() throws IOException {
         this.path = folder.newFile("f").toPath();
+        this.tmpDir = folder.newFolder().toPath();
+
         this.csvFactory = CsvAvroConverter.getFactory();
         Schema schema = SchemaBuilder.record("simple").fields()
                 .name("a").type("string").noDefault()
@@ -59,7 +65,7 @@ public class FileCacheTest {
 
     @Test
     public void testGzip() throws IOException {
-        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, true)) {
+        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, true, tmpDir)) {
             cache.writeRecord(exampleRecord);
         }
 
@@ -77,11 +83,11 @@ public class FileCacheTest {
 
     @Test
     public void testGzipAppend() throws IOException {
-        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, true)) {
+        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, true, tmpDir)) {
             cache.writeRecord(exampleRecord);
         }
 
-        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, true)) {
+        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, true, tmpDir)) {
             cache.writeRecord(exampleRecord);
         }
 
@@ -101,7 +107,7 @@ public class FileCacheTest {
 
     @Test
     public void testPlain() throws IOException {
-        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, false)) {
+        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, false, tmpDir)) {
             cache.writeRecord(exampleRecord);
         }
 
@@ -116,11 +122,12 @@ public class FileCacheTest {
 
     @Test
     public void testPlainAppend() throws IOException {
-        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, false)) {
+
+        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, false, tmpDir)) {
             cache.writeRecord(exampleRecord);
         }
 
-        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, false)) {
+        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, false, tmpDir)) {
             cache.writeRecord(exampleRecord);
         }
 
@@ -137,10 +144,11 @@ public class FileCacheTest {
     @Test
     public void compareTo() throws IOException {
         Path file3 = folder.newFile("g").toPath();
+        Path tmpDir = folder.newFolder().toPath();
 
-        try (FileCache cache1 = new FileCache(csvFactory, path, exampleRecord, false);
-             FileCache cache2 = new FileCache(csvFactory, path, exampleRecord, false);
-             FileCache cache3 = new FileCache(csvFactory, file3, exampleRecord, false)) {
+        try (FileCache cache1 = new FileCache(csvFactory, path, exampleRecord, false, tmpDir);
+             FileCache cache2 = new FileCache(csvFactory, path, exampleRecord, false, tmpDir);
+             FileCache cache3 = new FileCache(csvFactory, file3, exampleRecord, false, tmpDir)) {
             assertEquals(0, cache1.compareTo(cache2));
             // filenames are not equal
             assertEquals(-1, cache1.compareTo(cache3));

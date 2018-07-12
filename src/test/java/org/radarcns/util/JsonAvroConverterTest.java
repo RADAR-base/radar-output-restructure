@@ -39,6 +39,7 @@ import org.apache.avro.io.JsonDecoder;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.radarcns.data.JsonAvroConverter;
 
 public class JsonAvroConverterTest {
     @Rule

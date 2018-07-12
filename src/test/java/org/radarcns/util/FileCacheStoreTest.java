@@ -29,6 +29,9 @@ import org.apache.avro.generic.GenericRecordBuilder;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.radarcns.data.CsvAvroConverter;
+import org.radarcns.data.FileCacheStore;
+import org.radarcns.data.RecordConverterFactory;
 
 public class FileCacheStoreTest {
     @Rule
@@ -60,30 +63,30 @@ public class FileCacheStoreTest {
 
         try (FileCacheStore cache = new FileCacheStore(csvFactory, 2, false, false)) {
             record = new GenericRecordBuilder(simpleSchema).set("a", "something").build();
-            assertEquals(cache.writeRecord(f1, record), FileCacheStore.NO_CACHE_AND_WRITE);
+            assertEquals(cache.writeRecord(f1, record), FileCacheStore.WriteStatus.NO_CACHE_AND_WRITE);
             record = new GenericRecordBuilder(simpleSchema).set("a", "somethingElse").build();
-            assertEquals(cache.writeRecord(f1, record), FileCacheStore.CACHE_AND_WRITE);
+            assertEquals(cache.writeRecord(f1, record), FileCacheStore.WriteStatus.CACHE_AND_WRITE);
             record = new GenericRecordBuilder(simpleSchema).set("a", "something").build();
-            assertEquals(cache.writeRecord(f2, record), FileCacheStore.NO_CACHE_AND_WRITE);
+            assertEquals(cache.writeRecord(f2, record), FileCacheStore.WriteStatus.NO_CACHE_AND_WRITE);
             record = new GenericRecordBuilder(simpleSchema).set("a", "third").build();
-            assertEquals(cache.writeRecord(f1, record), FileCacheStore.CACHE_AND_WRITE);
+            assertEquals(cache.writeRecord(f1, record), FileCacheStore.WriteStatus.CACHE_AND_WRITE);
             record = new GenericRecordBuilder(simpleSchema).set("a", "f3").build();
-            assertEquals(cache.writeRecord(f3, record), FileCacheStore.NO_CACHE_AND_WRITE);
+            assertEquals(cache.writeRecord(f3, record), FileCacheStore.WriteStatus.NO_CACHE_AND_WRITE);
             record = new GenericRecordBuilder(simpleSchema).set("a", "f2").build();
-            assertEquals(cache.writeRecord(f2, record), FileCacheStore.NO_CACHE_AND_WRITE);
+            assertEquals(cache.writeRecord(f2, record), FileCacheStore.WriteStatus.NO_CACHE_AND_WRITE);
             record = new GenericRecordBuilder(simpleSchema).set("a", "f3").build();
-            assertEquals(cache.writeRecord(f3, record), FileCacheStore.CACHE_AND_WRITE);
+            assertEquals(cache.writeRecord(f3, record), FileCacheStore.WriteStatus.CACHE_AND_WRITE);
             record = new GenericRecordBuilder(simpleSchema).set("a", "f4").build();
-            assertEquals(cache.writeRecord(f4, record), FileCacheStore.NO_CACHE_AND_WRITE);
+            assertEquals(cache.writeRecord(f4, record), FileCacheStore.WriteStatus.NO_CACHE_AND_WRITE);
             record = new GenericRecordBuilder(simpleSchema).set("a", "f3").build();
-            assertEquals(cache.writeRecord(f3, record), FileCacheStore.CACHE_AND_WRITE);
+            assertEquals(cache.writeRecord(f3, record), FileCacheStore.WriteStatus.CACHE_AND_WRITE);
             record = new GenericRecordBuilder(conflictSchema).set("a", "f3"). set("b", "conflict").build();
-            assertEquals(cache.writeRecord(f3, record), FileCacheStore.CACHE_AND_NO_WRITE);
+            assertEquals(cache.writeRecord(f3, record), FileCacheStore.WriteStatus.CACHE_AND_NO_WRITE);
             record = new GenericRecordBuilder(conflictSchema).set("a", "f1"). set("b", "conflict").build();
             // Cannot write to file even though the file is not in cache since schema is different
-            assertEquals(cache.writeRecord(f1, record), FileCacheStore.NO_CACHE_AND_NO_WRITE);
+            assertEquals(cache.writeRecord(f1, record), FileCacheStore.WriteStatus.NO_CACHE_AND_NO_WRITE);
             // Can write the same record to a new file
-            assertEquals(cache.writeRecord(newFile, record), FileCacheStore.NO_CACHE_AND_WRITE);
+            assertEquals(cache.writeRecord(newFile, record), FileCacheStore.WriteStatus.NO_CACHE_AND_WRITE);
         }
 
         assertEquals("a\nsomething\nsomethingElse\nthird\n", new String(Files.readAllBytes(f1)));

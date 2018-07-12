@@ -22,8 +22,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-import com.fasterxml.jackson.databind.JsonMappingException;
-
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -49,6 +47,9 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
+import org.radarcns.data.CsvAvroConverter;
+import org.radarcns.data.RecordConverter;
+import org.radarcns.data.RecordConverterFactory;
 
 public class CsvAvroConverterTest {
     @Rule

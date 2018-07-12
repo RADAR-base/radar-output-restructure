@@ -28,11 +28,11 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.radarcns.util.CsvAvroConverter;
-import org.radarcns.util.FileCacheStore;
-import org.radarcns.util.JsonAvroConverter;
+import org.radarcns.data.CsvAvroConverter;
+import org.radarcns.data.FileCacheStore;
+import org.radarcns.data.JsonAvroConverter;
 import org.radarcns.util.ProgressBar;
-import org.radarcns.util.RecordConverterFactory;
+import org.radarcns.data.RecordConverterFactory;
 import org.radarcns.util.commandline.CommandLineArgs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -302,9 +302,9 @@ public class RestructureAvroRecords {
         java.nio.file.Path outputPath = userTopicDir.resolve(outputFileName);
 
         // Write data
-        int response = cache.writeRecord(outputPath, record);
+        FileCacheStore.WriteStatus response = cache.writeRecord(outputPath, record);
 
-        if (response == FileCacheStore.CACHE_AND_NO_WRITE || response == FileCacheStore.NO_CACHE_AND_NO_WRITE) {
+        if (!response.isSuccessful()) {
             // Write was unsuccessful due to different number of columns,
             // try again with new file name
             writeRecord(record, topicName, cache, ++suffix);

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarcns.util;
+package org.radarcns.data;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -27,13 +27,17 @@ import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
+
 /** Keeps path handles of a path. */
 public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
     private static final Logger logger = LoggerFactory.getLogger(FileCache.class);
+    private static final int BUFFER_SIZE = 8192;
 
     private final Writer writer;
     private final RecordConverter recordConverter;
     private final Path path;
+    private final Path tmpPath;
     private long lastUse;
 
     /**
@@ -45,19 +49,29 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
      * @throws IOException
      */
     public FileCache(RecordConverterFactory converterFactory, Path path,
-            GenericRecord record, boolean gzip) throws IOException {
+            GenericRecord record, boolean gzip, Path tmpDir) throws IOException {
         this.path = path;
         boolean fileIsNew = !Files.exists(path) || Files.size(path) == 0;
+        this.tmpPath = Files.createTempFile(tmpDir, path.getFileName().toString(),
+                gzip ? ".tmp.gz" : ".tmp");
 
-        OutputStream outFile = Files.newOutputStream(path,
-                StandardOpenOption.APPEND, StandardOpenOption.CREATE);
-        InputStream inputStream = new BufferedInputStream(Files.newInputStream(path));
+        OutputStream outFile = Files.newOutputStream(tmpPath, StandardOpenOption.WRITE);
         OutputStream bufOut = new BufferedOutputStream(outFile);
         if (gzip) {
             bufOut = new GZIPOutputStream(bufOut);
-            if (!fileIsNew) {
+        }
+
+        InputStream inputStream;
+        if (fileIsNew) {
+            inputStream = new ByteArrayInputStream(new byte[0]);
+        } else {
+            inputStream = new BufferedInputStream(Files.newInputStream(path));
+            InputStream copyStream = Files.newInputStream(path);
+            if (gzip) {
+                copyStream = new GZIPInputStream(copyStream);
                 inputStream = new GZIPInputStream(inputStream);
             }
+            copy(copyStream, bufOut);
         }
 
         this.writer = new OutputStreamWriter(bufOut);
@@ -78,7 +92,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
      * Write a record to the cache.
      * @param record AVRO record
      * @return true or false based on {@link RecordConverter} write result
-     * @throws IOException
+     * @throws IOException if the record cannot be used.
      */
     public boolean writeRecord(GenericRecord record) throws IOException {
         boolean result = this.recordConverter.writeRecord(record);
@@ -90,6 +104,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
     public void close() throws IOException {
         recordConverter.close();
         writer.close();
+        Files.move(tmpPath, path, REPLACE_EXISTING);
     }
 
     @Override
@@ -114,5 +129,17 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
     /** File that the cache is maintaining. */
     public Path getPath() {
         return path;
+    }
+
+
+    /**
+     * Reads all bytes from an input stream and writes them to an output stream.
+     */
+    private static void copy(InputStream source, OutputStream sink) throws IOException {
+        byte[] buf = new byte[BUFFER_SIZE];
+        int n;
+        while ((n = source.read(buf)) > 0) {
+            sink.write(buf, 0, n);
+        }
     }
 }
