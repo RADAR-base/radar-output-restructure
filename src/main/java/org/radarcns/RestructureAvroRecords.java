@@ -48,6 +48,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+import java.util.regex.Pattern;
 
 public class RestructureAvroRecords {
     private static final Logger logger = LoggerFactory.getLogger(RestructureAvroRecords.class);
@@ -57,6 +58,7 @@ public class RestructureAvroRecords {
     private static final java.nio.file.Path BINS_FILE_NAME = Paths.get("bins.csv");
     private static final java.nio.file.Path SCHEMA_OUTPUT_FILE_NAME = Paths.get("schema.json");
     private static final SimpleDateFormat FILE_DATE_FORMAT = new SimpleDateFormat("yyyyMMdd_HH");
+    private static final Pattern ILLEGAL_CHARACTER_PATTERN = Pattern.compile("[^a-zA-Z0-9_-]+");
 
     static {
         FILE_DATE_FORMAT.setTimeZone(TimeZone.getTimeZone("UTC"));
@@ -287,20 +289,8 @@ public class RestructureAvroRecords {
         Date time = getDate(keyField, valueField);
         java.nio.file.Path outputFileName = createFilename(time, suffix);
 
-        String projectId;
-
-        if (keyField.get("projectId") == null) {
-            projectId = "unknown-project";
-        } else {
-            // Clean Project id for use in final pathname
-            projectId = keyField.get("projectId").toString().replaceAll("[^a-zA-Z0-9_-]+", "");
-            if (projectId.isEmpty()) {
-                projectId = "empty-project-id";
-            }
-        }
-
-        // Clean user id and create final output pathname
-        String userId = keyField.get("userId").toString().replaceAll("[^a-zA-Z0-9_-]+", "");
+        String projectId = sanitizeId(keyField.get("projectId"), "unknown-project");
+        String userId = sanitizeId(keyField.get("userId"), "unknown-user");
 
         java.nio.file.Path projectDir = this.outputPath.resolve(projectId);
         java.nio.file.Path userDir = projectDir.resolve(userId);
@@ -323,8 +313,9 @@ public class RestructureAvroRecords {
                 }
             }
 
+            String sourceId = sanitizeId(keyField.get("sourceId"), "unknown-source");
             // Count data (binned and total)
-            bins.add(topicName, keyField.get("sourceId").toString(), time);
+            bins.add(topicName, sourceId, time);
             processedRecordsCount++;
         }
     }
@@ -370,6 +361,18 @@ public class RestructureAvroRecords {
         }
         long time = (Long) keyField.get("start");
         return new Date(time);
+    }
+
+    private static String sanitizeId(Object id, String defaultValue) {
+        if (id == null) {
+            return defaultValue;
+        }
+        String idString = ILLEGAL_CHARACTER_PATTERN.matcher(id.toString()).replaceAll("");
+        if (idString.isEmpty()) {
+            return defaultValue;
+        } else {
+            return idString;
+        }
     }
 
     public static class Builder {
