@@ -83,7 +83,7 @@ public class RestructureAvroRecords {
         final CommandLineArgs commandLineArgs = new CommandLineArgs();
         final JCommander parser = JCommander.newBuilder().addObject(commandLineArgs).build();
 
-        parser.setProgramName("hadoop jar restructurehdfs-all-0.3.3.jar");
+        parser.setProgramName("java -jar restructurehdfs-0.4.0-all.jar");
         parser.parse(args);
 
         if(commandLineArgs.help) {
@@ -96,8 +96,8 @@ public class RestructureAvroRecords {
 
         long time1 = System.currentTimeMillis();
 
-        RestructureAvroRecords restr = new RestructureAvroRecords.Builder(commandLineArgs.hdfsUri,
-                commandLineArgs.outputDirectory)
+        RestructureAvroRecords restr = new RestructureAvroRecords
+                .Builder(commandLineArgs.hdfsUri, commandLineArgs.outputDirectory)
                 .useGzip("gzip".equalsIgnoreCase(commandLineArgs.compression))
                 .doDeduplicate(commandLineArgs.deduplicate).format(commandLineArgs.format)
                 .doStage(!commandLineArgs.noStage)
