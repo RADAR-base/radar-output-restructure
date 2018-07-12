@@ -23,14 +23,11 @@ RUN ./gradlew --version
 
 COPY ./build.gradle ./gradle.properties ./settings.gradle /code/
 
-RUN ./gradlew downloadDependencies
+RUN ./gradlew downloadDependencies copyDependencies startScripts
 
 COPY ./src /code/src
-COPY LICENSE README.md /code/
 
-RUN ./gradlew distTar && \
-  tar xzf build/distributions/*.tar.gz && \
-  rm build/distributions/*.tar.gz
+RUN ./gradlew jar
 
 FROM openjdk:8-jre-alpine
 
@@ -38,8 +35,8 @@ MAINTAINER Joris Borgdorff <joris@thehyve.nl>
 
 LABEL description="RADAR-base HDFS data restructuring"
 
-COPY --from=builder /code/radar-hdfs-restructure-*/bin /usr/bin
-COPY --from=builder /code/radar-hdfs-restructure-*/share /usr/share
-COPY --from=builder /code/radar-hdfs-restructure-*/lib /usr/lib
+COPY --from=builder /code/build/third-party/* /usr/lib/
+COPY --from=builder /code/build/scripts/* /usr/bin/
+COPY --from=builder /code/build/libs/* /usr/lib/
 
 ENTRYPOINT ["radar-hdfs-restructure"]

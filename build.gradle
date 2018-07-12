@@ -61,6 +61,11 @@ task downloadDependencies {
     configurations.runtimeClasspath.files
 }
 
+task copyDependencies(type: Copy) {
+    from configurations.runtimeClasspath.files
+    into "${buildDir}/third-party/"
+}
+
 wrapper {
     gradleVersion '4.8'
 }
