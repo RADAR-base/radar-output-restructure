@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-package org.radarcns;
+package org.radarcns.hdfs;
 
 import com.beust.jcommander.JCommander;
+import com.beust.jcommander.ParameterException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.file.DataFileReader;
@@ -28,12 +29,12 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.radarcns.data.CsvAvroConverter;
-import org.radarcns.data.FileCacheStore;
-import org.radarcns.data.JsonAvroConverter;
-import org.radarcns.data.RecordConverterFactory;
-import org.radarcns.util.ProgressBar;
-import org.radarcns.util.commandline.CommandLineArgs;
+import org.radarcns.hdfs.data.CsvAvroConverter;
+import org.radarcns.hdfs.data.FileCacheStore;
+import org.radarcns.hdfs.data.JsonAvroConverter;
+import org.radarcns.hdfs.data.RecordConverterFactory;
+import org.radarcns.hdfs.util.ProgressBar;
+import org.radarcns.hdfs.util.commandline.CommandLineArgs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -83,10 +84,16 @@ public class RestructureAvroRecords {
         final CommandLineArgs commandLineArgs = new CommandLineArgs();
         final JCommander parser = JCommander.newBuilder().addObject(commandLineArgs).build();
 
-        parser.setProgramName("hadoop jar restructurehdfs-all-0.3.3.jar");
-        parser.parse(args);
+        parser.setProgramName("radar-hdfs-restructure");
+        try {
+            parser.parse(args);
+        } catch (ParameterException ex) {
+            logger.error(ex.getMessage());
+            parser.usage();
+            System.exit(1);
+        }
 
-        if(commandLineArgs.help) {
+        if (commandLineArgs.help) {
             parser.usage();
             System.exit(0);
         }
@@ -197,7 +204,7 @@ public class RestructureAvroRecords {
 
             logger.info("Converting {} files", toProcessFileCount);
 
-            ProgressBar progressBar = new ProgressBar(toProcessFileCount, 10);
+            ProgressBar progressBar = new ProgressBar(toProcessFileCount, 80);
             progressBar.update(0);
 
             // Actually process the files

@@ -1,4 +1,4 @@
-package org.radarcns.util.commandline;
+package org.radarcns.hdfs.util.commandline;
 
 import com.beust.jcommander.IParameterValidator;
 import com.beust.jcommander.ParameterException;

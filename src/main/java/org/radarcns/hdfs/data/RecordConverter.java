@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarcns.data;
+package org.radarcns.hdfs.data;
 
 import org.apache.avro.generic.GenericRecord;
 

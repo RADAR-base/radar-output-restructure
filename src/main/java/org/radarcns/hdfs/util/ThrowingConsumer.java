@@ -1,4 +1,4 @@
-package org.radarcns.util;
+package org.radarcns.hdfs.util;
 
 import java.io.IOException;
 import java.util.function.BiConsumer;

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarcns.util;
+package org.radarcns.hdfs.util;
 
 /**
  * Progress bar.
@@ -44,7 +44,7 @@ public class ProgressBar {
         }
         int remainPercent;
         if (total > 0) {
-            remainPercent = (int) ((100 * remain) / total);
+            remainPercent = Math.min((int) ((100 * remain) / total), 100);
         } else {
             remainPercent = 100;
         }
@@ -52,7 +52,7 @@ public class ProgressBar {
             return;
         }
         previousPercentage = remainPercent;
-        int stripesFilled = remainPercent / numStripes;
+        int stripesFilled = numStripes * remainPercent / 100;
         char notFilled = '-';
         char filled = '*';
         // 2 init + numStripes + 2 end + 4 percentage
