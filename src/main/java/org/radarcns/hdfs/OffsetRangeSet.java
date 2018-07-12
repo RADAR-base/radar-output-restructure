@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarcns;
+package org.radarcns.hdfs;
 
 import javax.annotation.Nonnull;
 import java.util.Iterator;

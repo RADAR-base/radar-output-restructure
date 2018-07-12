@@ -1,6 +1,8 @@
-package org.radarcns;
+package org.radarcns.hdfs;
 
 import org.junit.Test;
+import org.radarcns.hdfs.OffsetRange;
+import org.radarcns.hdfs.OffsetRangeSet;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;

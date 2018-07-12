@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarcns.data;
+package org.radarcns.hdfs.data;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
@@ -43,7 +43,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
-import static org.radarcns.data.CsvAvroConverterTest.writeTestNumbers;
+import static org.radarcns.hdfs.data.CsvAvroConverterTest.writeTestNumbers;
 
 public class JsonAvroConverterTest {
     @Rule

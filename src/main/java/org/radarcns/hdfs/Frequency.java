@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarcns;
+package org.radarcns.hdfs;
 
 import org.apache.commons.collections.MapIterator;
 import org.apache.commons.collections.keyvalue.MultiKey;
