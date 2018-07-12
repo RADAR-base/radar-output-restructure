@@ -66,15 +66,15 @@ public class FileCacheStore implements Flushable, Closeable {
      * @return Integer value according to one of the response codes.
      * @throws IOException when failing to open a file or writing to it.
      */
-    public WriteStatus writeRecord(Path path, GenericRecord record) throws IOException {
+    public WriteResponse writeRecord(Path path, GenericRecord record) throws IOException {
         FileCache cache = caches.get(path);
         if (cache != null) {
             if(cache.writeRecord(record)){
-                return WriteStatus.CACHE_AND_WRITE;
+                return WriteResponse.CACHE_AND_WRITE;
             } else {
                 // This is the case when cache is used but write is unsuccessful
                 // because of different number columns in same topic
-                return WriteStatus.CACHE_AND_NO_WRITE;
+                return WriteResponse.CACHE_AND_NO_WRITE;
             }
         } else {
             ensureCapacity();
@@ -85,11 +85,11 @@ public class FileCacheStore implements Flushable, Closeable {
             cache = new FileCache(converterFactory, path, record, gzip, tmpDir);
             caches.put(path, cache);
             if (cache.writeRecord(record)) {
-                return WriteStatus.NO_CACHE_AND_WRITE;
+                return WriteResponse.NO_CACHE_AND_WRITE;
             } else {
                 // The file path was not in cache but the file exists and this write is
                 // unsuccessful because of different number of columns
-                return WriteStatus.NO_CACHE_AND_NO_WRITE;
+                return WriteResponse.NO_CACHE_AND_NO_WRITE;
             }
 
         }
@@ -141,7 +141,7 @@ public class FileCacheStore implements Flushable, Closeable {
     }
 
     // Response codes for each write record case
-    public enum WriteStatus {
+    public enum WriteResponse {
         /** Cache hit and write was successful. */
         CACHE_AND_WRITE(true, true),
         /** Cache hit and write was unsuccessful because of a mismatch in number of columns. */
@@ -159,7 +159,7 @@ public class FileCacheStore implements Flushable, Closeable {
          * @param cacheHit whether the cache was used to write.
          * @param successful whether the write was successful.
          */
-        WriteStatus(boolean cacheHit, boolean successful) {
+        WriteResponse(boolean cacheHit, boolean successful) {
             this.cacheHit = cacheHit;
             this.successful = successful;
         }

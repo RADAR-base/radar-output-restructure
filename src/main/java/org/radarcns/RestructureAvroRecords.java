@@ -298,7 +298,7 @@ public class RestructureAvroRecords {
         java.nio.file.Path outputPath = userTopicDir.resolve(outputFileName);
 
         // Write data
-        FileCacheStore.WriteStatus response = cache.writeRecord(outputPath, record);
+        FileCacheStore.WriteResponse response = cache.writeRecord(outputPath, record);
 
         if (!response.isSuccessful()) {
             // Write was unsuccessful due to different number of columns,
