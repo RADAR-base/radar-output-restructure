@@ -28,4 +28,7 @@ public class CommandLineArgs {
 
     @Parameter(names = { "-h", "--help"}, help = true, description = "Display the usage of the program with available options.")
     public boolean help;
+
+    @Parameter(names = { "--no-stage"}, description = "Do not stage output files into a temporary directory before moving them to the data directory. This increases performance but may leave corrupted data files.")
+    public boolean noStage = false;
 }

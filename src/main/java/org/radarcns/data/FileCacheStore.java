@@ -48,13 +48,13 @@ public class FileCacheStore implements Flushable, Closeable {
     private final int maxFiles;
     private final Map<Path, FileCache> caches;
 
-    public FileCacheStore(RecordConverterFactory converterFactory, int maxFiles, boolean gzip, boolean deduplicate) throws IOException {
+    public FileCacheStore(RecordConverterFactory converterFactory, int maxFiles, boolean gzip, boolean deduplicate, boolean stage) throws IOException {
         this.converterFactory = converterFactory;
         this.maxFiles = maxFiles;
         this.caches = new HashMap<>(maxFiles * 4 / 3 + 1);
         this.gzip = gzip;
         this.deduplicate = deduplicate;
-        this.tmpDir = Files.createTempDirectory("restructurehdfs");
+        this.tmpDir = stage ? Files.createTempDirectory("restructurehdfs") : null;
     }
 
     /**
@@ -129,10 +129,12 @@ public class FileCacheStore implements Flushable, Closeable {
                     converterFactory.sortUnique(cache.getPath());
                 }
             }
-            Files.walk(tmpDir)
-                    .sorted(Comparator.reverseOrder())
-                    .forEach(tryCatch(Files::delete, (p, ex) -> logger.warn(
-                            "Failed to remove temporary file {}: {}", p, ex)));
+            if (tmpDir != null) {
+                Files.walk(tmpDir)
+                        .sorted(Comparator.reverseOrder())
+                        .forEach(tryCatch(Files::delete, (p, ex) -> logger.warn(
+                                "Failed to remove temporary file {}: {}", p, ex)));
+            }
         } finally {
             caches.clear();
         }

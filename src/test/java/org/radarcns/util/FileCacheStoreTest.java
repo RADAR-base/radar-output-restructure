@@ -21,6 +21,8 @@ import static org.junit.Assert.assertEquals;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Collection;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
@@ -29,11 +31,23 @@ import org.apache.avro.generic.GenericRecordBuilder;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 import org.radarcns.data.CsvAvroConverter;
 import org.radarcns.data.FileCacheStore;
 import org.radarcns.data.RecordConverterFactory;
 
+@RunWith(Parameterized.class)
 public class FileCacheStoreTest {
+
+    @Parameterized.Parameters
+    public static Collection<Boolean> doStage() {
+        return Arrays.asList(Boolean.TRUE, Boolean.FALSE);
+    }
+
+    @Parameterized.Parameter
+    public Boolean doStage;
+
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
 
@@ -61,7 +75,7 @@ public class FileCacheStoreTest {
 
         GenericRecord record;
 
-        try (FileCacheStore cache = new FileCacheStore(csvFactory, 2, false, false)) {
+        try (FileCacheStore cache = new FileCacheStore(csvFactory, 2, false, false, doStage)) {
             record = new GenericRecordBuilder(simpleSchema).set("a", "something").build();
             assertEquals(cache.writeRecord(f1, record), FileCacheStore.WriteStatus.NO_CACHE_AND_WRITE);
             record = new GenericRecordBuilder(simpleSchema).set("a", "somethingElse").build();

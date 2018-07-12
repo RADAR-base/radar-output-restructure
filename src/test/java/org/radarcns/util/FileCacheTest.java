@@ -24,6 +24,8 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 import org.radarcns.data.CsvAvroConverter;
 import org.radarcns.data.FileCache;
 import org.radarcns.data.RecordConverterFactory;
@@ -35,6 +37,10 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.zip.GZIPInputStream;
 
 import static org.junit.Assert.assertEquals;
@@ -43,7 +49,13 @@ import static org.junit.Assert.assertNull;
 /**
  * Created by joris on 03/07/2017.
  */
+@RunWith(Parameterized.class)
 public class FileCacheTest {
+    @Parameterized.Parameters
+    public static Collection<Boolean> useTmpDir() {
+        return Arrays.asList(Boolean.TRUE, Boolean.FALSE);
+    }
+
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
     private Path path;
@@ -51,10 +63,13 @@ public class FileCacheTest {
     private Record exampleRecord;
     private Path tmpDir;
 
+    @Parameterized.Parameter
+    public Boolean useTmpDir;
+
     @Before
     public void setUp() throws IOException {
         this.path = folder.newFile("f").toPath();
-        this.tmpDir = folder.newFolder().toPath();
+        this.tmpDir = useTmpDir ? folder.newFolder().toPath() : null;
 
         this.csvFactory = CsvAvroConverter.getFactory();
         Schema schema = SchemaBuilder.record("simple").fields()

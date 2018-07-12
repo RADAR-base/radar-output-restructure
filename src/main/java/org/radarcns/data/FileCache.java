@@ -46,16 +46,22 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
      * @param path path to cache.
      * @param record example record to create converter from, this is not written to path.
      * @param gzip whether to gzip the records
-     * @throws IOException
+     * @throws IOException if the file and/or temporary files cannot be correctly read or written to.
      */
     public FileCache(RecordConverterFactory converterFactory, Path path,
             GenericRecord record, boolean gzip, Path tmpDir) throws IOException {
         this.path = path;
         boolean fileIsNew = !Files.exists(path) || Files.size(path) == 0;
-        this.tmpPath = Files.createTempFile(tmpDir, path.getFileName().toString(),
-                gzip ? ".tmp.gz" : ".tmp");
+        OutputStream outFile;
+        if (tmpDir == null) {
+            this.tmpPath = null;
+            outFile = Files.newOutputStream(path, StandardOpenOption.APPEND, StandardOpenOption.CREATE);
+        } else {
+            this.tmpPath = Files.createTempFile(tmpDir, path.getFileName().toString(),
+                    gzip ? ".tmp.gz" : ".tmp");
+            outFile = Files.newOutputStream(tmpPath, StandardOpenOption.WRITE);
+        }
 
-        OutputStream outFile = Files.newOutputStream(tmpPath, StandardOpenOption.WRITE);
         OutputStream bufOut = new BufferedOutputStream(outFile);
         if (gzip) {
             bufOut = new GZIPOutputStream(bufOut);
@@ -65,13 +71,11 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
         if (fileIsNew) {
             inputStream = new ByteArrayInputStream(new byte[0]);
         } else {
-            inputStream = new BufferedInputStream(Files.newInputStream(path));
-            InputStream copyStream = Files.newInputStream(path);
-            if (gzip) {
-                copyStream = new GZIPInputStream(copyStream);
-                inputStream = new GZIPInputStream(inputStream);
+            inputStream = inputStream(new BufferedInputStream(Files.newInputStream(path)), gzip);
+
+            if (tmpPath != null) {
+                copy(path, bufOut, gzip);
             }
-            copy(copyStream, bufOut);
         }
 
         this.writer = new OutputStreamWriter(bufOut);
@@ -104,7 +108,9 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
     public void close() throws IOException {
         recordConverter.close();
         writer.close();
-        Files.move(tmpPath, path, REPLACE_EXISTING);
+        if (tmpPath != null) {
+            Files.move(tmpPath, path, REPLACE_EXISTING);
+        }
     }
 
     @Override
@@ -131,6 +137,19 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
         return path;
     }
 
+    private static void copy(Path source, OutputStream sink, boolean gzip) throws IOException {
+        try (InputStream copyStream = inputStream(Files.newInputStream(source), gzip)) {
+            copy(copyStream, sink);
+        }
+    }
+
+    private static InputStream inputStream(InputStream in, boolean gzip) throws IOException {
+        if (gzip) {
+            return new GZIPInputStream(in);
+        } else {
+            return in;
+        }
+    }
 
     /**
      * Reads all bytes from an input stream and writes them to an output stream.

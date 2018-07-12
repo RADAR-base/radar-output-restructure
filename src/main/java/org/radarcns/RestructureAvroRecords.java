@@ -63,6 +63,7 @@ public class RestructureAvroRecords {
     }
 
     private final RecordConverterFactory converterFactory;
+    private final boolean doStage;
 
     private java.nio.file.Path outputPath;
     private java.nio.file.Path offsetsPath;
@@ -97,6 +98,7 @@ public class RestructureAvroRecords {
                 commandLineArgs.outputDirectory)
                 .useGzip("gzip".equalsIgnoreCase(commandLineArgs.compression))
                 .doDeduplicate(commandLineArgs.deduplicate).format(commandLineArgs.format)
+                .doStage(!commandLineArgs.noStage)
                 .build();
 
         try {
@@ -119,6 +121,7 @@ public class RestructureAvroRecords {
 
         this.useGzip = builder.useGzip;
         this.doDeduplicate = builder.doDeduplicate;
+        this.doStage = builder.doStage;
         logger.info("Deduplicate set to {}", doDeduplicate);
 
         String extension;
@@ -197,7 +200,7 @@ public class RestructureAvroRecords {
 
             // Actually process the files
             for (Map.Entry<String, List<Path>> entry : topicPaths.entrySet()) {
-                try (FileCacheStore cache = new FileCacheStore(converterFactory, 100, useGzip, doDeduplicate)) {
+                try (FileCacheStore cache = new FileCacheStore(converterFactory, 100, useGzip, doDeduplicate, doStage)) {
                     for (Path filePath : entry.getValue()) {
                         // If JsonMappingException occurs, log the error and continue with other files
                         try {
@@ -372,6 +375,7 @@ public class RestructureAvroRecords {
         private String hdfsUri;
         private String outputPath;
         private String format;
+        private boolean doStage;
 
         public Builder(final String uri, final String outputPath) {
             this.hdfsUri = uri;
@@ -397,5 +401,9 @@ public class RestructureAvroRecords {
             return new RestructureAvroRecords(this);
         }
 
+        public Builder doStage(boolean stage) {
+            this.doStage = stage;
+            return this;
+        }
     }
 }
