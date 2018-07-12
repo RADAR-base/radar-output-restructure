@@ -289,11 +289,14 @@ public class RestructureAvroRecords {
 
         String projectId;
 
-        if(keyField.get("projectId") == null) {
+        if (keyField.get("projectId") == null) {
             projectId = "unknown-project";
         } else {
             // Clean Project id for use in final pathname
             projectId = keyField.get("projectId").toString().replaceAll("[^a-zA-Z0-9_-]+", "");
+            if (projectId.isEmpty()) {
+                projectId = "empty-project-id";
+            }
         }
 
         // Clean user id and create final output pathname
