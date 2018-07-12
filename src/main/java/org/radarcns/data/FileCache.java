@@ -38,6 +38,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
+import java.util.zip.ZipException;
 
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
@@ -71,7 +72,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
         } else {
             this.tmpPath = Files.createTempFile(tmpDir, path.getFileName().toString(),
                     gzip ? ".tmp.gz" : ".tmp");
-            outFile = Files.newOutputStream(tmpPath, StandardOpenOption.WRITE);
+            outFile = Files.newOutputStream(tmpPath);
         }
 
         OutputStream bufOut = new BufferedOutputStream(outFile);
@@ -86,7 +87,15 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
             inputStream = inputStream(new BufferedInputStream(Files.newInputStream(path)), gzip);
 
             if (tmpPath != null) {
-                copy(path, bufOut, gzip);
+                try {
+                    copy(path, bufOut, gzip);
+                } catch (ZipException ex) {
+                    // restart output buffer
+                    bufOut.close();
+                    // clear output file
+                    outFile = Files.newOutputStream(tmpPath);
+                    bufOut = new GZIPOutputStream(new BufferedOutputStream(outFile));
+                }
             }
         }
 
@@ -152,6 +161,25 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
     private static void copy(Path source, OutputStream sink, boolean gzip) throws IOException {
         try (InputStream copyStream = inputStream(Files.newInputStream(source), gzip)) {
             copy(copyStream, sink);
+        } catch (ZipException ex) {
+            Path corruptPath = null;
+            String suffix = "";
+            for (int i = 0; corruptPath == null && i < 100; i++) {
+                Path path = source.resolveSibling(source.getFileName() + ".corrupted" + suffix);
+                if (!Files.exists(path)) {
+                    corruptPath = path;
+                }
+                suffix = "-" + i;
+            }
+            if (corruptPath != null) {
+                logger.error("Original file {} was corrupted: {}."
+                        + " Moved to {}.", source, ex, corruptPath);
+                Files.move(source, corruptPath);
+            } else {
+                logger.error("Original file {} was corrupted: {}."
+                        + " Too many corrupt backups stored, removing file.", source, ex);
+            }
+            throw ex;
         }
     }
 
