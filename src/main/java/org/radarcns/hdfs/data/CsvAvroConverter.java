@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarcns.data;
+package org.radarcns.hdfs.data;
 
 import com.fasterxml.jackson.databind.MappingIterator;
 import com.fasterxml.jackson.databind.ObjectReader;

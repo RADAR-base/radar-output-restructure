@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarcns.util;
+package org.radarcns.hdfs.util;
 
 /**
  * Progress bar.

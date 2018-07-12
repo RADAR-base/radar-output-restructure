@@ -3,11 +3,7 @@ apply plugin: 'application'
 
 group 'org.radarcns.restructurehdfs'
 version '0.4.0-SNAPSHOT'
-mainClassName = 'org.radarcns.RestructureAvroRecords'
-
-run {
-    args = ['webhdfs://localhost:50070', '/topicAndroidNew/android_phone_sensor_acceleration', "${projectDir}/data"]
-}
+mainClassName = 'org.radarcns.hdfs.RestructureAvroRecords'
 
 sourceCompatibility = '1.8'
 targetCompatibility = '1.8'
@@ -37,26 +33,32 @@ dependencies {
     testImplementation group: 'junit', name: 'junit', version: '4.12'
 }
 
-//create a single Jar with all dependencies
-task fatJar(type: Jar) {
+jar {
     manifest {
-        attributes 'Implementation-Title': 'radar-restructure-hdfs',
-                'Implementation-Version': version,
-                'Main-Class': mainClassName
+        attributes 'Implementation-Title': 'RADAR-base HDFS data restructuring',
+                'Implementation-Version': version
     }
-    classifier = 'all'
-    from {
-        configurations.runtimeClasspath.collect {
-            it.isDirectory() ? it : zipTree(it)
-        }
-    } {
-        exclude 'META-INF/*'
-    }
-    with jar
 }
 
-artifacts {
-    archives fatJar
+distributions {
+    main {
+        contents {
+            into ("share/${project.name}") {
+                from 'README.md', 'LICENSE'
+            }
+        }
+    }
+}
+
+tasks.withType(Tar){
+    compression = Compression.GZIP
+    extension = 'tar.gz'
+}
+
+task downloadDependencies {
+    description "Pre-downloads dependencies"
+    configurations.compileClasspath.files
+    configurations.runtimeClasspath.files
 }
 
 wrapper {

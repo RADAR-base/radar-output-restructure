@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarcns.data;
+package org.radarcns.hdfs.data;
 
 import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
@@ -31,7 +31,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.radarcns.util.ThrowingConsumer.tryCatch;
+import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
 
 /**
  * Caches open file handles. If more than the limit is cached, the half of the files that were used
