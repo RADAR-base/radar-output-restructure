@@ -1,0 +1,6 @@
+.git/
+build/
+src/test/
+out/
+.gradle/
+.idea/

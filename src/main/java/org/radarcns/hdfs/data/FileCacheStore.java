@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 
-package org.radarcns.util;
+package org.radarcns.hdfs.data;
 
 import org.apache.avro.generic.GenericRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.Flushable;
@@ -25,34 +27,34 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
+
+import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
 
 /**
  * Caches open file handles. If more than the limit is cached, the half of the files that were used
  * the longest ago cache are evicted from cache.
  */
 public class FileCacheStore implements Flushable, Closeable {
+    private static final Logger logger = LoggerFactory.getLogger(FileCacheStore.class);
+
     private final boolean gzip;
     private final boolean deduplicate;
+    private final Path tmpDir;
 
     private RecordConverterFactory converterFactory;
     private final int maxFiles;
     private final Map<Path, FileCache> caches;
 
-    // Response codes for each write record case
-    public static final int CACHE_AND_WRITE = 1; //used cache and write successful
-    public static final int NO_CACHE_AND_WRITE= 2;
-    public static final int CACHE_AND_NO_WRITE =3;
-    public static final int NO_CACHE_AND_NO_WRITE =4;
-
-
-    public FileCacheStore(RecordConverterFactory converterFactory, int maxFiles, boolean gzip, boolean deduplicate) {
+    public FileCacheStore(RecordConverterFactory converterFactory, int maxFiles, boolean gzip, boolean deduplicate, boolean stage) throws IOException {
         this.converterFactory = converterFactory;
         this.maxFiles = maxFiles;
         this.caches = new HashMap<>(maxFiles * 4 / 3 + 1);
         this.gzip = gzip;
         this.deduplicate = deduplicate;
+        this.tmpDir = stage ? Files.createTempDirectory("restructurehdfs") : null;
     }
 
     /**
@@ -64,15 +66,15 @@ public class FileCacheStore implements Flushable, Closeable {
      * @return Integer value according to one of the response codes.
      * @throws IOException when failing to open a file or writing to it.
      */
-    public int writeRecord(Path path, GenericRecord record) throws IOException {
+    public WriteResponse writeRecord(Path path, GenericRecord record) throws IOException {
         FileCache cache = caches.get(path);
         if (cache != null) {
             if(cache.writeRecord(record)){
-                return CACHE_AND_WRITE;
+                return WriteResponse.CACHE_AND_WRITE;
             } else {
                 // This is the case when cache is used but write is unsuccessful
                 // because of different number columns in same topic
-                return CACHE_AND_NO_WRITE;
+                return WriteResponse.CACHE_AND_NO_WRITE;
             }
         } else {
             ensureCapacity();
@@ -80,14 +82,14 @@ public class FileCacheStore implements Flushable, Closeable {
             Path dir = path.getParent();
             Files.createDirectories(dir);
 
-            cache = new FileCache(converterFactory, path, record, gzip);
+            cache = new FileCache(converterFactory, path, record, gzip, tmpDir);
             caches.put(path, cache);
-            if(cache.writeRecord(record)) {
-                return NO_CACHE_AND_WRITE;
+            if (cache.writeRecord(record)) {
+                return WriteResponse.NO_CACHE_AND_WRITE;
             } else {
                 // The file path was not in cache but the file exists and this write is
                 // unsuccessful because of different number of columns
-                return NO_CACHE_AND_NO_WRITE;
+                return WriteResponse.NO_CACHE_AND_NO_WRITE;
             }
 
         }
@@ -127,9 +129,47 @@ public class FileCacheStore implements Flushable, Closeable {
                     converterFactory.sortUnique(cache.getPath());
                 }
             }
+            if (tmpDir != null) {
+                Files.walk(tmpDir)
+                        .sorted(Comparator.reverseOrder())
+                        .forEach(tryCatch(Files::delete, (p, ex) -> logger.warn(
+                                "Failed to remove temporary file {}: {}", p, ex)));
+            }
         } finally {
             caches.clear();
         }
     }
 
+    // Response codes for each write record case
+    public enum WriteResponse {
+        /** Cache hit and write was successful. */
+        CACHE_AND_WRITE(true, true),
+        /** Cache hit and write was unsuccessful because of a mismatch in number of columns. */
+        CACHE_AND_NO_WRITE(true, false),
+        /** Cache miss and write was successful. */
+        NO_CACHE_AND_WRITE(false, true),
+        /** Cache miss and write was unsuccessful because of a mismatch in number of columns. */
+        NO_CACHE_AND_NO_WRITE(false, false);
+
+        private final boolean successful;
+        private final boolean cacheHit;
+
+        /**
+         * Write status.
+         * @param cacheHit whether the cache was used to write.
+         * @param successful whether the write was successful.
+         */
+        WriteResponse(boolean cacheHit, boolean successful) {
+            this.cacheHit = cacheHit;
+            this.successful = successful;
+        }
+
+        public boolean isSuccessful() {
+            return successful;
+        }
+
+        public boolean isCacheHit() {
+            return cacheHit;
+        }
+    }
 }

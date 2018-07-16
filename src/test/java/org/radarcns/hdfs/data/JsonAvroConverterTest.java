@@ -14,22 +14,11 @@
  * limitations under the License.
  */
 
-package org.radarcns.util;
-
-import static org.junit.Assert.assertEquals;
-import static org.radarcns.util.CsvAvroConverterTest.writeTestNumbers;
+package org.radarcns.hdfs.data;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.SerializationFeature;
-
-import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Parser;
 import org.apache.avro.generic.GenericDatumReader;
@@ -39,6 +28,22 @@ import org.apache.avro.io.JsonDecoder;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.StringReader;
+import java.io.StringWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import static org.junit.Assert.assertEquals;
+import static org.radarcns.hdfs.data.CsvAvroConverterTest.writeTestNumbers;
 
 public class JsonAvroConverterTest {
     @Rule

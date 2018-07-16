@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 
-package org.radarcns;
+package org.radarcns.hdfs;
 
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
+import org.radarcns.hdfs.OffsetRange;
+import org.radarcns.hdfs.OffsetRangeFile;
+import org.radarcns.hdfs.OffsetRangeSet;
 
 import java.io.BufferedReader;
 import java.io.IOException;

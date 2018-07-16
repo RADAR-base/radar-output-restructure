@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
-package org.radarcns;
+package org.radarcns.hdfs;
 
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.ParameterException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.file.DataFileReader;
@@ -27,11 +29,12 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.radarcns.util.CsvAvroConverter;
-import org.radarcns.util.FileCacheStore;
-import org.radarcns.util.JsonAvroConverter;
-import org.radarcns.util.ProgressBar;
-import org.radarcns.util.RecordConverterFactory;
+import org.radarcns.hdfs.data.CsvAvroConverter;
+import org.radarcns.hdfs.data.FileCacheStore;
+import org.radarcns.hdfs.data.JsonAvroConverter;
+import org.radarcns.hdfs.data.RecordConverterFactory;
+import org.radarcns.hdfs.util.ProgressBar;
+import org.radarcns.hdfs.util.commandline.CommandLineArgs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,6 +49,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+import java.util.regex.Pattern;
 
 public class RestructureAvroRecords {
     private static final Logger logger = LoggerFactory.getLogger(RestructureAvroRecords.class);
@@ -55,12 +59,14 @@ public class RestructureAvroRecords {
     private static final java.nio.file.Path BINS_FILE_NAME = Paths.get("bins.csv");
     private static final java.nio.file.Path SCHEMA_OUTPUT_FILE_NAME = Paths.get("schema.json");
     private static final SimpleDateFormat FILE_DATE_FORMAT = new SimpleDateFormat("yyyyMMdd_HH");
+    private static final Pattern ILLEGAL_CHARACTER_PATTERN = Pattern.compile("[^a-zA-Z0-9_-]+");
 
     static {
         FILE_DATE_FORMAT.setTimeZone(TimeZone.getTimeZone("UTC"));
     }
 
     private final RecordConverterFactory converterFactory;
+    private final boolean doStage;
 
     private java.nio.file.Path outputPath;
     private java.nio.file.Path offsetsPath;
@@ -70,27 +76,46 @@ public class RestructureAvroRecords {
 
     private long processedFileCount;
     private long processedRecordsCount;
-    private static final boolean USE_GZIP = "gzip".equalsIgnoreCase(System.getProperty("org.radarcns.compression"));
+    private final boolean useGzip;
+    private final boolean doDeduplicate;
 
-    // Default set to false because causes loss of records from Biovotion data. https://github.com/RADAR-base/Restructure-HDFS-topic/issues/16
-    private static final boolean DO_DEDUPLICATE = "true".equalsIgnoreCase(System.getProperty("org.radarcns.deduplicate", "false"));
+    public static void main(String [] args) {
 
-    public static void main(String [] args) throws Exception {
-        if (args.length != 3) {
-            System.out.println("Usage: hadoop jar restructurehdfs-all-0.2.jar <webhdfs_url> <hdfs_root_directory> <output_folder>");
+        final CommandLineArgs commandLineArgs = new CommandLineArgs();
+        final JCommander parser = JCommander.newBuilder().addObject(commandLineArgs).build();
+
+        parser.setProgramName("radar-hdfs-restructure");
+        try {
+            parser.parse(args);
+        } catch (ParameterException ex) {
+            logger.error(ex.getMessage());
+            parser.usage();
             System.exit(1);
+        }
+
+        if (commandLineArgs.help) {
+            parser.usage();
+            System.exit(0);
         }
 
         logger.info(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
         logger.info("Starting...");
-        logger.info("In:  " + args[0] + args[1]);
-        logger.info("Out: " + args[2]);
 
         long time1 = System.currentTimeMillis();
 
-        RestructureAvroRecords restr = new RestructureAvroRecords(args[0], args[2]);
+        RestructureAvroRecords restr = new RestructureAvroRecords
+                .Builder(commandLineArgs.hdfsUri, commandLineArgs.outputDirectory)
+                .useGzip("gzip".equalsIgnoreCase(commandLineArgs.compression))
+                .doDeduplicate(commandLineArgs.deduplicate).format(commandLineArgs.format)
+                .doStage(!commandLineArgs.noStage)
+                .build();
+
         try {
-            restr.start(args[1]);
+            for(String input : commandLineArgs.inputPaths) {
+                logger.info("In:  " + commandLineArgs.hdfsUri + input);
+                logger.info("Out: " + commandLineArgs.outputDirectory);
+                restr.start(input);
+            }
         } catch (IOException ex) {
             logger.error("Processing failed", ex);
         }
@@ -99,12 +124,17 @@ public class RestructureAvroRecords {
         logger.info("Time taken: {} seconds", (System.currentTimeMillis() - time1)/1000d);
     }
 
-    public RestructureAvroRecords(String inputPath, String outputPath) {
-        this.setInputWebHdfsURL(inputPath);
-        this.setOutputPath(outputPath);
+    private RestructureAvroRecords(RestructureAvroRecords.Builder builder) {
+        this.setInputWebHdfsURL(builder.hdfsUri);
+        this.setOutputPath(builder.outputPath);
+
+        this.useGzip = builder.useGzip;
+        this.doDeduplicate = builder.doDeduplicate;
+        this.doStage = builder.doStage;
+        logger.info("Deduplicate set to {}", doDeduplicate);
 
         String extension;
-        if (System.getProperty("org.radarcns.format", "csv").equalsIgnoreCase("json")) {
+        if (builder.format.equalsIgnoreCase("json")) {
             logger.info("Writing output files in JSON format");
             converterFactory = JsonAvroConverter.getFactory();
             extension = "json";
@@ -113,7 +143,7 @@ public class RestructureAvroRecords {
             converterFactory = CsvAvroConverter.getFactory();
             extension = "csv";
         }
-        if (USE_GZIP) {
+        if (this.useGzip) {
             logger.info("Compressing output files in GZIP format");
             extension += ".gz";
         }
@@ -174,12 +204,12 @@ public class RestructureAvroRecords {
 
             logger.info("Converting {} files", toProcessFileCount);
 
-            ProgressBar progressBar = new ProgressBar(toProcessFileCount, 10);
+            ProgressBar progressBar = new ProgressBar(toProcessFileCount, 70);
             progressBar.update(0);
 
             // Actually process the files
             for (Map.Entry<String, List<Path>> entry : topicPaths.entrySet()) {
-                try (FileCacheStore cache = new FileCacheStore(converterFactory, 100, USE_GZIP, DO_DEDUPLICATE)) {
+                try (FileCacheStore cache = new FileCacheStore(converterFactory, 100, useGzip, doDeduplicate, doStage)) {
                     for (Path filePath : entry.getValue()) {
                         // If JsonMappingException occurs, log the error and continue with other files
                         try {
@@ -266,17 +296,8 @@ public class RestructureAvroRecords {
         Date time = getDate(keyField, valueField);
         java.nio.file.Path outputFileName = createFilename(time, suffix);
 
-        String projectId;
-
-        if(keyField.get("projectId") == null) {
-            projectId = "unknown-project";
-        } else {
-            // Clean Project id for use in final pathname
-            projectId = keyField.get("projectId").toString().replaceAll("[^a-zA-Z0-9_-]+", "");
-        }
-
-        // Clean user id and create final output pathname
-        String userId = keyField.get("userId").toString().replaceAll("[^a-zA-Z0-9_-]+", "");
+        String projectId = sanitizeId(keyField.get("projectId"), "unknown-project");
+        String userId = sanitizeId(keyField.get("userId"), "unknown-user");
 
         java.nio.file.Path projectDir = this.outputPath.resolve(projectId);
         java.nio.file.Path userDir = projectDir.resolve(userId);
@@ -284,9 +305,9 @@ public class RestructureAvroRecords {
         java.nio.file.Path outputPath = userTopicDir.resolve(outputFileName);
 
         // Write data
-        int response = cache.writeRecord(outputPath, record);
+        FileCacheStore.WriteResponse response = cache.writeRecord(outputPath, record);
 
-        if (response == FileCacheStore.CACHE_AND_NO_WRITE || response == FileCacheStore.NO_CACHE_AND_NO_WRITE) {
+        if (!response.isSuccessful()) {
             // Write was unsuccessful due to different number of columns,
             // try again with new file name
             writeRecord(record, topicName, cache, ++suffix);
@@ -299,8 +320,9 @@ public class RestructureAvroRecords {
                 }
             }
 
+            String sourceId = sanitizeId(keyField.get("sourceId"), "unknown-source");
             // Count data (binned and total)
-            bins.add(topicName, keyField.get("sourceId").toString(), time);
+            bins.add(topicName, sourceId, time);
             processedRecordsCount++;
         }
     }
@@ -346,5 +368,55 @@ public class RestructureAvroRecords {
         }
         long time = (Long) keyField.get("start");
         return new Date(time);
+    }
+
+    private static String sanitizeId(Object id, String defaultValue) {
+        if (id == null) {
+            return defaultValue;
+        }
+        String idString = ILLEGAL_CHARACTER_PATTERN.matcher(id.toString()).replaceAll("");
+        if (idString.isEmpty()) {
+            return defaultValue;
+        } else {
+            return idString;
+        }
+    }
+
+    public static class Builder {
+        private boolean useGzip;
+        private boolean doDeduplicate;
+        private String hdfsUri;
+        private String outputPath;
+        private String format;
+        private boolean doStage;
+
+        public Builder(final String uri, final String outputPath) {
+            this.hdfsUri = uri;
+            this.outputPath = outputPath;
+        }
+
+        public Builder useGzip(final boolean gzip) {
+            this.useGzip = gzip;
+            return this;
+        }
+
+        public Builder doDeduplicate(final boolean dedup) {
+            this.doDeduplicate = dedup;
+            return this;
+        }
+
+        public Builder format(final String format) {
+            this.format = format;
+            return this;
+        }
+
+        public RestructureAvroRecords build() {
+            return new RestructureAvroRecords(this);
+        }
+
+        public Builder doStage(boolean stage) {
+            this.doStage = stage;
+            return this;
+        }
     }
 }

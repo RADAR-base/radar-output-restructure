@@ -2,60 +2,70 @@ apply plugin: 'java'
 apply plugin: 'application'
 
 group 'org.radarcns.restructurehdfs'
-version '0.3.2'
-mainClassName = 'org.radarcns.RestructureAvroRecords'
-
-run {
-    args = ['webhdfs://localhost:50070', '/topicAndroidNew/android_phone_sensor_acceleration', "${projectDir}/data"]
-}
+version '0.4.0'
+mainClassName = 'org.radarcns.hdfs.RestructureAvroRecords'
 
 sourceCompatibility = '1.8'
 targetCompatibility = '1.8'
 
-ext.avroVersion = '1.8.2'
-ext.jacksonVersion = '2.8.9'
-ext.hadoopVersion = '2.7.3'
+ext {
+    avroVersion = '1.8.2'
+    jacksonVersion = '2.9.6'
+    hadoopVersion = '2.7.6'
+    jCommanderVersion = '1.72'
+}
 
 repositories {
     jcenter()
 }
 
 dependencies {
-    compile group: 'org.apache.hadoop', name: 'hadoop-common', version: hadoopVersion
-    compile group: 'org.apache.avro', name: 'avro', version: avroVersion
-    compile group: 'org.apache.avro', name: 'avro-mapred', version: avroVersion
-    compile group: 'com.fasterxml.jackson.core' , name: 'jackson-databind', version: jacksonVersion
-    compile group: 'com.fasterxml.jackson.dataformat' , name: 'jackson-dataformat-csv', version: jacksonVersion
+    implementation group: 'org.apache.avro', name: 'avro', version: avroVersion
+    implementation group: 'com.fasterxml.jackson.core' , name: 'jackson-databind', version: jacksonVersion
+    implementation group: 'com.fasterxml.jackson.dataformat' , name: 'jackson-dataformat-csv', version: jacksonVersion
+    implementation group: 'com.beust', name: 'jcommander', version: jCommanderVersion
 
-    runtime group: 'org.apache.hadoop', name: 'hadoop-hdfs', version: hadoopVersion
+    implementation group: 'org.apache.avro', name: 'avro-mapred', version: avroVersion
+    implementation group: 'org.apache.hadoop', name: 'hadoop-common', version: hadoopVersion
 
-    testCompile group: 'junit', name: 'junit', version: '4.12'
+    runtimeOnly group: 'org.apache.hadoop', name: 'hadoop-hdfs', version: hadoopVersion
+
+    testImplementation group: 'junit', name: 'junit', version: '4.12'
 }
 
-//create a single Jar with all dependencies
-task fatJar(type: Jar) {
-    dependsOn configurations.runtime
+jar {
     manifest {
-        attributes 'Implementation-Title': 'radar-restructure-hdfs',
-                'Implementation-Version': version,
-                'Main-Class': mainClassName
+        attributes 'Implementation-Title': 'RADAR-base HDFS data restructuring',
+                'Implementation-Version': version
     }
-    baseName = project.name + '-all'
-    from {
-        configurations.runtime.collect {
-            it.isDirectory() ? it : zipTree(it)
+}
+
+distributions {
+    main {
+        contents {
+            into ("share/${project.name}") {
+                from 'README.md', 'LICENSE'
+            }
         }
-    } {
-        exclude 'META-INF/*'
     }
-    with jar
 }
 
-artifacts {
-    archives fatJar
+tasks.withType(Tar){
+    compression = Compression.GZIP
+    extension = 'tar.gz'
 }
 
-task wrapper(type: Wrapper) {
-    gradleVersion = '4.1'
-    distributionType 'all'
+task downloadDependencies {
+    description "Pre-downloads dependencies"
+    configurations.compileClasspath.files
+    configurations.runtimeClasspath.files
+}
+
+task copyDependencies(type: Copy) {
+    from configurations.runtimeClasspath.files
+    into "${buildDir}/third-party/"
+}
+
+wrapper {
+    gradleVersion '4.8'
 }
