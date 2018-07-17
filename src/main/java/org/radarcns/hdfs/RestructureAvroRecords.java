@@ -109,6 +109,26 @@ public class RestructureAvroRecords {
                 .doDeduplicate(commandLineArgs.deduplicate).format(commandLineArgs.format)
                 .doStage(!commandLineArgs.noStage);
 
+        // Configure high availability
+        if (commandLineArgs.hdfsUri1 != null || commandLineArgs.hdfsUri2 != null || commandLineArgs.hdfsHa != null) {
+            if (commandLineArgs.hdfsUri1 == null || commandLineArgs.hdfsUri2 == null || commandLineArgs.hdfsHa == null) {
+                logger.error("HDFS High availability name node configuration is incomplete. Configure --namenode-1, --namenode-2 and --namenode-ha");
+                System.exit(1);
+            }
+
+            String[] haNames = commandLineArgs.hdfsHa.split(",");
+            if (haNames.length != 2) {
+                logger.error("Cannot process HDFS High Availability mode for other than two name nodes.");
+                System.exit(1);
+            }
+
+            builder.putHdfsConfig("dfs.nameservices", commandLineArgs.hdfsUri);
+            builder.putHdfsConfig("dfs.ha.namenodes." + commandLineArgs.hdfsUri, commandLineArgs.hdfsHa);
+            builder.putHdfsConfig("dfs.namenode.rpc-address." + commandLineArgs.hdfsUri + "." + haNames[0], commandLineArgs.hdfsUri1);
+            builder.putHdfsConfig("dfs.namenode.rpc-address." + commandLineArgs.hdfsUri + "." + haNames[1], commandLineArgs.hdfsUri2);
+            builder.putHdfsConfig("dfs.client.failover.proxy.provider." + commandLineArgs.hdfsUri,"org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider");
+        }
+
         RestructureAvroRecords restr = builder.build();
 
         try {
@@ -156,7 +176,8 @@ public class RestructureAvroRecords {
     }
 
     public void setInputWebHdfsURL(String fileSystemURL) {
-        conf.set("fs.defaultFS", fileSystemURL);
+        conf.set("fs.defaultFS", "hdfs://" + fileSystemURL);
+        conf.set("fs.default.name", conf.get("fs.defaultFS"));
     }
 
     public void setOutputPath(String path) {

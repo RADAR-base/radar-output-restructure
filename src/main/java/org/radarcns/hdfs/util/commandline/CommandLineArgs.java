@@ -20,8 +20,17 @@ public class CommandLineArgs {
     @Parameter(names = { "-d", "--deduplicate" }, description = "Boolean to define if to use deduplication or not.")
     public boolean deduplicate;
 
-    @Parameter(names = { "-u", "--hdfs-uri" }, description = "The HDFS uri to connect to. Eg - 'hdfs://<HOST>:<RPC_PORT>/<PATH>'.", required = true, validateWith = { HdfsUriValidator.class, PathValidator.class })
+    @Parameter(names = { "-n", "--nameservice"}, description = "The HDFS name services to connect to. Eg - '<HOST>' for single configurations or <CLUSTER_ID> for high availability web services.", required = true, validateWith = { PathValidator.class })
     public String hdfsUri;
+
+    @Parameter(names = { "--namenode-1" }, description = "High availability HDFS name node to also connect to. Eg - '<HOST>:<RPC_PORT>'.", validateWith = { PathValidator.class })
+    public String hdfsUri1;
+
+    @Parameter(names = { "--namenode-2" }, description = "High availability HDFS name node to also connect to. Eg - '<HOST>:<RPC_PORT>'.", validateWith = { PathValidator.class })
+    public String hdfsUri2;
+
+    @Parameter(names = { "--namenode-ha"}, description = "High availability HDFS name node names. Eg - 'nn1,nn2'.", validateWith = { PathValidator.class })
+    public String hdfsHa;
 
     @Parameter(names = { "-o", "--output-directory"}, description = "The output folder where the files are to be extracted.", required = true, validateWith = PathValidator.class)
     public String outputDirectory;
