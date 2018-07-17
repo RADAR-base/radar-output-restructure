@@ -124,8 +124,8 @@ public class RestructureAvroRecords {
 
             builder.putHdfsConfig("dfs.nameservices", commandLineArgs.hdfsUri);
             builder.putHdfsConfig("dfs.ha.namenodes." + commandLineArgs.hdfsUri, commandLineArgs.hdfsHa);
-            builder.putHdfsConfig("dfs.namenode.rpc-address." + commandLineArgs.hdfsUri + "." + haNames[0], commandLineArgs.hdfsUri1);
-            builder.putHdfsConfig("dfs.namenode.rpc-address." + commandLineArgs.hdfsUri + "." + haNames[1], commandLineArgs.hdfsUri2);
+            builder.putHdfsConfig("dfs.namenode.rpc-address." + commandLineArgs.hdfsUri + "." + haNames[0], commandLineArgs.hdfsUri1 + ":8020");
+            builder.putHdfsConfig("dfs.namenode.rpc-address." + commandLineArgs.hdfsUri + "." + haNames[1], commandLineArgs.hdfsUri2 + ":8020");
             builder.putHdfsConfig("dfs.client.failover.proxy.provider." + commandLineArgs.hdfsUri,"org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider");
         }
 
@@ -133,7 +133,7 @@ public class RestructureAvroRecords {
 
         try {
             for(String input : commandLineArgs.inputPaths) {
-                logger.info("In:  " + commandLineArgs.hdfsUri + input);
+                logger.info("In:  hdfs://" + commandLineArgs.hdfsUri + input);
                 logger.info("Out: " + commandLineArgs.outputDirectory);
                 restr.start(input);
             }
@@ -177,7 +177,6 @@ public class RestructureAvroRecords {
 
     public void setInputWebHdfsURL(String fileSystemURL) {
         conf.set("fs.defaultFS", "hdfs://" + fileSystemURL);
-        conf.set("fs.default.name", conf.get("fs.defaultFS"));
     }
 
     public void setOutputPath(String path) {

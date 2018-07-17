@@ -23,10 +23,10 @@ public class CommandLineArgs {
     @Parameter(names = { "-n", "--nameservice"}, description = "The HDFS name services to connect to. Eg - '<HOST>' for single configurations or <CLUSTER_ID> for high availability web services.", required = true, validateWith = { PathValidator.class })
     public String hdfsUri;
 
-    @Parameter(names = { "--namenode-1" }, description = "High availability HDFS name node to also connect to. Eg - '<HOST>:<RPC_PORT>'.", validateWith = { PathValidator.class })
+    @Parameter(names = { "--namenode-1" }, description = "High availability HDFS first name node hostname.", validateWith = { PathValidator.class })
     public String hdfsUri1;
 
-    @Parameter(names = { "--namenode-2" }, description = "High availability HDFS name node to also connect to. Eg - '<HOST>:<RPC_PORT>'.", validateWith = { PathValidator.class })
+    @Parameter(names = { "--namenode-2" }, description = "High availability HDFS second name node hostname. Eg - '<HOST>'.", validateWith = { PathValidator.class })
     public String hdfsUri2;
 
     @Parameter(names = { "--namenode-ha"}, description = "High availability HDFS name node names. Eg - 'nn1,nn2'.", validateWith = { PathValidator.class })
