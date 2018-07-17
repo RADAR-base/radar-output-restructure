@@ -103,12 +103,13 @@ public class RestructureAvroRecords {
 
         long time1 = System.currentTimeMillis();
 
-        RestructureAvroRecords restr = new RestructureAvroRecords
+        RestructureAvroRecords.Builder builder = new RestructureAvroRecords
                 .Builder(commandLineArgs.hdfsUri, commandLineArgs.outputDirectory)
                 .useGzip("gzip".equalsIgnoreCase(commandLineArgs.compression))
                 .doDeduplicate(commandLineArgs.deduplicate).format(commandLineArgs.format)
-                .doStage(!commandLineArgs.noStage)
-                .build();
+                .doStage(!commandLineArgs.noStage);
+
+        RestructureAvroRecords restr = builder.build();
 
         try {
             for(String input : commandLineArgs.inputPaths) {
@@ -127,6 +128,10 @@ public class RestructureAvroRecords {
     private RestructureAvroRecords(RestructureAvroRecords.Builder builder) {
         this.setInputWebHdfsURL(builder.hdfsUri);
         this.setOutputPath(builder.outputPath);
+
+        for (Map.Entry<String, String> hdfsConf : builder.hdfsConf.entrySet()) {
+            conf.set(hdfsConf.getKey(), hdfsConf.getValue());
+        }
 
         this.useGzip = builder.useGzip;
         this.doDeduplicate = builder.doDeduplicate;
@@ -386,6 +391,7 @@ public class RestructureAvroRecords {
         private boolean useGzip;
         private boolean doDeduplicate;
         private String hdfsUri;
+        private Map<String, String> hdfsConf = new HashMap<>();
         private String outputPath;
         private String format;
         private boolean doStage;
@@ -408,6 +414,10 @@ public class RestructureAvroRecords {
         public Builder format(final String format) {
             this.format = format;
             return this;
+        }
+
+        public void putHdfsConfig(String name, String value) {
+            hdfsConf.put(name, value);
         }
 
         public RestructureAvroRecords build() {
