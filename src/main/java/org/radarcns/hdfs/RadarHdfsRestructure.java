@@ -182,7 +182,11 @@ public class RadarHdfsRestructure {
         System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism", String.valueOf(numThreads - 1));
 
         Map<String, List<Path>> result = walk(fs, path)
-                .filter(f -> !seenFiles.contains(OffsetRange.parseFilename(f.getName())))
+                .filter(f -> {
+                    String name = f.getName();
+                    return name.endsWith(".avro")
+                            && !seenFiles.contains(OffsetRange.parseFilename(name));
+                })
                 .collect(Collectors.groupingByConcurrent(f -> f.getParent().getParent().getName()));
 
         System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism", oldParallelism);
@@ -228,8 +232,7 @@ public class RadarHdfsRestructure {
                     } else {
                         return Stream.of(f.getPath());
                     }
-                })
-                .filter(f -> f.getName().endsWith(".avro"));
+                });
     }
 
     private static String getTopic(Path filePath, OffsetRangeSet seenFiles) {
