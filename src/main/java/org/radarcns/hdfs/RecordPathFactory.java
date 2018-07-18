@@ -2,6 +2,8 @@ package org.radarcns.hdfs;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 import java.time.Instant;
@@ -10,30 +12,59 @@ import java.util.regex.Pattern;
 
 import static java.time.ZoneOffset.UTC;
 
-public interface RecordPathFactory extends Plugin {
-    DateTimeFormatter HOURLY_TIME_BIN_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HH'00'")
+public abstract class RecordPathFactory implements Plugin {
+    private static final Logger logger = LoggerFactory.getLogger(RecordPathFactory.class);
+    private static final Pattern ILLEGAL_CHARACTER_PATTERN = Pattern.compile("[^a-zA-Z0-9_-]+");
+
+    public static final DateTimeFormatter HOURLY_TIME_BIN_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HH'00'")
             .withZone(UTC);
-    Pattern ILLEGAL_CHARACTER_PATTERN = Pattern.compile("[^a-zA-Z0-9_-]+");
 
-    RecordOrganization getRecordPath(String topic, GenericRecord record, int attempt);
+    private Path root;
+    private String extension;
 
-    Path getRoot();
+    public RecordOrganization getRecordOrganization(String topic, GenericRecord record, int attempt) {
+        GenericRecord keyField = (GenericRecord) record.get("key");
+        GenericRecord valueField = (GenericRecord) record.get("value");
 
-    void setRoot(Path rootDirectory);
+        if (keyField == null || valueField == null) {
+            logger.error("Failed to process {}", record);
+            throw new IllegalArgumentException("Failed to process " + record + "; no key or value");
+        }
 
-    String getExtension();
+        Instant time = RecordPathFactory.getDate(keyField, valueField);
 
-    void setExtension(String extension);
-
-    DateTimeFormatter getTimeBinFormat();
-
-    default String getTimeBin(Instant time) {
-        return time == null ? "unknown_date" : getTimeBinFormat().format(time);
+        Path relativePath = getRelativePath(topic, keyField, valueField, time, attempt);
+        Path outputPath = getRoot().resolve(relativePath);
+        String category = getCategory(keyField, valueField);
+        return new RecordOrganization(outputPath, category, time);
     }
 
-    default String createFilename(Instant time, int attempt) {
-        String fileSuffix = (attempt == 0 ? "" : "_" + attempt) + getExtension();
-        return getTimeBin(time) + fileSuffix;
+    public abstract Path getRelativePath(String topic, GenericRecord key, GenericRecord value, Instant time, int attempt);
+
+    public abstract String getCategory(GenericRecord key, GenericRecord value);
+
+    public Path getRoot() {
+        return this.root;
+    }
+
+    public void setRoot(Path rootDirectory) {
+        this.root = rootDirectory;
+    }
+
+    public String getExtension() {
+        return this.extension;
+    }
+
+    public void setExtension(String extension) {
+        this.extension = extension;
+    }
+
+    public DateTimeFormatter getTimeBinFormat() {
+        return HOURLY_TIME_BIN_FORMAT;
+    }
+
+    public String getTimeBin(Instant time) {
+        return time == null ? "unknown_date" : getTimeBinFormat().format(time);
     }
 
     class RecordOrganization {
@@ -60,7 +91,7 @@ public interface RecordPathFactory extends Plugin {
         }
     }
 
-    static Instant getDate(GenericRecord keyField, GenericRecord valueField) {
+    public static Instant getDate(GenericRecord keyField, GenericRecord valueField) {
         Schema.Field timeField = valueField.getSchema().getField("time");
         if (timeField != null) {
             double time = (Double) valueField.get(timeField.pos());
@@ -76,7 +107,7 @@ public interface RecordPathFactory extends Plugin {
         return Instant.ofEpochMilli((Long) keyField.get("start"));
     }
 
-    static String sanitizeId(Object id, String defaultValue) {
+    public static String sanitizeId(Object id, String defaultValue) {
         if (id == null) {
             return defaultValue;
         }

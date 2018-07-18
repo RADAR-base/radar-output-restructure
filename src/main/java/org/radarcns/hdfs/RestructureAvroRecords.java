@@ -312,7 +312,7 @@ public class RestructureAvroRecords {
             throw new IOException("Failed to process " + record + "; no key or value");
         }
 
-        RecordPathFactory.RecordOrganization metadata = pathFactory.getRecordPath(topicName, record, suffix);
+        RecordPathFactory.RecordOrganization metadata = pathFactory.getRecordOrganization(topicName, record, suffix);
 
         // Write data
         FileCacheStore.WriteResponse response = cache.writeRecord(metadata.getPath(), record);
