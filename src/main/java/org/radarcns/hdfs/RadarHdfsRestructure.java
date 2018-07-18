@@ -65,14 +65,13 @@ public class RadarHdfsRestructure {
     private RecordPathFactory pathFactory;
 
     private RadarHdfsRestructure(RadarHdfsRestructure.Builder builder) {
+        conf = new Configuration();
         this.setInputWebHdfsURL(builder.hdfsUri);
         this.setOutputPath(builder.root);
 
-        conf = new Configuration();
         for (Map.Entry<String, String> hdfsConf : builder.hdfsConf.entrySet()) {
             conf.set(hdfsConf.getKey(), hdfsConf.getValue());
         }
-
     }
 
     public void setInputWebHdfsURL(String fileSystemURL) {
