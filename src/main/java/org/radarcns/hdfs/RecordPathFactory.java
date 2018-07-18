@@ -71,7 +71,7 @@ public abstract class RecordPathFactory implements Plugin {
         return time == null ? "unknown_date" : getTimeBinFormat().format(time);
     }
 
-    class RecordOrganization {
+    public static class RecordOrganization {
         private final Path path;
         private final Instant time;
         private final String category;

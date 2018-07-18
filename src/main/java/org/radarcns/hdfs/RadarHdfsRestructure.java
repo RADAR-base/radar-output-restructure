@@ -38,14 +38,20 @@ import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.TimeZone;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 public class RadarHdfsRestructure {
     private static final Logger logger = LoggerFactory.getLogger(RadarHdfsRestructure.class);
@@ -59,22 +65,24 @@ public class RadarHdfsRestructure {
         FILE_DATE_FORMAT.setTimeZone(TimeZone.getTimeZone("UTC"));
     }
 
-    private int numThreads;
+    private final int numThreads;
 
-    private java.nio.file.Path offsetsPath;
-    private Frequency bins;
+    private final java.nio.file.Path offsetsPath;
+    private final Frequency bins;
 
     private final Configuration conf;
 
-    private final AtomicLong processedFileCount = new AtomicLong(0L);
-    private final AtomicLong processedRecordsCount = new AtomicLong(0L);
+    private LongAdder processedFileCount;
+    private LongAdder processedRecordsCount;
     private FileStoreFactory fileStoreFactory;
     private RecordPathFactory pathFactory;
 
-    private RadarHdfsRestructure(RadarHdfsRestructure.Builder builder) {
+    private RadarHdfsRestructure(Builder builder) {
         conf = new Configuration();
-        this.setInputWebHdfsURL(builder.hdfsUri);
-        this.setOutputPath(builder.root);
+        conf.set("fs.defaultFS", "hdfs://" + builder.hdfsUri);
+        java.nio.file.Path outputPath = Paths.get(builder.root.replaceAll("/$", ""));
+        offsetsPath = outputPath.resolve(OFFSETS_FILE_NAME);
+        bins = Frequency.read(outputPath.resolve(BINS_FILE_NAME));
         this.numThreads = builder.numThreads;
 
         for (Map.Entry<String, String> hdfsConf : builder.hdfsConf.entrySet()) {
@@ -82,29 +90,18 @@ public class RadarHdfsRestructure {
         }
     }
 
-    public void setInputWebHdfsURL(String fileSystemURL) {
-        conf.set("fs.defaultFS", "hdfs://" + fileSystemURL);
-    }
-
-    public void setOutputPath(String path) {
-        // Remove trailing backslash
-        java.nio.file.Path outputPath = Paths.get(path.replaceAll("/$", ""));
-        offsetsPath = outputPath.resolve(OFFSETS_FILE_NAME);
-        bins = Frequency.read(outputPath.resolve(BINS_FILE_NAME));
-    }
-
     public long getProcessedFileCount() {
-        return processedFileCount.get();
+        return processedFileCount.sum();
     }
 
     public long getProcessedRecordsCount() {
-        return processedRecordsCount.get();
+        return processedRecordsCount.sum();
     }
 
     public void start(String directoryName) throws IOException {
         // Get files and directories
         Path path = new Path(directoryName);
-        FileSystem fs = FileSystem.get(conf);
+        FileSystem fs = path.getFileSystem(conf);
 
         try (OffsetRangeFile.Writer offsets = new OffsetRangeFile.Writer(offsetsPath)) {
             OffsetRangeSet seenFiles;
@@ -114,11 +111,20 @@ public class RadarHdfsRestructure {
                 logger.error("Error reading offsets file. Processing all offsets.");
                 seenFiles = new OffsetRangeSet();
             }
-            logger.info("Retrieving file list from {}", path);
+
+            String oldParallelism = System.getProperty("java.util.concurrent.ForkJoinPool.common.parallelism");
+            System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism", String.valueOf(numThreads - 1));
+
             // Get filenames to process
-            Map<String, List<Path>> topicPaths = new HashMap<>();
-            long toProcessFileCount = 0L;
-            processedFileCount.set(0L);
+            Map<String, List<Path>> topicPaths = getTopicPaths(fs, path, seenFiles);
+
+            long toProcessFileCount = topicPaths.values().stream()
+                    .mapToInt(List::size)
+                    .sum();
+
+            processedFileCount = new LongAdder();
+            processedRecordsCount = new LongAdder();
+
             RemoteIterator<LocatedFileStatus> files = fs.listFiles(path, true);
             while (files.hasNext()) {
                 LocatedFileStatus locatedFileStatus = files.next();
@@ -139,30 +145,26 @@ public class RadarHdfsRestructure {
             ProgressBar progressBar = new ProgressBar(toProcessFileCount, 70);
             progressBar.update(0);
 
-            if (!pathFactory.isTopicPartitioned()) {
-                numThreads = 1;
-            }
-
-            ExecutorService executor = Executors.newFixedThreadPool(this.numThreads);
+            logger.info("Retrieving file list from {}", path);
+            ExecutorService executor = Executors.newFixedThreadPool(getPathFactory().isTopicPartitioned() ? this.numThreads : 1);
 
             // Actually process the files
-            for (Map.Entry<String, List<Path>> entry : topicPaths.entrySet()) {
-                executor.submit(() -> {
-                    try (FileCacheStore cache = fileStoreFactory.newFileCacheStore()) {
-                        for (Path filePath : entry.getValue()) {
-                            // If JsonMappingException occurs, log the error and continue with other files
-                            try {
-                                this.processFile(filePath, entry.getKey(), cache, offsets);
-                            } catch (JsonMappingException exc) {
-                                logger.error("Cannot map values", exc);
-                            }
-                            progressBar.update(processedFileCount.incrementAndGet());
+            topicPaths.forEach((topic, paths) -> executor.submit(() -> {
+                try (FileCacheStore cache = fileStoreFactory.newFileCacheStore()) {
+                    for (Path filePath : paths) {
+                        // If JsonMappingException occurs, log the error and continue with other files
+                        try {
+                            this.processFile(filePath, topic, cache, offsets);
+                        } catch (JsonMappingException exc) {
+                            logger.error("Cannot map values", exc);
                         }
-                    } catch (IOException ex) {
-                        logger.error("Failed to process file", ex);
+                        processedFileCount.increment();
+                        progressBar.update(processedFileCount.sum());
                     }
-                });
-            }
+                } catch (IOException ex) {
+                    logger.error("Failed to process file", ex);
+                }
+            }));
 
             executor.shutdown();
             executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
@@ -173,6 +175,61 @@ public class RadarHdfsRestructure {
 
         logger.info("Cleaning offset file");
         OffsetRangeFile.cleanUp(offsetsPath);
+    }
+
+    private Map<String, List<Path>> getTopicPaths(FileSystem fs, Path path, OffsetRangeSet seenFiles) {
+        String oldParallelism = System.getProperty("java.util.concurrent.ForkJoinPool.common.parallelism");
+        System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism", String.valueOf(numThreads - 1));
+
+        Map<String, List<Path>> result = walk(fs, path)
+                .filter(f -> !seenFiles.contains(OffsetRange.parseFilename(f.getName())))
+                .collect(Collectors.groupingByConcurrent(f -> f.getParent().getParent().getName()));
+
+        System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism", oldParallelism);
+
+        return result;
+    }
+
+    private Stream<Path> walk(FileSystem fs, Path path) {
+        RemoteIterator<LocatedFileStatus> files;
+        try {
+            files = fs.listFiles(path, false);
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+        Spliterator<LocatedFileStatus> spliterator = Spliterators.spliteratorUnknownSize(new Iterator<LocatedFileStatus>() {
+            @Override
+            public boolean hasNext() {
+                try {
+                    return files.hasNext();
+                } catch (IOException e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+
+            @Override
+            public LocatedFileStatus next() {
+                try {
+                    return files.next();
+                } catch (IOException e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+        }, Spliterator.NONNULL | Spliterator.IMMUTABLE | Spliterator.DISTINCT);
+
+        return StreamSupport.stream(spliterator, true)
+                .flatMap(f -> {
+                    if (f.isDirectory()) {
+                        if (!f.getPath().getName().equals("+tmp")) {
+                            return walk(fs, f.getPath());
+                        } else {
+                            return Stream.empty();
+                        }
+                    } else {
+                        return Stream.of(f.getPath());
+                    }
+                })
+                .filter(f -> f.getName().endsWith(".avro"));
     }
 
     private static String getTopic(Path filePath, OffsetRangeSet seenFiles) {
@@ -260,14 +317,18 @@ public class RadarHdfsRestructure {
             }
 
             // Count data (binned and total)
-            bins.add(topicName, metadata.getCategory(), pathFactory.getTimeBin(metadata.getTime()));
-            processedRecordsCount.incrementAndGet();
+            bins.add(topicName, metadata.getCategory(), getPathFactory().getTimeBin(metadata.getTime()));
+            processedRecordsCount.increment();
         }
     }
 
-    public void setFileStoreFactory(FileStoreFactory factory) {
+    public synchronized void setFileStoreFactory(FileStoreFactory factory) {
         this.fileStoreFactory = factory;
         this.pathFactory = factory.getPathFactory();
+    }
+
+    private synchronized RecordPathFactory getPathFactory() {
+        return pathFactory;
     }
 
     @SuppressWarnings({"UnusedReturnValue", "WeakerAccess"})

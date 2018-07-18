@@ -35,6 +35,7 @@ public class Application implements FileStoreFactory {
     private final RadarHdfsRestructure hdfsReader;
     private final RecordPathFactory pathFactory;
     private final List<String> inputPaths;
+    private final int cacheSize;
 
     private Application(Builder builder) {
         this.storageDriver = builder.storageDriver;
@@ -44,6 +45,7 @@ public class Application implements FileStoreFactory {
         compression = builder.compressionFactory.get(builder.compression);
         hdfsReader = builder.hdfsReader;
         hdfsReader.setFileStoreFactory(this);
+        cacheSize = builder.cacheSize;
 
         pathFactory = builder.pathFactory;
         String extension = converterFactory.getExtension() + compression.getExtension();
@@ -83,6 +85,7 @@ public class Application implements FileStoreFactory {
             restr = new RadarHdfsRestructure.Builder(commandLineArgs.hdfsUri, commandLineArgs.outputDirectory)
                     .hdfsHighAvailability(commandLineArgs.hdfsHa,
                             commandLineArgs.hdfsUri1, commandLineArgs.hdfsUri2)
+                    .numThreads(commandLineArgs.numThreads)
                     .build();
 
             application = new Builder(restr, commandLineArgs.outputDirectory)
@@ -95,6 +98,7 @@ public class Application implements FileStoreFactory {
                     .storageDriver(commandLineArgs.storageDriver)
                     .properties(commandLineArgs.properties)
                     .inputPaths(commandLineArgs.inputPaths)
+                    .cacheSize(commandLineArgs.cacheSize)
                     .build();
         } catch (IllegalArgumentException ex) {
             logger.error("HDFS High availability name node configuration is incomplete."
@@ -115,7 +119,7 @@ public class Application implements FileStoreFactory {
     }
 
     public FileCacheStore newFileCacheStore() throws IOException {
-        return new FileCacheStore(storageDriver, converterFactory, 100, compression,
+        return new FileCacheStore(storageDriver, converterFactory, cacheSize, compression,
                 doDeduplicate);
     }
 
@@ -143,7 +147,6 @@ public class Application implements FileStoreFactory {
     }
 
     public static class Builder {
-
         private final String root;
         private StorageDriver storageDriver;
         private boolean doDeduplicate;
@@ -155,6 +158,7 @@ public class Application implements FileStoreFactory {
         private Map<String, String> properties = new HashMap<>();
         private RadarHdfsRestructure hdfsReader;
         private List<String> inputPaths;
+        private int cacheSize = 100;
 
         public Builder(RadarHdfsRestructure restr, String root) {
             this.hdfsReader = restr;
@@ -202,6 +206,17 @@ public class Application implements FileStoreFactory {
 
         public Builder properties(Map<String, String> props) {
             this.properties.putAll(props);
+            return this;
+        }
+
+        public Builder cacheSize(Integer size) {
+            if (size == null) {
+                return this;
+            }
+            if (size < 1) {
+                throw new IllegalArgumentException("Cannot use cache size smaller than 1");
+            }
+            cacheSize = size;
             return this;
         }
 

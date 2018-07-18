@@ -57,6 +57,11 @@ public class CommandLineArgs {
     @DynamicParameter(names = {"-p", "--property"}, description = "Properties used by custom plugins.")
     public Map<String, String> properties = new HashMap<>();
 
+    @Parameter(names = {"t", "--num-threads"}, description = "Number of threads to use for processing")
+    public int numThreads = 1;
+
+    @Parameter(names = {"-c", "--cache-size"}, description = "Number of files to keep in cache in a single thread.")
+    public Integer cacheSize;
 
     public static <T> T nonNullOrDefault(T value, Supplier<T> defaultValue) {
         return value != null ? value : defaultValue.get();
