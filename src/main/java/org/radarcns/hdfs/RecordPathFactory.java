@@ -59,6 +59,10 @@ public abstract class RecordPathFactory implements Plugin {
         this.extension = extension;
     }
 
+    public boolean isTopicPartitioned() {
+        return true;
+    }
+
     public DateTimeFormatter getTimeBinFormat() {
         return HOURLY_TIME_BIN_FORMAT;
     }

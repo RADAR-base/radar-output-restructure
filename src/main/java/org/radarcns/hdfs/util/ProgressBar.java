@@ -37,7 +37,7 @@ public class ProgressBar {
         this.previousPercentage = -1;
     }
 
-    public void update(long remain) {
+    public synchronized void update(long remain) {
         if (remain > total || remain < 0) {
             throw new IllegalArgumentException(
                     "Update value " + remain + " out of range [0, " + total + "].");

@@ -63,7 +63,7 @@ public class Frequency {
         return new Frequency(path, map);
     }
 
-    public void add(String topicName, String id, String timeBin) {
+    public synchronized void add(String topicName, String id, String timeBin) {
         Integer count = (Integer) bins.get(topicName, id, timeBin);
         if (count == null) {
             bins.put(topicName, id, timeBin, 1);
@@ -82,7 +82,7 @@ public class Frequency {
         }
     }
 
-    public void write() {
+    public synchronized void write() {
         // Write all bins to csv
         MapIterator mapIterator = bins.mapIterator();
         try (BufferedWriter bw = Files.newBufferedWriter(path)) {

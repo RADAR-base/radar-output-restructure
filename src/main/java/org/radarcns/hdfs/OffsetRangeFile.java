@@ -89,23 +89,23 @@ public final class OffsetRangeFile {
                     .with(fileIsNew ? SCHEMA.withHeader() : SCHEMA);
         }
 
-        public void write(OffsetRange range) throws IOException {
+        public synchronized void write(OffsetRange range) throws IOException {
             writer.writeValue(generator, range);
         }
 
-        public void write(OffsetRangeSet rangeSet) throws IOException {
+        public synchronized void write(OffsetRangeSet rangeSet) throws IOException {
             for (OffsetRange range : rangeSet) {
                 write(range);
             }
         }
 
         @Override
-        public void flush() throws IOException {
+        public synchronized void flush() throws IOException {
             generator.flush();
         }
 
         @Override
-        public void close() throws IOException {
+        public synchronized void close() throws IOException {
             generator.close();
             bufferedWriter.close();
         }

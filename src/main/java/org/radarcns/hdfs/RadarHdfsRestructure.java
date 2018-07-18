@@ -41,6 +41,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class RadarHdfsRestructure {
     private static final Logger logger = LoggerFactory.getLogger(RadarHdfsRestructure.class);
@@ -54,13 +59,15 @@ public class RadarHdfsRestructure {
         FILE_DATE_FORMAT.setTimeZone(TimeZone.getTimeZone("UTC"));
     }
 
+    private int numThreads;
+
     private java.nio.file.Path offsetsPath;
     private Frequency bins;
 
     private final Configuration conf;
 
-    private long processedFileCount;
-    private long processedRecordsCount;
+    private final AtomicLong processedFileCount = new AtomicLong(0L);
+    private final AtomicLong processedRecordsCount = new AtomicLong(0L);
     private FileStoreFactory fileStoreFactory;
     private RecordPathFactory pathFactory;
 
@@ -68,6 +75,7 @@ public class RadarHdfsRestructure {
         conf = new Configuration();
         this.setInputWebHdfsURL(builder.hdfsUri);
         this.setOutputPath(builder.root);
+        this.numThreads = builder.numThreads;
 
         for (Map.Entry<String, String> hdfsConf : builder.hdfsConf.entrySet()) {
             conf.set(hdfsConf.getKey(), hdfsConf.getValue());
@@ -86,11 +94,11 @@ public class RadarHdfsRestructure {
     }
 
     public long getProcessedFileCount() {
-        return processedFileCount;
+        return processedFileCount.get();
     }
 
     public long getProcessedRecordsCount() {
-        return processedRecordsCount;
+        return processedRecordsCount.get();
     }
 
     public void start(String directoryName) throws IOException {
@@ -110,7 +118,7 @@ public class RadarHdfsRestructure {
             // Get filenames to process
             Map<String, List<Path>> topicPaths = new HashMap<>();
             long toProcessFileCount = 0L;
-            processedFileCount = 0L;
+            processedFileCount.set(0L);
             RemoteIterator<LocatedFileStatus> files = fs.listFiles(path, true);
             while (files.hasNext()) {
                 LocatedFileStatus locatedFileStatus = files.next();
@@ -131,20 +139,36 @@ public class RadarHdfsRestructure {
             ProgressBar progressBar = new ProgressBar(toProcessFileCount, 70);
             progressBar.update(0);
 
+            if (!pathFactory.isTopicPartitioned()) {
+                numThreads = 1;
+            }
+
+            ExecutorService executor = Executors.newFixedThreadPool(this.numThreads);
+
             // Actually process the files
             for (Map.Entry<String, List<Path>> entry : topicPaths.entrySet()) {
-                try (FileCacheStore cache = fileStoreFactory.newFileCacheStore()) {
-                    for (Path filePath : entry.getValue()) {
-                        // If JsonMappingException occurs, log the error and continue with other files
-                        try {
-                            this.processFile(filePath, entry.getKey(), cache, offsets);
-                        } catch (JsonMappingException exc) {
-                            logger.error("Cannot map values", exc);
+                executor.submit(() -> {
+                    try (FileCacheStore cache = fileStoreFactory.newFileCacheStore()) {
+                        for (Path filePath : entry.getValue()) {
+                            // If JsonMappingException occurs, log the error and continue with other files
+                            try {
+                                this.processFile(filePath, entry.getKey(), cache, offsets);
+                            } catch (JsonMappingException exc) {
+                                logger.error("Cannot map values", exc);
+                            }
+                            progressBar.update(processedFileCount.incrementAndGet());
                         }
-                        progressBar.update(++processedFileCount);
+                    } catch (IOException ex) {
+                        logger.error("Failed to process file", ex);
                     }
-                }
+                });
             }
+
+            executor.shutdown();
+            executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            logger.error("Processing interrupted");
+            Thread.currentThread().interrupt();
         }
 
         logger.info("Cleaning offset file");
@@ -237,7 +261,7 @@ public class RadarHdfsRestructure {
 
             // Count data (binned and total)
             bins.add(topicName, metadata.getCategory(), pathFactory.getTimeBin(metadata.getTime()));
-            processedRecordsCount++;
+            processedRecordsCount.incrementAndGet();
         }
     }
 
@@ -251,10 +275,19 @@ public class RadarHdfsRestructure {
         public String root;
         private String hdfsUri;
         private final Map<String, String> hdfsConf = new HashMap<>();
+        private int numThreads = 1;
 
         public Builder(final String uri, String root) {
             this.hdfsUri = uri;
             this.root = root;
+        }
+
+        public Builder numThreads(int num) {
+            if (num < 1) {
+                throw new IllegalArgumentException("Number of threads must be at least 1");
+            }
+            this.numThreads = num;
+            return this;
         }
 
         public Builder hdfsHighAvailability(String hdfsHa, String hdfsNameNode1, String hdfsNameNode2) {
