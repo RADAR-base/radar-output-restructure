@@ -1,19 +1,22 @@
 package org.radarcns.hdfs.util.commandline;
 
+import com.beust.jcommander.DynamicParameter;
 import com.beust.jcommander.Parameter;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class CommandLineArgs {
 
     @Parameter(description = "<input_path_1> [<input_path_2> ...]", variableArity = true, required = true)
     public List<String> inputPaths = new ArrayList<>();
 
-    @Parameter(names = { "-f", "--format" }, description = "Format to use when converting the files. JSON and CSV is available.")
+    @Parameter(names = { "-f", "--format" }, description = "Format to use when converting the files. JSON and CSV are available by default.")
     public String format = "csv";
 
-    @Parameter(names = { "-c", "--compression" }, description = "Compression to use when converting the files. Gzip is available.")
+    @Parameter(names = { "-c", "--compression" }, description = "Compression to use when converting the files. Gzip is available by default.")
     public String compression = "none";
 
     // Default set to false because causes loss of records from Biovotion data. https://github.com/RADAR-base/Restructure-HDFS-topic/issues/16
@@ -38,6 +41,18 @@ public class CommandLineArgs {
     @Parameter(names = { "-h", "--help"}, help = true, description = "Display the usage of the program with available options.")
     public boolean help;
 
-    @Parameter(names = { "--no-stage"}, description = "Do not stage output files into a temporary directory before moving them to the data directory. This increases performance but may leave corrupted data files.")
-    public boolean noStage = false;
+    @Parameter(names = { "--path-factory" }, description = "Factory to create path names with")
+    public String pathFactory;
+
+    @Parameter(names = {"--storage-driver"}, description = "Storage driver to use for storing data")
+    public String storageDriver;
+
+    @Parameter(names = {"--format-factory"}, description = "Format factory class to use for storing data")
+    public String formatFactory;
+
+    @Parameter(names = {"--compression-factory"}, description = "Compression factory class to use for compressing/decompressing data")
+    public String compressionFactory;
+
+    @DynamicParameter(names = {"-p", "--property"}, description = "Properties used by custom plugins.")
+    public Map<String, String> properties = new HashMap<>();
 }

@@ -50,6 +50,17 @@ distributions {
     }
 }
 
+startScripts {
+    classpath += files('lib/PlaceHolderForPluginPath')
+
+    doLast {
+        def windowsScriptFile = file getWindowsScript()
+        def unixScriptFile    = file getUnixScript()
+        windowsScriptFile.text = windowsScriptFile.text.replace('PlaceHolderForPluginPath', 'radar-hdfs-plugins\\*')
+        unixScriptFile.text = unixScriptFile.text.replace('PlaceHolderForPluginPath', 'radar-hdfs-plugins/*')
+    }
+}
+
 tasks.withType(Tar){
     compression = Compression.GZIP
     extension = 'tar.gz'

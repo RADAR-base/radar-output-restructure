@@ -19,7 +19,6 @@ package org.radarcns.hdfs;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.ParameterException;
 import com.fasterxml.jackson.databind.JsonMappingException;
-import org.apache.avro.Schema.Field;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
@@ -29,10 +28,13 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.radarcns.hdfs.data.CsvAvroConverter;
+import org.radarcns.hdfs.data.Compression;
+import org.radarcns.hdfs.data.CompressionFactory;
 import org.radarcns.hdfs.data.FileCacheStore;
-import org.radarcns.hdfs.data.JsonAvroConverter;
+import org.radarcns.hdfs.data.FormatFactory;
+import org.radarcns.hdfs.data.LocalStorageDriver;
 import org.radarcns.hdfs.data.RecordConverterFactory;
+import org.radarcns.hdfs.data.StorageDriver;
 import org.radarcns.hdfs.util.ProgressBar;
 import org.radarcns.hdfs.util.commandline.CommandLineArgs;
 import org.slf4j.Logger;
@@ -49,34 +51,32 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
-import java.util.regex.Pattern;
+import java.util.function.Supplier;
 
 public class RestructureAvroRecords {
     private static final Logger logger = LoggerFactory.getLogger(RestructureAvroRecords.class);
 
-    private final String outputFileExtension;
     private static final java.nio.file.Path OFFSETS_FILE_NAME = Paths.get("offsets.csv");
     private static final java.nio.file.Path BINS_FILE_NAME = Paths.get("bins.csv");
     private static final java.nio.file.Path SCHEMA_OUTPUT_FILE_NAME = Paths.get("schema.json");
     private static final SimpleDateFormat FILE_DATE_FORMAT = new SimpleDateFormat("yyyyMMdd_HH");
-    private static final Pattern ILLEGAL_CHARACTER_PATTERN = Pattern.compile("[^a-zA-Z0-9_-]+");
 
     static {
         FILE_DATE_FORMAT.setTimeZone(TimeZone.getTimeZone("UTC"));
     }
 
     private final RecordConverterFactory converterFactory;
-    private final boolean doStage;
+    private final RecordPathFactory pathFactory;
+    private final Compression compression;
+    private final StorageDriver storageDriver;
 
-    private java.nio.file.Path outputPath;
     private java.nio.file.Path offsetsPath;
     private Frequency bins;
 
-    private final Configuration conf = new Configuration();
+    private final Configuration conf;
 
     private long processedFileCount;
     private long processedRecordsCount;
-    private final boolean useGzip;
     private final boolean doDeduplicate;
 
     public static void main(String [] args) {
@@ -103,33 +103,35 @@ public class RestructureAvroRecords {
 
         long time1 = System.currentTimeMillis();
 
-        RestructureAvroRecords.Builder builder = new RestructureAvroRecords
-                .Builder(commandLineArgs.hdfsUri, commandLineArgs.outputDirectory)
-                .useGzip("gzip".equalsIgnoreCase(commandLineArgs.compression))
-                .doDeduplicate(commandLineArgs.deduplicate).format(commandLineArgs.format)
-                .doStage(!commandLineArgs.noStage);
+        RestructureAvroRecords restr;
 
-        // Configure high availability
-        if (commandLineArgs.hdfsUri1 != null || commandLineArgs.hdfsUri2 != null || commandLineArgs.hdfsHa != null) {
-            if (commandLineArgs.hdfsUri1 == null || commandLineArgs.hdfsUri2 == null || commandLineArgs.hdfsHa == null) {
-                logger.error("HDFS High availability name node configuration is incomplete. Configure --namenode-1, --namenode-2 and --namenode-ha");
-                System.exit(1);
-            }
-
-            String[] haNames = commandLineArgs.hdfsHa.split(",");
-            if (haNames.length != 2) {
-                logger.error("Cannot process HDFS High Availability mode for other than two name nodes.");
-                System.exit(1);
-            }
-
-            builder.putHdfsConfig("dfs.nameservices", commandLineArgs.hdfsUri);
-            builder.putHdfsConfig("dfs.ha.namenodes." + commandLineArgs.hdfsUri, commandLineArgs.hdfsHa);
-            builder.putHdfsConfig("dfs.namenode.rpc-address." + commandLineArgs.hdfsUri + "." + haNames[0], commandLineArgs.hdfsUri1 + ":8020");
-            builder.putHdfsConfig("dfs.namenode.rpc-address." + commandLineArgs.hdfsUri + "." + haNames[1], commandLineArgs.hdfsUri2 + ":8020");
-            builder.putHdfsConfig("dfs.client.failover.proxy.provider." + commandLineArgs.hdfsUri,"org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider");
+        try {
+            restr = new Builder(commandLineArgs.hdfsUri, commandLineArgs.outputDirectory)
+                    .compression(commandLineArgs.compression)
+                    .doDeduplicate(commandLineArgs.deduplicate)
+                    .format(commandLineArgs.format)
+                    .hdfsHighAvailability(commandLineArgs.hdfsHa,
+                            commandLineArgs.hdfsUri1, commandLineArgs.hdfsUri2)
+                    .pathFactory(commandLineArgs.pathFactory)
+                    .compressionFactory(commandLineArgs.compressionFactory)
+                    .formatFactory(commandLineArgs.formatFactory)
+                    .storageDriver(commandLineArgs.storageDriver)
+                    .properties(commandLineArgs.properties)
+                    .build();
+        } catch (IllegalArgumentException ex) {
+            logger.error("HDFS High availability name node configuration is incomplete."
+                    + " Configure --namenode-1, --namenode-2 and --namenode-ha");
+            System.exit(1);
+            return;
+        } catch (IOException ex) {
+            logger.error("Failed to initialize plugins", ex);
+            System.exit(1);
+            return;
+        } catch (ReflectiveOperationException | ClassCastException e) {
+            logger.error("Cannot find factory", e);
+            System.exit(1);
+            return;
         }
-
-        RestructureAvroRecords restr = builder.build();
 
         try {
             for(String input : commandLineArgs.inputPaths) {
@@ -140,39 +142,30 @@ public class RestructureAvroRecords {
         } catch (IOException ex) {
             logger.error("Processing failed", ex);
         }
-
         logger.info("Processed {} files and {} records", restr.getProcessedFileCount(), restr.getProcessedRecordsCount());
         logger.info("Time taken: {} seconds", (System.currentTimeMillis() - time1)/1000d);
     }
 
     private RestructureAvroRecords(RestructureAvroRecords.Builder builder) {
+        this.pathFactory = builder.pathFactory;
+
         this.setInputWebHdfsURL(builder.hdfsUri);
         this.setOutputPath(builder.outputPath);
 
+        conf = new Configuration();
         for (Map.Entry<String, String> hdfsConf : builder.hdfsConf.entrySet()) {
             conf.set(hdfsConf.getKey(), hdfsConf.getValue());
         }
 
-        this.useGzip = builder.useGzip;
         this.doDeduplicate = builder.doDeduplicate;
-        this.doStage = builder.doStage;
         logger.info("Deduplicate set to {}", doDeduplicate);
 
-        String extension;
-        if (builder.format.equalsIgnoreCase("json")) {
-            logger.info("Writing output files in JSON format");
-            converterFactory = JsonAvroConverter.getFactory();
-            extension = "json";
-        } else {
-            logger.info("Writing output files in CSV format");
-            converterFactory = CsvAvroConverter.getFactory();
-            extension = "csv";
-        }
-        if (this.useGzip) {
-            logger.info("Compressing output files in GZIP format");
-            extension += ".gz";
-        }
-        outputFileExtension = extension;
+        converterFactory = builder.formatFactory.get(builder.format);
+        compression = builder.compressionFactory.get(builder.compression);
+        storageDriver = builder.storageDriver;
+
+        String extension = converterFactory.getExtension() + compression.getExtension();
+        this.pathFactory.setExtension(extension);
     }
 
     public void setInputWebHdfsURL(String fileSystemURL) {
@@ -181,8 +174,9 @@ public class RestructureAvroRecords {
 
     public void setOutputPath(String path) {
         // Remove trailing backslash
-        outputPath = Paths.get(path.replaceAll("/$", ""));
+        java.nio.file.Path outputPath = Paths.get(path.replaceAll("/$", ""));
         offsetsPath = outputPath.resolve(OFFSETS_FILE_NAME);
+        pathFactory.setRoot(outputPath);
         bins = Frequency.read(outputPath.resolve(BINS_FILE_NAME));
     }
 
@@ -234,7 +228,7 @@ public class RestructureAvroRecords {
 
             // Actually process the files
             for (Map.Entry<String, List<Path>> entry : topicPaths.entrySet()) {
-                try (FileCacheStore cache = new FileCacheStore(converterFactory, 100, useGzip, doDeduplicate, doStage)) {
+                try (FileCacheStore cache = new FileCacheStore(storageDriver, converterFactory, 100, compression, doDeduplicate)) {
                     for (Path filePath : entry.getValue()) {
                         // If JsonMappingException occurs, log the error and continue with other files
                         try {
@@ -318,19 +312,10 @@ public class RestructureAvroRecords {
             throw new IOException("Failed to process " + record + "; no key or value");
         }
 
-        Date time = getDate(keyField, valueField);
-        java.nio.file.Path outputFileName = createFilename(time, suffix);
-
-        String projectId = sanitizeId(keyField.get("projectId"), "unknown-project");
-        String userId = sanitizeId(keyField.get("userId"), "unknown-user");
-
-        java.nio.file.Path projectDir = this.outputPath.resolve(projectId);
-        java.nio.file.Path userDir = projectDir.resolve(userId);
-        java.nio.file.Path userTopicDir = userDir.resolve(topicName);
-        java.nio.file.Path outputPath = userTopicDir.resolve(outputFileName);
+        RecordPathFactory.RecordOrganization metadata = pathFactory.getRecordPath(topicName, record, suffix);
 
         // Write data
-        FileCacheStore.WriteResponse response = cache.writeRecord(outputPath, record);
+        FileCacheStore.WriteResponse response = cache.writeRecord(metadata.getPath(), record);
 
         if (!response.isSuccessful()) {
             // Write was unsuccessful due to different number of columns,
@@ -338,91 +323,40 @@ public class RestructureAvroRecords {
             writeRecord(record, topicName, cache, ++suffix);
         } else {
             // Write was successful, finalize the write
-            java.nio.file.Path schemaPath = userTopicDir.resolve(SCHEMA_OUTPUT_FILE_NAME);
+            java.nio.file.Path schemaPath = metadata.getPath().resolveSibling(SCHEMA_OUTPUT_FILE_NAME);
             if (!Files.exists(schemaPath)) {
                 try (Writer writer = Files.newBufferedWriter(schemaPath)) {
                     writer.write(record.getSchema().toString(true));
                 }
             }
 
-            String sourceId = sanitizeId(keyField.get("sourceId"), "unknown-source");
             // Count data (binned and total)
-            bins.add(topicName, sourceId, time);
+            bins.add(topicName, metadata.getCategory(), pathFactory.getTimeBin(metadata.getTime()));
             processedRecordsCount++;
         }
     }
 
-    private java.nio.file.Path createFilename(Date date, int suffix) {
-        if (date == null) {
-            logger.warn("Time field of record valueField is not set");
-            return Paths.get("unknown_date." + outputFileExtension);
-        }
-
-        String finalSuffix;
-        if(suffix == 0) {
-            finalSuffix = "";
-        } else {
-            finalSuffix = "_" + suffix;
-        }
-
-        // Make a timestamped filename YYYYMMDD_HH00.json
-        String hourlyTimestamp = createHourTimestamp(date);
-        return Paths.get(hourlyTimestamp + "00" + finalSuffix +"." + outputFileExtension);
-    }
-
-    public static String createHourTimestamp(Date date) {
-        if (date == null) {
-            return "unknown_date";
-        }
-
-        return FILE_DATE_FORMAT.format(date);
-    }
-
-    public static Date getDate(GenericRecord keyField, GenericRecord valueField) {
-        Field timeField = valueField.getSchema().getField("time");
-        if (timeField != null) {
-            double time = (Double) valueField.get(timeField.pos());
-            // Convert from millis to date and apply dateFormat
-            return new Date((long) (time * 1000d));
-        }
-
-        // WindowedKey
-        timeField = keyField.getSchema().getField("start");
-        if (timeField == null) {
-            return null;
-        }
-        long time = (Long) keyField.get("start");
-        return new Date(time);
-    }
-
-    private static String sanitizeId(Object id, String defaultValue) {
-        if (id == null) {
-            return defaultValue;
-        }
-        String idString = ILLEGAL_CHARACTER_PATTERN.matcher(id.toString()).replaceAll("");
-        if (idString.isEmpty()) {
-            return defaultValue;
-        } else {
-            return idString;
-        }
-    }
-
+    @SuppressWarnings({"UnusedReturnValue", "WeakerAccess"})
     public static class Builder {
-        private boolean useGzip;
         private boolean doDeduplicate;
         private String hdfsUri;
-        private Map<String, String> hdfsConf = new HashMap<>();
+        private final Map<String, String> hdfsConf = new HashMap<>();
         private String outputPath;
         private String format;
-        private boolean doStage;
+        private String compression;
+        private RecordPathFactory pathFactory;
+        private StorageDriver storageDriver;
+        private CompressionFactory compressionFactory;
+        private FormatFactory formatFactory;
+        private final Map<String, String> properties = new HashMap<>();
 
         public Builder(final String uri, final String outputPath) {
             this.hdfsUri = uri;
             this.outputPath = outputPath;
         }
 
-        public Builder useGzip(final boolean gzip) {
-            this.useGzip = gzip;
+        public Builder compression(final String compression) {
+            this.compression = compression;
             return this;
         }
 
@@ -436,17 +370,93 @@ public class RestructureAvroRecords {
             return this;
         }
 
-        public void putHdfsConfig(String name, String value) {
-            hdfsConf.put(name, value);
+        public Builder storageDriver(String storageDriver)
+                throws ReflectiveOperationException, ClassCastException {
+            this.storageDriver = instantiate(storageDriver, StorageDriver.class);
+            return this;
         }
 
-        public RestructureAvroRecords build() {
+        public Builder hdfsHighAvailability(String hdfsHa, String hdfsNameNode1, String hdfsNameNode2) {
+            // Configure high availability
+            if (hdfsHa == null && hdfsNameNode1 == null && hdfsNameNode2 == null) {
+                return this;
+            }
+            if (hdfsHa == null || hdfsNameNode1 == null || hdfsNameNode2 == null) {
+                throw new IllegalArgumentException("HDFS High availability name node configuration is incomplete.");
+            }
+
+            String[] haNames = hdfsHa.split(",");
+            if (haNames.length != 2) {
+                logger.error("Cannot process HDFS High Availability mode for other than two name nodes.");
+                System.exit(1);
+            }
+
+            putHdfsConfig("dfs.nameservices", hdfsUri)
+                    .putHdfsConfig("dfs.ha.namenodes." + hdfsUri, hdfsHa)
+                    .putHdfsConfig("dfs.namenode.rpc-address." + hdfsUri + "." + haNames[0],
+                            hdfsNameNode1 + ":8020")
+                    .putHdfsConfig("dfs.namenode.rpc-address." + hdfsUri + "." + haNames[1],
+                            hdfsNameNode2 + ":8020")
+                    .putHdfsConfig("dfs.client.failover.proxy.provider." + hdfsUri,
+                            "org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider");
+
+            return this;
+        }
+
+        public Builder pathFactory(String factoryClassName)
+                throws ReflectiveOperationException, ClassCastException {
+            this.pathFactory = instantiate(factoryClassName, RecordPathFactory.class);
+            return this;
+        }
+
+        public Builder compressionFactory(String factoryClassName)
+                throws ReflectiveOperationException, ClassCastException {
+            this.compressionFactory = instantiate(factoryClassName, CompressionFactory.class);
+            return this;
+        }
+
+        public Builder formatFactory(String factoryClassName)
+                throws ReflectiveOperationException, ClassCastException {
+            this.formatFactory = instantiate(factoryClassName, FormatFactory.class);
+            return this;
+        }
+
+        public Builder putHdfsConfig(String name, String value) {
+            hdfsConf.put(name, value);
+            return this;
+        }
+
+        public Builder properties(Map<String, String> props) {
+            this.properties.putAll(props);
+            return this;
+        }
+
+        private static <T> T instantiate(String clsName, Class<T> superClass)
+                throws ReflectiveOperationException, ClassCastException {
+            if (clsName == null) {
+                return null;
+            }
+            Class cls = Class.forName(clsName);
+            return superClass.cast(cls.newInstance());
+        }
+
+        public RestructureAvroRecords build() throws IOException {
+            compression = getOrDefault(compression, () -> "identity");
+            format = getOrDefault(format, () -> "csv");
+            pathFactory = getOrDefault(pathFactory, ObservationKeyPathFactory::new);
+            pathFactory.init(properties);
+            storageDriver = getOrDefault(storageDriver, LocalStorageDriver::new);
+            storageDriver.init(properties);
+            compressionFactory = getOrDefault(compressionFactory, CompressionFactory::new);
+            compressionFactory.init(properties);
+            formatFactory = getOrDefault(formatFactory, FormatFactory::new);
+            formatFactory.init(properties);
+
             return new RestructureAvroRecords(this);
         }
 
-        public Builder doStage(boolean stage) {
-            this.doStage = stage;
-            return this;
+        private static <T> T getOrDefault(T value, Supplier<T> defaultValue) {
+            return value != null ? value : defaultValue.get();
         }
     }
 }

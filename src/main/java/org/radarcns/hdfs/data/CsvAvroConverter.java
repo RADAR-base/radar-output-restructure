@@ -33,6 +33,8 @@ import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.ByteBuffer;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -44,7 +46,6 @@ import java.util.Map;
  * records need to have exactly the same hierarchy (or at least a subset of it.)
  */
 public class CsvAvroConverter implements RecordConverter {
-
     public static RecordConverterFactory getFactory() {
         CsvFactory factory = new CsvFactory();
         return new RecordConverterFactory() {
@@ -56,6 +57,16 @@ public class CsvAvroConverter implements RecordConverter {
             @Override
             public boolean hasHeader() {
                 return true;
+            }
+
+            @Override
+            public String getExtension() {
+                return ".csv";
+            }
+
+            @Override
+            public Collection<String> getFormats() {
+                return Collections.singleton("csv");
             }
         };
     }

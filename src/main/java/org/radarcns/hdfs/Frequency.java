@@ -27,7 +27,6 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 
@@ -64,14 +63,12 @@ public class Frequency {
         return new Frequency(path, map);
     }
 
-    public void add(String topicName, String id, Date date) {
-        String timestamp = RestructureAvroRecords.createHourTimestamp(date);
-
-        Integer count = (Integer) bins.get(topicName, id, timestamp);
+    public void add(String topicName, String id, String timeBin) {
+        Integer count = (Integer) bins.get(topicName, id, timeBin);
         if (count == null) {
-            bins.put(topicName, id, timestamp, 1);
+            bins.put(topicName, id, timeBin, 1);
         } else {
-            bins.put(topicName, id, timestamp, count + 1);
+            bins.put(topicName, id, timeBin, count + 1);
         }
     }
 

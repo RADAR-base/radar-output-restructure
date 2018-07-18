@@ -40,8 +40,7 @@ import java.util.zip.GZIPOutputStream;
 
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
-@FunctionalInterface
-public interface RecordConverterFactory {
+public interface RecordConverterFactory extends Format {
     PathMatcher GZ_FILE_MATCHER = FileSystems.getDefault().getPathMatcher("glob:**.gz");
 
     /**
@@ -54,6 +53,8 @@ public interface RecordConverterFactory {
      * @throws IOException if the converter could not be created
      */
     RecordConverter converterFor(Writer writer, GenericRecord record, boolean writeHeader, Reader reader) throws IOException;
+
+    String getExtension();
 
     default boolean hasHeader() {
         return false;

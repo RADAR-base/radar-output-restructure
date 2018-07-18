@@ -23,28 +23,14 @@ import org.apache.avro.generic.GenericRecordBuilder;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.Collection;
 
 import static org.junit.Assert.assertEquals;
 
-@RunWith(Parameterized.class)
 public class FileCacheStoreTest {
-
-    @Parameterized.Parameters
-    public static Collection<Boolean> doStage() {
-        return Arrays.asList(Boolean.TRUE, Boolean.FALSE);
-    }
-
-    @Parameterized.Parameter
-    public Boolean doStage;
-
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
 
@@ -72,32 +58,32 @@ public class FileCacheStoreTest {
 
         GenericRecord record;
 
-        try (FileCacheStore cache = new FileCacheStore(csvFactory, 2, false, false, doStage)) {
+        try (FileCacheStore cache = new FileCacheStore(new LocalStorageDriver(), csvFactory, 2, new IdentityCompression(), false)) {
             record = new GenericRecordBuilder(simpleSchema).set("a", "something").build();
-            assertEquals(cache.writeRecord(f1, record), FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE);
+            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE, cache.writeRecord(f1, record));
             record = new GenericRecordBuilder(simpleSchema).set("a", "somethingElse").build();
-            assertEquals(cache.writeRecord(f1, record), FileCacheStore.WriteResponse.CACHE_AND_WRITE);
+            assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE, cache.writeRecord(f1, record));
             record = new GenericRecordBuilder(simpleSchema).set("a", "something").build();
-            assertEquals(cache.writeRecord(f2, record), FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE);
+            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE, cache.writeRecord(f2, record));
             record = new GenericRecordBuilder(simpleSchema).set("a", "third").build();
-            assertEquals(cache.writeRecord(f1, record), FileCacheStore.WriteResponse.CACHE_AND_WRITE);
+            assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE, cache.writeRecord(f1, record));
             record = new GenericRecordBuilder(simpleSchema).set("a", "f3").build();
-            assertEquals(cache.writeRecord(f3, record), FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE);
+            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE, cache.writeRecord(f3, record));
             record = new GenericRecordBuilder(simpleSchema).set("a", "f2").build();
-            assertEquals(cache.writeRecord(f2, record), FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE);
+            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE, cache.writeRecord(f2, record));
             record = new GenericRecordBuilder(simpleSchema).set("a", "f3").build();
-            assertEquals(cache.writeRecord(f3, record), FileCacheStore.WriteResponse.CACHE_AND_WRITE);
+            assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE, cache.writeRecord(f3, record));
             record = new GenericRecordBuilder(simpleSchema).set("a", "f4").build();
-            assertEquals(cache.writeRecord(f4, record), FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE);
+            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE, cache.writeRecord(f4, record));
             record = new GenericRecordBuilder(simpleSchema).set("a", "f3").build();
-            assertEquals(cache.writeRecord(f3, record), FileCacheStore.WriteResponse.CACHE_AND_WRITE);
+            assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE, cache.writeRecord(f3, record));
             record = new GenericRecordBuilder(conflictSchema).set("a", "f3"). set("b", "conflict").build();
-            assertEquals(cache.writeRecord(f3, record), FileCacheStore.WriteResponse.CACHE_AND_NO_WRITE);
+            assertEquals(FileCacheStore.WriteResponse.CACHE_AND_NO_WRITE, cache.writeRecord(f3, record));
             record = new GenericRecordBuilder(conflictSchema).set("a", "f1"). set("b", "conflict").build();
             // Cannot write to file even though the file is not in cache since schema is different
-            assertEquals(cache.writeRecord(f1, record), FileCacheStore.WriteResponse.NO_CACHE_AND_NO_WRITE);
+            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_NO_WRITE, cache.writeRecord(f1, record));
             // Can write the same record to a new file
-            assertEquals(cache.writeRecord(newFile, record), FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE);
+            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE, cache.writeRecord(newFile, record));
         }
 
         assertEquals("a\nsomething\nsomethingElse\nthird\n", new String(Files.readAllBytes(f1)));

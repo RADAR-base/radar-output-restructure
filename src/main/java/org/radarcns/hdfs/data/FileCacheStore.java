@@ -40,21 +40,23 @@ import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
 public class FileCacheStore implements Flushable, Closeable {
     private static final Logger logger = LoggerFactory.getLogger(FileCacheStore.class);
 
-    private final boolean gzip;
     private final boolean deduplicate;
     private final Path tmpDir;
+    private final Compression compression;
 
+    private final StorageDriver storageDriver;
     private RecordConverterFactory converterFactory;
     private final int maxFiles;
     private final Map<Path, FileCache> caches;
 
-    public FileCacheStore(RecordConverterFactory converterFactory, int maxFiles, boolean gzip, boolean deduplicate, boolean stage) throws IOException {
+    public FileCacheStore(StorageDriver storageDriver, RecordConverterFactory converterFactory, int maxFiles, Compression compression, boolean deduplicate) throws IOException {
+        this.storageDriver = storageDriver;
         this.converterFactory = converterFactory;
         this.maxFiles = maxFiles;
         this.caches = new HashMap<>(maxFiles * 4 / 3 + 1);
-        this.gzip = gzip;
+        this.compression = compression;
         this.deduplicate = deduplicate;
-        this.tmpDir = stage ? Files.createTempDirectory("restructurehdfs") : null;
+        this.tmpDir = Files.createTempDirectory("restructurehdfs");
     }
 
     /**
@@ -82,7 +84,7 @@ public class FileCacheStore implements Flushable, Closeable {
             Path dir = path.getParent();
             Files.createDirectories(dir);
 
-            cache = new FileCache(converterFactory, path, record, gzip, tmpDir);
+            cache = new FileCache(storageDriver, converterFactory, path, record, compression, tmpDir);
             caches.put(path, cache);
             if (cache.writeRecord(record)) {
                 return WriteResponse.NO_CACHE_AND_WRITE;

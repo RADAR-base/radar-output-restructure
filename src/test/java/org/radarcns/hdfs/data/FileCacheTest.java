@@ -44,12 +44,8 @@ import static org.junit.Assert.assertNull;
 /**
  * Created by joris on 03/07/2017.
  */
-@RunWith(Parameterized.class)
 public class FileCacheTest {
-    @Parameterized.Parameters
-    public static Collection<Boolean> useTmpDir() {
-        return Arrays.asList(Boolean.TRUE, Boolean.FALSE);
-    }
+    private LocalStorageDriver storageDriver;
 
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
@@ -58,24 +54,22 @@ public class FileCacheTest {
     private Record exampleRecord;
     private Path tmpDir;
 
-    @Parameterized.Parameter
-    public Boolean useTmpDir;
-
     @Before
     public void setUp() throws IOException {
         this.path = folder.newFile("f").toPath();
-        this.tmpDir = useTmpDir ? folder.newFolder().toPath() : null;
+        this.tmpDir = folder.newFolder().toPath();
 
         this.csvFactory = CsvAvroConverter.getFactory();
         Schema schema = SchemaBuilder.record("simple").fields()
                 .name("a").type("string").noDefault()
                 .endRecord();
         this.exampleRecord = new GenericRecordBuilder(schema).set("a", "something").build();
+        this.storageDriver = new LocalStorageDriver();
     }
 
     @Test
     public void testGzip() throws IOException {
-        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, true, tmpDir)) {
+        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new GzipCompression(), tmpDir)) {
             cache.writeRecord(exampleRecord);
         }
 
@@ -93,11 +87,11 @@ public class FileCacheTest {
 
     @Test
     public void testGzipAppend() throws IOException {
-        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, true, tmpDir)) {
+        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new GzipCompression(), tmpDir)) {
             cache.writeRecord(exampleRecord);
         }
 
-        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, true, tmpDir)) {
+        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new GzipCompression(), tmpDir)) {
             cache.writeRecord(exampleRecord);
         }
 
@@ -117,7 +111,7 @@ public class FileCacheTest {
 
     @Test
     public void testPlain() throws IOException {
-        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, false, tmpDir)) {
+        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new IdentityCompression(), tmpDir)) {
             cache.writeRecord(exampleRecord);
         }
 
@@ -133,11 +127,11 @@ public class FileCacheTest {
     @Test
     public void testPlainAppend() throws IOException {
 
-        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, false, tmpDir)) {
+        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new IdentityCompression(), tmpDir)) {
             cache.writeRecord(exampleRecord);
         }
 
-        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, false, tmpDir)) {
+        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new IdentityCompression(), tmpDir)) {
             cache.writeRecord(exampleRecord);
         }
 
@@ -156,9 +150,9 @@ public class FileCacheTest {
         Path file3 = folder.newFile("g").toPath();
         Path tmpDir = folder.newFolder().toPath();
 
-        try (FileCache cache1 = new FileCache(csvFactory, path, exampleRecord, false, tmpDir);
-             FileCache cache2 = new FileCache(csvFactory, path, exampleRecord, false, tmpDir);
-             FileCache cache3 = new FileCache(csvFactory, file3, exampleRecord, false, tmpDir)) {
+        try (FileCache cache1 = new FileCache(storageDriver, csvFactory, path, exampleRecord, new IdentityCompression(), tmpDir);
+             FileCache cache2 = new FileCache(storageDriver, csvFactory, path, exampleRecord, new IdentityCompression(), tmpDir);
+             FileCache cache3 = new FileCache(storageDriver, csvFactory, file3, exampleRecord, new IdentityCompression(), tmpDir)) {
             assertEquals(0, cache1.compareTo(cache2));
             // filenames are not equal
             assertEquals(-1, cache1.compareTo(cache3));
