@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 public class CommandLineArgs {
 
@@ -55,4 +56,18 @@ public class CommandLineArgs {
 
     @DynamicParameter(names = {"-p", "--property"}, description = "Properties used by custom plugins.")
     public Map<String, String> properties = new HashMap<>();
+
+
+    public static <T> T nonNullOrDefault(T value, Supplier<T> defaultValue) {
+        return value != null ? value : defaultValue.get();
+    }
+
+    public static <T> T instantiate(String clsName, Class<T> superClass)
+            throws ReflectiveOperationException, ClassCastException {
+        if (clsName == null) {
+            return null;
+        }
+        Class cls = Class.forName(clsName);
+        return superClass.cast(cls.newInstance());
+    }
 }

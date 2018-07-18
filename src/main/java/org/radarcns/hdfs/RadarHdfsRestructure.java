@@ -16,8 +16,6 @@
 
 package org.radarcns.hdfs;
 
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.ParameterException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.generic.GenericDatumReader;
@@ -28,15 +26,8 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.radarcns.hdfs.data.Compression;
-import org.radarcns.hdfs.data.CompressionFactory;
 import org.radarcns.hdfs.data.FileCacheStore;
-import org.radarcns.hdfs.data.FormatFactory;
-import org.radarcns.hdfs.data.LocalStorageDriver;
-import org.radarcns.hdfs.data.RecordConverterFactory;
-import org.radarcns.hdfs.data.StorageDriver;
 import org.radarcns.hdfs.util.ProgressBar;
-import org.radarcns.hdfs.util.commandline.CommandLineArgs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,15 +37,13 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
-import java.util.function.Supplier;
 
-public class RestructureAvroRecords {
-    private static final Logger logger = LoggerFactory.getLogger(RestructureAvroRecords.class);
+public class RadarHdfsRestructure {
+    private static final Logger logger = LoggerFactory.getLogger(RadarHdfsRestructure.class);
 
     private static final java.nio.file.Path OFFSETS_FILE_NAME = Paths.get("offsets.csv");
     private static final java.nio.file.Path BINS_FILE_NAME = Paths.get("bins.csv");
@@ -65,11 +54,6 @@ public class RestructureAvroRecords {
         FILE_DATE_FORMAT.setTimeZone(TimeZone.getTimeZone("UTC"));
     }
 
-    private final RecordConverterFactory converterFactory;
-    private final RecordPathFactory pathFactory;
-    private final Compression compression;
-    private final StorageDriver storageDriver;
-
     private java.nio.file.Path offsetsPath;
     private Frequency bins;
 
@@ -77,95 +61,18 @@ public class RestructureAvroRecords {
 
     private long processedFileCount;
     private long processedRecordsCount;
-    private final boolean doDeduplicate;
+    private FileStoreFactory fileStoreFactory;
+    private RecordPathFactory pathFactory;
 
-    public static void main(String [] args) {
-
-        final CommandLineArgs commandLineArgs = new CommandLineArgs();
-        final JCommander parser = JCommander.newBuilder().addObject(commandLineArgs).build();
-
-        parser.setProgramName("radar-hdfs-restructure");
-        try {
-            parser.parse(args);
-        } catch (ParameterException ex) {
-            logger.error(ex.getMessage());
-            parser.usage();
-            System.exit(1);
-        }
-
-        if (commandLineArgs.help) {
-            parser.usage();
-            System.exit(0);
-        }
-
-        logger.info(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
-        logger.info("Starting...");
-
-        long time1 = System.currentTimeMillis();
-
-        RestructureAvroRecords restr;
-
-        try {
-            restr = new Builder(commandLineArgs.hdfsUri, commandLineArgs.outputDirectory)
-                    .compression(commandLineArgs.compression)
-                    .doDeduplicate(commandLineArgs.deduplicate)
-                    .format(commandLineArgs.format)
-                    .hdfsHighAvailability(commandLineArgs.hdfsHa,
-                            commandLineArgs.hdfsUri1, commandLineArgs.hdfsUri2)
-                    .pathFactory(commandLineArgs.pathFactory)
-                    .compressionFactory(commandLineArgs.compressionFactory)
-                    .formatFactory(commandLineArgs.formatFactory)
-                    .storageDriver(commandLineArgs.storageDriver)
-                    .properties(commandLineArgs.properties)
-                    .build();
-        } catch (IllegalArgumentException ex) {
-            logger.error("HDFS High availability name node configuration is incomplete."
-                    + " Configure --namenode-1, --namenode-2 and --namenode-ha");
-            System.exit(1);
-            return;
-        } catch (IOException ex) {
-            logger.error("Failed to initialize plugins", ex);
-            System.exit(1);
-            return;
-        } catch (ReflectiveOperationException | ClassCastException e) {
-            logger.error("Cannot find factory", e);
-            System.exit(1);
-            return;
-        }
-
-        try {
-            for(String input : commandLineArgs.inputPaths) {
-                logger.info("In:  hdfs://" + commandLineArgs.hdfsUri + input);
-                logger.info("Out: " + commandLineArgs.outputDirectory);
-                restr.start(input);
-            }
-        } catch (IOException ex) {
-            logger.error("Processing failed", ex);
-        }
-        logger.info("Processed {} files and {} records", restr.getProcessedFileCount(), restr.getProcessedRecordsCount());
-        logger.info("Time taken: {} seconds", (System.currentTimeMillis() - time1)/1000d);
-    }
-
-    private RestructureAvroRecords(RestructureAvroRecords.Builder builder) {
-        this.pathFactory = builder.pathFactory;
-
+    private RadarHdfsRestructure(RadarHdfsRestructure.Builder builder) {
         this.setInputWebHdfsURL(builder.hdfsUri);
-        this.setOutputPath(builder.outputPath);
+        this.setOutputPath(builder.root);
 
         conf = new Configuration();
         for (Map.Entry<String, String> hdfsConf : builder.hdfsConf.entrySet()) {
             conf.set(hdfsConf.getKey(), hdfsConf.getValue());
         }
 
-        this.doDeduplicate = builder.doDeduplicate;
-        logger.info("Deduplicate set to {}", doDeduplicate);
-
-        converterFactory = builder.formatFactory.get(builder.format);
-        compression = builder.compressionFactory.get(builder.compression);
-        storageDriver = builder.storageDriver;
-
-        String extension = converterFactory.getExtension() + compression.getExtension();
-        this.pathFactory.setExtension(extension);
     }
 
     public void setInputWebHdfsURL(String fileSystemURL) {
@@ -176,7 +83,6 @@ public class RestructureAvroRecords {
         // Remove trailing backslash
         java.nio.file.Path outputPath = Paths.get(path.replaceAll("/$", ""));
         offsetsPath = outputPath.resolve(OFFSETS_FILE_NAME);
-        pathFactory.setRoot(outputPath);
         bins = Frequency.read(outputPath.resolve(BINS_FILE_NAME));
     }
 
@@ -228,7 +134,7 @@ public class RestructureAvroRecords {
 
             // Actually process the files
             for (Map.Entry<String, List<Path>> entry : topicPaths.entrySet()) {
-                try (FileCacheStore cache = new FileCacheStore(storageDriver, converterFactory, 100, compression, doDeduplicate)) {
+                try (FileCacheStore cache = fileStoreFactory.newFileCacheStore()) {
                     for (Path filePath : entry.getValue()) {
                         // If JsonMappingException occurs, log the error and continue with other files
                         try {
@@ -336,44 +242,20 @@ public class RestructureAvroRecords {
         }
     }
 
+    public void setFileStoreFactory(FileStoreFactory factory) {
+        this.fileStoreFactory = factory;
+        this.pathFactory = factory.getPathFactory();
+    }
+
     @SuppressWarnings({"UnusedReturnValue", "WeakerAccess"})
     public static class Builder {
-        private boolean doDeduplicate;
+        public String root;
         private String hdfsUri;
         private final Map<String, String> hdfsConf = new HashMap<>();
-        private String outputPath;
-        private String format;
-        private String compression;
-        private RecordPathFactory pathFactory;
-        private StorageDriver storageDriver;
-        private CompressionFactory compressionFactory;
-        private FormatFactory formatFactory;
-        private final Map<String, String> properties = new HashMap<>();
 
-        public Builder(final String uri, final String outputPath) {
+        public Builder(final String uri, String root) {
             this.hdfsUri = uri;
-            this.outputPath = outputPath;
-        }
-
-        public Builder compression(final String compression) {
-            this.compression = compression;
-            return this;
-        }
-
-        public Builder doDeduplicate(final boolean dedup) {
-            this.doDeduplicate = dedup;
-            return this;
-        }
-
-        public Builder format(final String format) {
-            this.format = format;
-            return this;
-        }
-
-        public Builder storageDriver(String storageDriver)
-                throws ReflectiveOperationException, ClassCastException {
-            this.storageDriver = instantiate(storageDriver, StorageDriver.class);
-            return this;
+            this.root = root;
         }
 
         public Builder hdfsHighAvailability(String hdfsHa, String hdfsNameNode1, String hdfsNameNode2) {
@@ -403,60 +285,13 @@ public class RestructureAvroRecords {
             return this;
         }
 
-        public Builder pathFactory(String factoryClassName)
-                throws ReflectiveOperationException, ClassCastException {
-            this.pathFactory = instantiate(factoryClassName, RecordPathFactory.class);
-            return this;
-        }
-
-        public Builder compressionFactory(String factoryClassName)
-                throws ReflectiveOperationException, ClassCastException {
-            this.compressionFactory = instantiate(factoryClassName, CompressionFactory.class);
-            return this;
-        }
-
-        public Builder formatFactory(String factoryClassName)
-                throws ReflectiveOperationException, ClassCastException {
-            this.formatFactory = instantiate(factoryClassName, FormatFactory.class);
-            return this;
-        }
-
         public Builder putHdfsConfig(String name, String value) {
             hdfsConf.put(name, value);
             return this;
         }
 
-        public Builder properties(Map<String, String> props) {
-            this.properties.putAll(props);
-            return this;
-        }
-
-        private static <T> T instantiate(String clsName, Class<T> superClass)
-                throws ReflectiveOperationException, ClassCastException {
-            if (clsName == null) {
-                return null;
-            }
-            Class cls = Class.forName(clsName);
-            return superClass.cast(cls.newInstance());
-        }
-
-        public RestructureAvroRecords build() throws IOException {
-            compression = getOrDefault(compression, () -> "identity");
-            format = getOrDefault(format, () -> "csv");
-            pathFactory = getOrDefault(pathFactory, ObservationKeyPathFactory::new);
-            pathFactory.init(properties);
-            storageDriver = getOrDefault(storageDriver, LocalStorageDriver::new);
-            storageDriver.init(properties);
-            compressionFactory = getOrDefault(compressionFactory, CompressionFactory::new);
-            compressionFactory.init(properties);
-            formatFactory = getOrDefault(formatFactory, FormatFactory::new);
-            formatFactory.init(properties);
-
-            return new RestructureAvroRecords(this);
-        }
-
-        private static <T> T getOrDefault(T value, Supplier<T> defaultValue) {
-            return value != null ? value : defaultValue.get();
+        public RadarHdfsRestructure build() {
+            return new RadarHdfsRestructure(this);
         }
     }
 }

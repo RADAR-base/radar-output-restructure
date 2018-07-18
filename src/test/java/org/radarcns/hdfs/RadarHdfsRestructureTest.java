@@ -21,14 +21,12 @@ import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.junit.Test;
-import org.radarcns.hdfs.RestructureAvroRecords;
 
 import java.time.Instant;
-import java.util.Date;
 
 import static org.junit.Assert.assertEquals;
 
-public class RestructureAvroRecordsTest {
+public class RadarHdfsRestructureTest {
     @Test
     public void createHourTimestamp() {
         ObservationKeyPathFactory factory = new ObservationKeyPathFactory();
