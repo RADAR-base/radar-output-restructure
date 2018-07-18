@@ -7,7 +7,7 @@ plugins {
 }
 
 group 'org.radarcns'
-version '0.4.1-SNAPSHOT'
+version '0.5.0-SNAPSHOT'
 mainClassName = 'org.radarcns.hdfs.RestructureAvroRecords'
 
 sourceCompatibility = '1.8'
