@@ -22,6 +22,7 @@ public interface StorageDriver extends Plugin {
     void move(Path oldPath, Path newPath) throws IOException;
     void store(Path localPath, Path newPath) throws IOException;
     long size(Path path) throws IOException;
+    void delete(Path path) throws IOException;
 
     default BufferedReader newBufferedReader(Path path) throws IOException {
         Reader reader = new InputStreamReader(newInputStream(path));

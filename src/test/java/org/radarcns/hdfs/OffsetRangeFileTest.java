@@ -21,13 +21,11 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
-import org.radarcns.hdfs.OffsetRange;
-import org.radarcns.hdfs.OffsetRangeFile;
-import org.radarcns.hdfs.OffsetRangeSet;
+import org.radarcns.hdfs.data.LocalStorageDriver;
+import org.radarcns.hdfs.data.StorageDriver;
 
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
@@ -41,34 +39,34 @@ public class OffsetRangeFileTest {
     @Rule
     public ExpectedException exception = ExpectedException.none();
     private Path testFile;
+    private StorageDriver storage;
 
     @Before
     public void setUp() throws IOException {
         testFile = folder.newFile().toPath();
+        storage = new LocalStorageDriver();
     }
 
     @Test
     public void readEmpty() throws IOException {
-        assertTrue(OffsetRangeFile.read(testFile).isEmpty());
+        assertTrue(OffsetRangeFile.read(storage, testFile).isEmpty());
 
-        Files.delete(testFile);
+        storage.delete(testFile);
 
         // will create on write
-        try (OffsetRangeFile.Writer ignored = new OffsetRangeFile.Writer(testFile)) {
-            assertTrue(OffsetRangeFile.read(testFile).isEmpty());
+        try (OffsetRangeFile.Writer ignored = new OffsetRangeFile.Writer(storage, testFile)) {
+            assertTrue(OffsetRangeFile.read(storage, testFile).isEmpty());
         }
     }
 
     @Test
     public void write() throws IOException {
-        try (OffsetRangeFile.Writer rangeFile = new OffsetRangeFile.Writer(testFile)) {
+        try (OffsetRangeFile.Writer rangeFile = new OffsetRangeFile.Writer(storage, testFile)) {
             rangeFile.write(OffsetRange.parseFilename("a+0+0+1"));
             rangeFile.write(OffsetRange.parseFilename("a+0+1+2"));
         }
-        System.out.println(new String(Files.readAllBytes(testFile)));
 
-        OffsetRangeSet set = OffsetRangeFile.read(testFile);
-        System.out.println(set);
+        OffsetRangeSet set = OffsetRangeFile.read(storage, testFile);
         assertTrue(set.contains(OffsetRange.parseFilename("a+0+0+1")));
         assertTrue(set.contains(OffsetRange.parseFilename("a+0+1+2")));
         assertTrue(set.contains(OffsetRange.parseFilename("a+0+0+2")));
@@ -80,26 +78,26 @@ public class OffsetRangeFileTest {
 
     @Test
     public void cleanUp() throws IOException {
-        try (OffsetRangeFile.Writer rangeFile = new OffsetRangeFile.Writer(testFile)) {
+        try (OffsetRangeFile.Writer rangeFile = new OffsetRangeFile.Writer(storage, testFile)) {
             rangeFile.write(OffsetRange.parseFilename("a+0+0+1"));
             rangeFile.write(OffsetRange.parseFilename("a+0+1+2"));
             rangeFile.write(OffsetRange.parseFilename("a+0+4+4"));
         }
 
-        try (BufferedReader br = Files.newBufferedReader(testFile)) {
+        try (BufferedReader br = storage.newBufferedReader(testFile)) {
             assertEquals(4, br.lines().count());
         }
 
-        OffsetRangeSet rangeSet = OffsetRangeFile.read(testFile);
+        OffsetRangeSet rangeSet = OffsetRangeFile.read(storage, testFile);
         assertEquals(2, rangeSet.size("a", 0));
 
-        OffsetRangeFile.cleanUp(testFile);
+        OffsetRangeFile.cleanUp(storage, testFile);
 
-        try (BufferedReader br = Files.newBufferedReader(testFile)) {
+        try (BufferedReader br = storage.newBufferedReader(testFile)) {
             assertEquals(3, br.lines().count());
         }
 
-        OffsetRangeSet updatedRangeSet = OffsetRangeFile.read(testFile);
+        OffsetRangeSet updatedRangeSet = OffsetRangeFile.read(storage, testFile);
         assertEquals(2, rangeSet.size("a", 0));
 
         assertEquals(rangeSet, updatedRangeSet);

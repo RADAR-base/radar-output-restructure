@@ -44,4 +44,9 @@ public class LocalStorageDriver implements StorageDriver {
     public long size(Path path) throws IOException {
         return Files.size(path);
     }
+
+    @Override
+    public void delete(Path path) throws IOException {
+        Files.delete(path);
+    }
 }

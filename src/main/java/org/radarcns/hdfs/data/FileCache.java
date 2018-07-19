@@ -122,7 +122,9 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
         storageDriver.store(tmpPath, path);
 
         cacheCloseListeners.forEach(CacheCloseListener::onCacheClosed);
-        cacheFinalizeListener.onCacheCloseFinished();
+        if (cacheFinalizeListener != null) {
+            cacheFinalizeListener.onCacheCloseFinished();
+        }
     }
 
     @Override

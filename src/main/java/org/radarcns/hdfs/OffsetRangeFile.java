@@ -32,9 +32,6 @@ import java.io.Flushable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-
-import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 /**
  * Accesses a OffsetRange file using the CSV format. On construction, this will create the file if
