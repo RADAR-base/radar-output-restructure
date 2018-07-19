@@ -35,6 +35,8 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.zip.ZipException;
 
 /** Keeps path handles of a path. */
@@ -46,6 +48,8 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
     private final StorageDriver storageDriver;
     private final Path path;
     private final Path tmpPath;
+    private final List<CacheCloseListener> cacheCloseListeners;
+    private CacheFinalizeListener cacheFinalizeListener;
     private long lastUse;
 
     /**
@@ -63,6 +67,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
         boolean fileIsNew = !storageDriver.exists(path) || storageDriver.size(path) == 0;
         this.tmpPath = Files.createTempFile(tmpDir, path.getFileName().toString(),
                 ".tmp" + compression.getExtension());
+        this.cacheCloseListeners = new ArrayList<>();
         OutputStream outStream = compression.compress(
                 new BufferedOutputStream(Files.newOutputStream(tmpPath)));
 
@@ -114,9 +119,10 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
     public void close() throws IOException {
         recordConverter.close();
         writer.close();
-        if (tmpPath != null) {
-            storageDriver.store(tmpPath, path);
-        }
+        storageDriver.store(tmpPath, path);
+
+        cacheCloseListeners.forEach(CacheCloseListener::onCacheClosed);
+        cacheFinalizeListener.onCacheCloseFinished();
     }
 
     @Override
@@ -167,5 +173,13 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
             }
             throw ex;
         }
+    }
+
+    public void addOnCacheCloseListener(CacheCloseListener callback) {
+        cacheCloseListeners.add(callback);
+    }
+
+    public void setCacheFinalizeListener(CacheFinalizeListener cacheFinalizeListener) {
+        this.cacheFinalizeListener = cacheFinalizeListener;
     }
 }

@@ -128,6 +128,11 @@ public class Application implements FileStoreFactory {
         return pathFactory;
     }
 
+    @Override
+    public StorageDriver getStorageDriver() {
+        return storageDriver;
+    }
+
     public void start() {
         Instant time1 = Instant.now();
 

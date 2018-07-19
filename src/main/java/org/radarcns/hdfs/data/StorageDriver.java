@@ -2,18 +2,36 @@ package org.radarcns.hdfs.data;
 
 import org.radarcns.hdfs.Plugin;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.nio.file.Path;
 
 public interface StorageDriver extends Plugin {
     @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     boolean exists(Path path);
     InputStream newInputStream(Path path) throws IOException;
+    OutputStream newOutputStream(Path path, boolean append) throws IOException;
+
     void move(Path oldPath, Path newPath) throws IOException;
     void store(Path localPath, Path newPath) throws IOException;
     long size(Path path) throws IOException;
+
+    default BufferedReader newBufferedReader(Path path) throws IOException {
+        Reader reader = new InputStreamReader(newInputStream(path));
+        return new BufferedReader(reader);
+    }
+
+    default BufferedWriter newBufferedWriter(Path path, boolean append) throws IOException {
+        Writer writer = new OutputStreamWriter(newOutputStream(path, append));
+        return new BufferedWriter(writer);
+    }
 
     /**
      * Reads all bytes from an input stream and writes them to an output stream.

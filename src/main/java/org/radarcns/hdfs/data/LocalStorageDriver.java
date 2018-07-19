@@ -2,10 +2,13 @@ package org.radarcns.hdfs.data;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
+import static java.nio.file.StandardOpenOption.APPEND;
+import static java.nio.file.StandardOpenOption.CREATE;
 
 public class LocalStorageDriver implements StorageDriver {
     @Override
@@ -16,6 +19,15 @@ public class LocalStorageDriver implements StorageDriver {
     @Override
     public InputStream newInputStream(Path path) throws IOException {
         return Files.newInputStream(path);
+    }
+
+    @Override
+    public OutputStream newOutputStream(Path path, boolean append) throws IOException {
+        if (append) {
+            return Files.newOutputStream(path, APPEND, CREATE);
+        } else {
+            return Files.newOutputStream(path);
+        }
     }
 
     @Override

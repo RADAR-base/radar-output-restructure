@@ -27,13 +27,15 @@ import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.radarcns.hdfs.data.FileCacheStore;
+import org.radarcns.hdfs.data.StorageDriver;
 import org.radarcns.hdfs.util.ProgressBar;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.io.Writer;
-import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -44,7 +46,6 @@ import java.util.Map;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.TimeZone;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -68,21 +69,22 @@ public class RadarHdfsRestructure {
     private final int numThreads;
 
     private final java.nio.file.Path offsetsPath;
-    private final Frequency bins;
+    private Frequency bins;
 
     private final Configuration conf;
+    private final java.nio.file.Path outputPath;
 
     private LongAdder processedFileCount;
     private LongAdder processedRecordsCount;
     private FileStoreFactory fileStoreFactory;
     private RecordPathFactory pathFactory;
+    private StorageDriver storage;
 
     private RadarHdfsRestructure(Builder builder) {
         conf = new Configuration();
         conf.set("fs.defaultFS", "hdfs://" + builder.hdfsUri);
-        java.nio.file.Path outputPath = Paths.get(builder.root.replaceAll("/$", ""));
+        outputPath = Paths.get(builder.root.replaceAll("/$", ""));
         offsetsPath = outputPath.resolve(OFFSETS_FILE_NAME);
-        bins = Frequency.read(outputPath.resolve(BINS_FILE_NAME));
         this.numThreads = builder.numThreads;
 
         for (Map.Entry<String, String> hdfsConf : builder.hdfsConf.entrySet()) {
@@ -103,17 +105,14 @@ public class RadarHdfsRestructure {
         Path path = new Path(directoryName);
         FileSystem fs = path.getFileSystem(conf);
 
-        try (OffsetRangeFile.Writer offsets = new OffsetRangeFile.Writer(offsetsPath)) {
+        try (OffsetRangeFile.Writer offsets = new OffsetRangeFile.Writer(storage, offsetsPath)) {
             OffsetRangeSet seenFiles;
             try {
-                seenFiles = OffsetRangeFile.read(offsetsPath);
+                seenFiles = OffsetRangeFile.read(storage, offsetsPath);
             } catch (IOException ex) {
                 logger.error("Error reading offsets file. Processing all offsets.");
                 seenFiles = new OffsetRangeSet();
             }
-
-            String oldParallelism = System.getProperty("java.util.concurrent.ForkJoinPool.common.parallelism");
-            System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism", String.valueOf(numThreads - 1));
 
             // Get filenames to process
             Map<String, List<Path>> topicPaths = getTopicPaths(fs, path, seenFiles);
@@ -174,7 +173,7 @@ public class RadarHdfsRestructure {
         }
 
         logger.info("Cleaning offset file");
-        OffsetRangeFile.cleanUp(offsetsPath);
+        OffsetRangeFile.cleanUp(storage, offsetsPath);
     }
 
     private Map<String, List<Path>> getTopicPaths(FileSystem fs, Path path, OffsetRangeSet seenFiles) {
@@ -201,33 +200,34 @@ public class RadarHdfsRestructure {
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
-        Spliterator<LocatedFileStatus> spliterator = Spliterators.spliteratorUnknownSize(new Iterator<LocatedFileStatus>() {
-            @Override
-            public boolean hasNext() {
-                try {
-                    return files.hasNext();
-                } catch (IOException e) {
-                    throw new IllegalStateException(e);
-                }
-            }
+        Spliterator<LocatedFileStatus> spliterator = Spliterators.spliteratorUnknownSize(
+                new Iterator<LocatedFileStatus>() {
+                    @Override
+                    public boolean hasNext() {
+                        try {
+                            return files.hasNext();
+                        } catch (IOException e) {
+                            throw new IllegalStateException(e);
+                        }
+                    }
 
-            @Override
-            public LocatedFileStatus next() {
-                try {
-                    return files.next();
-                } catch (IOException e) {
-                    throw new IllegalStateException(e);
-                }
-            }
-        }, Spliterator.NONNULL | Spliterator.IMMUTABLE | Spliterator.DISTINCT);
+                    @Override
+                    public LocatedFileStatus next() {
+                        try {
+                            return files.next();
+                        } catch (IOException e) {
+                            throw new IllegalStateException(e);
+                        }
+                    }
+                }, Spliterator.NONNULL | Spliterator.IMMUTABLE | Spliterator.DISTINCT);
 
         return StreamSupport.stream(spliterator, true)
                 .flatMap(f -> {
                     if (f.isDirectory()) {
-                        if (!f.getPath().getName().equals("+tmp")) {
-                            return walk(fs, f.getPath());
-                        } else {
+                        if (f.getPath().getName().equals("+tmp")) {
                             return Stream.empty();
+                        } else {
+                            return walk(fs, f.getPath());
                         }
                     } else {
                         return Stream.of(f.getPath());
@@ -278,21 +278,12 @@ public class RadarHdfsRestructure {
             record = dataFileReader.next(record);
 
             // Get the fields
-            this.writeRecord(record, topicName, cache, 0);
-        }
-
-        // Write which file has been processed and update bins
-        try {
-            OffsetRange range = OffsetRange.parseFilename(filePath.getName());
-            offsets.write(range);
-            bins.write();
-        } catch (IOException ex) {
-            logger.warn("Failed to update status. Continuing processing.", ex);
+            this.writeRecord(record, topicName, cache, offsets, filePath.getName(), 0);
         }
     }
 
-    private void writeRecord(GenericRecord record, String topicName, FileCacheStore cache, int suffix)
-            throws IOException {
+    private void writeRecord(GenericRecord record, String topicName, FileCacheStore cache,
+            OffsetRangeFile.Writer offsets, String filename, int suffix) throws IOException {
         GenericRecord keyField = (GenericRecord) record.get("key");
         GenericRecord valueField = (GenericRecord) record.get("value");
 
@@ -304,23 +295,32 @@ public class RadarHdfsRestructure {
         RecordPathFactory.RecordOrganization metadata = pathFactory.getRecordOrganization(topicName, record, suffix);
 
         // Write data
-        FileCacheStore.WriteResponse response = cache.writeRecord(metadata.getPath(), record);
+        FileCacheStore.WriteResponse response = cache.writeRecord(metadata.getPath(), record, () -> {
+            // Count data (binned and total)
+            String timeBin = getPathFactory().getTimeBin(metadata.getTime());
+            bins.add(topicName, metadata.getCategory(), timeBin);
+            OffsetRange range = OffsetRange.parseFilename(filename);
+            try {
+                offsets.write(range);
+            } catch (IOException ex) {
+                logger.warn("Failed to update offset status. Continuing processing.", ex);
+            }
+        }, () -> bins.write());
 
         if (!response.isSuccessful()) {
             // Write was unsuccessful due to different number of columns,
             // try again with new file name
-            writeRecord(record, topicName, cache, ++suffix);
+            writeRecord(record, topicName, cache, offsets, filename, ++suffix);
         } else {
             // Write was successful, finalize the write
             java.nio.file.Path schemaPath = metadata.getPath().resolveSibling(SCHEMA_OUTPUT_FILE_NAME);
-            if (!Files.exists(schemaPath)) {
-                try (Writer writer = Files.newBufferedWriter(schemaPath)) {
+            if (!storage.exists(schemaPath)) {
+                try (OutputStream out = storage.newOutputStream(schemaPath, false);
+                     Writer writer = new OutputStreamWriter(out)) {
                     writer.write(record.getSchema().toString(true));
                 }
             }
 
-            // Count data (binned and total)
-            bins.add(topicName, metadata.getCategory(), getPathFactory().getTimeBin(metadata.getTime()));
             processedRecordsCount.increment();
         }
     }
@@ -328,6 +328,8 @@ public class RadarHdfsRestructure {
     public synchronized void setFileStoreFactory(FileStoreFactory factory) {
         this.fileStoreFactory = factory;
         this.pathFactory = factory.getPathFactory();
+        this.storage = factory.getStorageDriver();
+        bins = Frequency.read(storage, outputPath.resolve(BINS_FILE_NAME));
     }
 
     private synchronized RecordPathFactory getPathFactory() {

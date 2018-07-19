@@ -23,6 +23,7 @@ import com.fasterxml.jackson.dataformat.csv.CsvFactory;
 import com.fasterxml.jackson.dataformat.csv.CsvGenerator;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
+import org.radarcns.hdfs.data.StorageDriver;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -56,18 +57,19 @@ public final class OffsetRangeFile {
         // utility class
     }
 
-    public static void cleanUp(Path path) throws IOException {
+    public static void cleanUp(StorageDriver storage, Path path) throws IOException {
         Path tmpPath = Files.createTempFile("offsets", ".csv.tmp");
-        try (OffsetRangeFile.Writer offsets = new OffsetRangeFile.Writer(tmpPath)) {
-            offsets.write(OffsetRangeFile.read(path));
+        try (OffsetRangeFile.Writer offsets = new OffsetRangeFile.Writer(storage, tmpPath)) {
+            offsets.write(OffsetRangeFile.read(storage, path));
         }
-        Files.move(tmpPath, path, REPLACE_EXISTING);
+        storage.store(tmpPath, path);
+        Files.deleteIfExists(tmpPath);
     }
 
-    public static OffsetRangeSet read(Path path) throws IOException {
+    public static OffsetRangeSet read(StorageDriver storage, Path path) throws IOException {
         OffsetRangeSet set = new OffsetRangeSet();
 
-        try (BufferedReader br = Files.newBufferedReader(path)) {
+        try (BufferedReader br = storage.newBufferedReader(path)) {
             MappingIterator<OffsetRange> ranges = CSV_READER.readValues(br);
             while(ranges.hasNext()) {
                 set.add(ranges.next());
@@ -81,9 +83,9 @@ public final class OffsetRangeFile {
         private final CsvGenerator generator;
         private final ObjectWriter writer;
 
-        public Writer(Path path) throws IOException {
-            boolean fileIsNew = !Files.exists(path) || Files.size(path) == 0;
-            this.bufferedWriter = Files.newBufferedWriter(path, StandardOpenOption.APPEND, StandardOpenOption.CREATE);
+        public Writer(StorageDriver storage, Path path) throws IOException {
+            boolean fileIsNew = !storage.exists(path) || storage.size(path) == 0;
+            this.bufferedWriter = storage.newBufferedWriter(path, true);
             this.generator = CSV_FACTORY.createGenerator(bufferedWriter);
             this.writer = CSV_MAPPER.writerFor(OffsetRange.class)
                     .with(fileIsNew ? SCHEMA.withHeader() : SCHEMA);
@@ -93,7 +95,7 @@ public final class OffsetRangeFile {
             writer.writeValue(generator, range);
         }
 
-        public synchronized void write(OffsetRangeSet rangeSet) throws IOException {
+        public void write(OffsetRangeSet rangeSet) throws IOException {
             for (OffsetRange range : rangeSet) {
                 write(range);
             }

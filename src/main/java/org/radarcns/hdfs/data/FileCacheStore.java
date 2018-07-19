@@ -68,10 +68,13 @@ public class FileCacheStore implements Flushable, Closeable {
      * @return Integer value according to one of the response codes.
      * @throws IOException when failing to open a file or writing to it.
      */
-    public WriteResponse writeRecord(Path path, GenericRecord record) throws IOException {
+    public WriteResponse writeRecord(Path path, GenericRecord record, CacheCloseListener callback,
+            CacheFinalizeListener finalizeListener) throws IOException {
         FileCache cache = caches.get(path);
         if (cache != null) {
             if(cache.writeRecord(record)){
+                cache.addOnCacheCloseListener(callback);
+                cache.setCacheFinalizeListener(finalizeListener);
                 return WriteResponse.CACHE_AND_WRITE;
             } else {
                 // This is the case when cache is used but write is unsuccessful
@@ -87,6 +90,8 @@ public class FileCacheStore implements Flushable, Closeable {
             cache = new FileCache(storageDriver, converterFactory, path, record, compression, tmpDir);
             caches.put(path, cache);
             if (cache.writeRecord(record)) {
+                cache.addOnCacheCloseListener(callback);
+                cache.setCacheFinalizeListener(finalizeListener);
                 return WriteResponse.NO_CACHE_AND_WRITE;
             } else {
                 // The file path was not in cache but the file exists and this write is
