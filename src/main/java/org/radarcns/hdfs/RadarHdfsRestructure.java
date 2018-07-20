@@ -46,6 +46,7 @@ import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -124,14 +125,22 @@ public class RadarHdfsRestructure {
             processedRecordsCount = new LongAdder();
             filesClosed = new LongAdder();
 
-            long toProcessFileCount = topicPaths.values().stream()
+            long toProcessRecordsCount = topicPaths.values().parallelStream()
+                    .flatMap(List::stream)
+                    .map(p -> OffsetRange.parseFilename(p.getName()))
+                    .mapToInt(r -> (int)(r.getOffsetTo() - r.getOffsetFrom()) + 1)
+                    .sum();
+
+            long toProcessFileCount = topicPaths.values().parallelStream()
                     .mapToInt(List::size)
                     .sum();
 
-            logger.info("Converting {} files", toProcessFileCount);
+            logger.info("Converting {} files with {} records",
+                    toProcessFileCount, toProcessRecordsCount);
 
-            ProgressBar progressBar = new ProgressBar(toProcessFileCount, 70);
+            ProgressBar progressBar = new ProgressBar(toProcessRecordsCount, 70);
             progressBar.update(0);
+            AtomicLong lastUpdate = new AtomicLong(0L);
 
             ExecutorService executor = Executors.newWorkStealingPool(getPathFactory().isTopicPartitioned() ? this.numThreads : 1);
 
@@ -141,12 +150,11 @@ public class RadarHdfsRestructure {
                     for (Path filePath : paths) {
                         // If JsonMappingException occurs, log the error and continue with other files
                         try {
-                            this.processFile(filePath, topic, cache, offsets, bins);
+                            this.processFile(filePath, topic, cache, offsets, bins, progressBar, lastUpdate);
                         } catch (JsonMappingException exc) {
                             logger.error("Cannot map values", exc);
                         }
                         processedFileCount.increment();
-                        progressBar.update(processedFileCount.sum());
                     }
                     bins.flush();
                     offsets.flush();
@@ -157,6 +165,7 @@ public class RadarHdfsRestructure {
 
             executor.shutdown();
             executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+            progressBar.update(toProcessRecordsCount);
         } catch (InterruptedException e) {
             logger.error("Processing interrupted");
             Thread.currentThread().interrupt();
@@ -208,7 +217,7 @@ public class RadarHdfsRestructure {
     }
 
     private void processFile(Path filePath, String topicName, FileCacheStore cache,
-            OffsetRangeFile.Writer offsets, Frequency bins) throws IOException {
+            OffsetRangeFile.Writer offsets, Frequency bins, ProgressBar progressBar, AtomicLong lastUpdate) throws IOException {
         logger.debug("Reading {}", filePath);
 
         // Read and parseFilename avro file
@@ -230,6 +239,12 @@ public class RadarHdfsRestructure {
 
             // Get the fields
             this.writeRecord(record, topicName, cache, offsets, bins, filePath.getName(), 0);
+
+            processedRecordsCount.increment();
+            long now = System.nanoTime();
+            if (now == lastUpdate.updateAndGet(l -> now > l + 50_000_000L ? now : l)) {
+                progressBar.update(processedRecordsCount.sum());
+            }
         }
     }
 
@@ -270,8 +285,6 @@ public class RadarHdfsRestructure {
                     writer.write(record.getSchema().toString(true));
                 }
             }
-
-            processedRecordsCount.increment();
         }
     }
 

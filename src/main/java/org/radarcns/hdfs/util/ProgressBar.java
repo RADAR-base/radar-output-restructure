@@ -23,6 +23,7 @@ package org.radarcns.hdfs.util;
 public class ProgressBar {
     private final long total;
     private final int numStripes;
+    private final long startTime;
     private int previousPercentage;
 
     public ProgressBar(long total, int numStripes) {
@@ -35,6 +36,7 @@ public class ProgressBar {
         this.total = total;
         this.numStripes = numStripes;
         this.previousPercentage = -1;
+        this.startTime = System.currentTimeMillis();
     }
 
     public synchronized void update(long remain) {
@@ -56,7 +58,7 @@ public class ProgressBar {
         char notFilled = '-';
         char filled = '*';
         // 2 init + numStripes + 2 end + 4 percentage
-        StringBuilder builder = new StringBuilder(numStripes + 8);
+        StringBuilder builder = new StringBuilder(numStripes + 25);
         builder.append("\r[");
         for (int i = 0; i < stripesFilled; i++) {
             builder.append(filled);
@@ -64,7 +66,28 @@ public class ProgressBar {
         for (int i = stripesFilled; i < numStripes; i++) {
             builder.append(notFilled);
         }
-        builder.append("] ").append(remainPercent).append('%');
+        builder.append("] ").append(remainPercent)
+                .append("% - ETA ");
+
+        if (remain > 0) {
+            long remainingSeconds = (System.currentTimeMillis() - startTime) * (total - remain) / (remain * 1000L);
+            long remainingMinutes = (remainingSeconds / 60) % 60;
+            long remainingSecondsShort = remainingSeconds % 60;
+            builder.append(remainingSeconds / 3600)
+                    .append(':');
+            if (remainingMinutes < 10) {
+                builder.append('0');
+            }
+            builder.append(remainingMinutes)
+                    .append(':');
+            if (remainingSecondsShort < 10) {
+                builder.append('0');
+            }
+            builder.append(remainingSecondsShort);
+        } else {
+            builder.append('-');
+        }
+
         if (remain < total) {
             System.out.print(builder.toString());
         } else {
