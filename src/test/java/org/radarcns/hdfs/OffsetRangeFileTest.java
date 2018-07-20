@@ -55,8 +55,9 @@ public class OffsetRangeFileTest {
 
         // will create on write
         try (OffsetRangeFile.Writer ignored = new OffsetRangeFile.Writer(storage, testFile)) {
-            assertTrue(OffsetRangeFile.read(storage, testFile).isEmpty());
+            // ignored
         }
+        assertTrue(OffsetRangeFile.read(storage, testFile).isEmpty());
     }
 
     @Test
