@@ -30,18 +30,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
-import java.io.Closeable;
-import java.io.Flushable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Queue;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
 
@@ -49,7 +41,7 @@ import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
  * Accesses a OffsetRange file using the CSV format. On construction, this will create the file if
  * not present.
  */
-public final class OffsetRangeFile {
+public final class OffsetRangeFile extends PostponedWriter {
     private static final Logger logger = LoggerFactory.getLogger(OffsetRangeFile.class);
 
     private static final CsvSchema SCHEMA = CsvSchema.builder()
@@ -65,68 +57,67 @@ public final class OffsetRangeFile {
     private static final ObjectReader CSV_READER = CSV_MAPPER.reader(SCHEMA.withHeader())
             .forType(OffsetRange.class);
 
-    private OffsetRangeFile() {
-        // utility class
+
+    private final StorageDriver storage;
+    private final Path path;
+    private final OffsetRangeSet offsets;
+
+    public OffsetRangeFile(StorageDriver storage, Path path, OffsetRangeSet startSet) {
+        super("offsets", 1, TimeUnit.SECONDS);
+        this.path = path;
+        this.storage = storage;
+        offsets = startSet == null ? new OffsetRangeSet() : startSet;
     }
 
-    public static OffsetRangeSet read(StorageDriver storage, Path path) throws IOException {
-        OffsetRangeSet set = new OffsetRangeSet();
-
-        try (BufferedReader br = storage.newBufferedReader(path)) {
-            MappingIterator<OffsetRange> ranges = CSV_READER.readValues(br);
-            while(ranges.hasNext()) {
-                set.add(ranges.next());
-            }
-        }
-        return set;
-    }
-
-    public static class Writer extends PostponedWriter {
-        private final StorageDriver storage;
-        private final Path path;
-        private final OffsetRangeSet offsets;
-
-        public Writer(StorageDriver storage, Path path) throws IOException {
-            super("offsets", 1, TimeUnit.SECONDS);
-            this.path = path;
-            this.storage = storage;
-            OffsetRangeSet newOffsets = null;
-            if (storage.exists(path) && storage.size(path) > 0) {
-                try {
-                    newOffsets = OffsetRangeFile.read(storage, path);
-                } catch (IOException ex) {
-                    logger.error("Failed to read old offsets file", ex);
+    public static OffsetRangeFile read(StorageDriver storage, Path path) {
+        try {
+            if (storage.exists(path)) {
+                OffsetRangeSet set = new OffsetRangeSet();
+                try (BufferedReader br = storage.newBufferedReader(path)) {
+                    MappingIterator<OffsetRange> ranges = CSV_READER.readValues(br);
+                    while (ranges.hasNext()) {
+                        set.add(ranges.next());
+                    }
                 }
+                return new OffsetRangeFile(storage, path, set);
+            } else {
+                return new OffsetRangeFile(storage, path, null);
             }
-            offsets = newOffsets == null ? new OffsetRangeSet() : newOffsets;
+        } catch (IOException ex) {
+            logger.error("Error reading offsets file. Processing all offsets.");
+            return new OffsetRangeFile(storage, path, null);
         }
+    }
 
-        public void add(OffsetRange range) {
-            offsets.add(range);
-        }
+    public OffsetRangeSet getOffsets() {
+        return offsets;
+    }
 
-        protected void doWrite() {
-            BufferedOutputStream out;
-            CsvGenerator generator;
+    public void add(OffsetRange range) {
+        offsets.add(range);
+    }
 
-            try {
-                Path tmpPath = Files.createTempFile("offsets", ".csv");
-                out = new BufferedOutputStream(Files.newOutputStream(tmpPath), 8192);
-                generator = CSV_FACTORY.createGenerator(out);
-                ObjectWriter writer = CSV_MAPPER.writerFor(OffsetRange.class).with(SCHEMA);
+    protected void doWrite() {
+        BufferedOutputStream out;
+        CsvGenerator generator;
 
-                offsets.ranges()
-                        .forEach(tryCatch(r -> writer.writeValue(generator, r), (r, ex) -> {
-                            throw new IllegalStateException("Failed to write value", ex);
-                        }));
+        try {
+            Path tmpPath = Files.createTempFile("offsets", ".csv");
+            out = new BufferedOutputStream(Files.newOutputStream(tmpPath), 8192);
+            generator = CSV_FACTORY.createGenerator(out);
+            ObjectWriter writer = CSV_MAPPER.writerFor(OffsetRange.class).with(SCHEMA);
 
-                generator.flush();
-                generator.close();
-                out.close();
-                storage.store(tmpPath, path);
-            } catch (IOException e) {
-                logger.error("Failed to write offsets", e);
-            }
+            offsets.ranges()
+                    .forEach(tryCatch(r -> writer.writeValue(generator, r), (r, ex) -> {
+                        throw new IllegalStateException("Failed to write value", ex);
+                    }));
+
+            generator.flush();
+            generator.close();
+            out.close();
+            storage.store(tmpPath, path);
+        } catch (IOException e) {
+            logger.error("Failed to write offsets", e);
         }
     }
 }

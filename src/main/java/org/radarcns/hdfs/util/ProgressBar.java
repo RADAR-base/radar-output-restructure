@@ -16,6 +16,8 @@
 
 package org.radarcns.hdfs.util;
 
+import java.time.Duration;
+
 /**
  * Progress bar.
  * Based on https://stackoverflow.com/a/43381186/574082.
@@ -70,20 +72,8 @@ public class ProgressBar {
                 .append("% - ETA ");
 
         if (remain > 0) {
-            long remainingSeconds = (System.currentTimeMillis() - startTime) * (total - remain) / (remain * 1000L);
-            long remainingMinutes = (remainingSeconds / 60) % 60;
-            long remainingSecondsShort = remainingSeconds % 60;
-            builder.append(remainingSeconds / 3600)
-                    .append(':');
-            if (remainingMinutes < 10) {
-                builder.append('0');
-            }
-            builder.append(remainingMinutes)
-                    .append(':');
-            if (remainingSecondsShort < 10) {
-                builder.append('0');
-            }
-            builder.append(remainingSecondsShort);
+            long duration = (System.currentTimeMillis() - startTime);
+            formatTime(builder,duration * (total - remain) / (remain * 1000L));
         } else {
             builder.append('-');
         }
@@ -93,6 +83,37 @@ public class ProgressBar {
         } else {
             System.out.println(builder.toString());
         }
+    }
+
+    public static StringBuilder formatTime(StringBuilder builder, long seconds) {
+        long minutes = (seconds / 60) % 60;
+        long sec = seconds % 60;
+        builder.append(seconds / 3600).append(':');
+        if (minutes < 10) {
+            builder.append('0');
+        }
+        builder.append(minutes).append(':');
+        if (sec < 10) {
+            builder.append('0');
+        }
+        builder.append(sec);
+        return builder;
+    }
+
+
+    public static String formatTime(Duration duration) {
+        long millis = duration.toMillis();
+        StringBuilder builder = new StringBuilder(16);
+        formatTime(builder, millis / 1000)
+                .append('.');
+        long millisLast = (int)(millis % 1000L);
+        if (millisLast < 100) {
+            builder.append('0');
+        }
+        if (millisLast < 10) {
+            builder.append('0');
+        }
+        return builder.append(millisLast).toString();
     }
 
     public boolean isDone() {

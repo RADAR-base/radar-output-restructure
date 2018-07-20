@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.radarcns.hdfs.util.ProgressBar.formatTime;
 import static org.radarcns.hdfs.util.commandline.CommandLineArgs.instantiate;
 import static org.radarcns.hdfs.util.commandline.CommandLineArgs.nonNullOrDefault;
 
@@ -137,7 +138,7 @@ public class Application implements FileStoreFactory {
     }
 
     public void start() {
-        Instant time1 = Instant.now();
+        Instant timeStart = Instant.now();
 
         try {
             for (String input : inputPaths) {
@@ -151,7 +152,7 @@ public class Application implements FileStoreFactory {
 
         logger.info("Processed {} files and {} records",
                 hdfsReader.getProcessedFileCount(), hdfsReader.getProcessedRecordsCount());
-        logger.info("Time taken: {}", Duration.between(time1, Instant.now()));
+        logger.info("Time taken: {}", formatTime(Duration.between(timeStart, Instant.now())));
     }
 
     public static class Builder {

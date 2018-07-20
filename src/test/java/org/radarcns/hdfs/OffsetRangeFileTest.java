@@ -49,25 +49,22 @@ public class OffsetRangeFileTest {
 
     @Test
     public void readEmpty() throws IOException {
-        assertTrue(OffsetRangeFile.read(storage, testFile).isEmpty());
+        assertTrue(OffsetRangeFile.read(storage, testFile).getOffsets().isEmpty());
 
         storage.delete(testFile);
 
         // will create on write
-        try (OffsetRangeFile.Writer ignored = new OffsetRangeFile.Writer(storage, testFile)) {
-            // ignored
-        }
-        assertTrue(OffsetRangeFile.read(storage, testFile).isEmpty());
+        assertTrue(OffsetRangeFile.read(storage, testFile).getOffsets().isEmpty());
     }
 
     @Test
     public void write() throws IOException {
-        try (OffsetRangeFile.Writer rangeFile = new OffsetRangeFile.Writer(storage, testFile)) {
+        try (OffsetRangeFile rangeFile = new OffsetRangeFile(storage, testFile, null)) {
             rangeFile.add(OffsetRange.parseFilename("a+0+0+1"));
             rangeFile.add(OffsetRange.parseFilename("a+0+1+2"));
         }
 
-        OffsetRangeSet set = OffsetRangeFile.read(storage, testFile);
+        OffsetRangeSet set = OffsetRangeFile.read(storage, testFile).getOffsets();
         assertTrue(set.contains(OffsetRange.parseFilename("a+0+0+1")));
         assertTrue(set.contains(OffsetRange.parseFilename("a+0+1+2")));
         assertTrue(set.contains(OffsetRange.parseFilename("a+0+0+2")));
@@ -79,7 +76,7 @@ public class OffsetRangeFileTest {
 
     @Test
     public void cleanUp() throws IOException {
-        try (OffsetRangeFile.Writer rangeFile = new OffsetRangeFile.Writer(storage, testFile)) {
+        try (OffsetRangeFile rangeFile = new OffsetRangeFile(storage, testFile, null)) {
             rangeFile.add(OffsetRange.parseFilename("a+0+0+1"));
             rangeFile.add(OffsetRange.parseFilename("a+0+1+2"));
             rangeFile.add(OffsetRange.parseFilename("a+0+4+4"));
@@ -89,7 +86,7 @@ public class OffsetRangeFileTest {
             assertEquals(3, br.lines().count());
         }
 
-        OffsetRangeSet rangeSet = OffsetRangeFile.read(storage, testFile);
+        OffsetRangeSet rangeSet = OffsetRangeFile.read(storage, testFile).getOffsets();
         assertEquals(2, rangeSet.size("a", 0));
     }
 }

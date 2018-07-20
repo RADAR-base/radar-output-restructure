@@ -51,6 +51,8 @@ import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.radarcns.hdfs.util.ProgressBar.formatTime;
+
 public class RadarHdfsRestructure {
     private static final Logger logger = LoggerFactory.getLogger(RadarHdfsRestructure.class);
 
@@ -102,76 +104,24 @@ public class RadarHdfsRestructure {
         Path path = new Path(directoryName);
         FileSystem fs = path.getFileSystem(conf);
 
-
-
-        try (OffsetRangeFile.Writer offsets = new OffsetRangeFile.Writer(storage, offsetsPath);
+        try (OffsetRangeFile offsetFile = OffsetRangeFile.read(storage, offsetsPath);
              Frequency bins = Frequency.read(storage, outputPath.resolve(BINS_FILE_NAME))) {
-            OffsetRangeSet seenFiles;
-            try {
-                seenFiles = OffsetRangeFile.read(storage, offsetsPath);
-            } catch (IOException ex) {
-                logger.error("Error reading offsets file. Processing all offsets.");
-                seenFiles = new OffsetRangeSet();
-            }
 
             logger.info("Retrieving file list from {}", path);
 
             Instant timeStart = Instant.now();
             // Get filenames to process
-            Map<String, List<Path>> topicPaths = getTopicPaths(fs, path, seenFiles);
-            logger.info("Time retrieving file list: {}", Duration.between(timeStart, Instant.now()));
+            Map<String, List<Path>> topicPaths = getTopicPaths(fs, path, offsetFile.getOffsets());
+            logger.info("Time retrieving file list: {}",
+                    formatTime(Duration.between(timeStart, Instant.now())));
 
-            processedFileCount = new LongAdder();
-            processedRecordsCount = new LongAdder();
-            filesClosed = new LongAdder();
-
-            long toProcessRecordsCount = topicPaths.values().parallelStream()
-                    .flatMap(List::stream)
-                    .map(p -> OffsetRange.parseFilename(p.getName()))
-                    .mapToInt(r -> (int)(r.getOffsetTo() - r.getOffsetFrom()) + 1)
-                    .sum();
-
-            long toProcessFileCount = topicPaths.values().parallelStream()
-                    .mapToInt(List::size)
-                    .sum();
-
-            logger.info("Converting {} files with {} records",
-                    toProcessFileCount, toProcessRecordsCount);
-
-            ProgressBar progressBar = new ProgressBar(toProcessRecordsCount, 70);
-            progressBar.update(0);
-            AtomicLong lastUpdate = new AtomicLong(0L);
-
-            ExecutorService executor = Executors.newWorkStealingPool(getPathFactory().isTopicPartitioned() ? this.numThreads : 1);
-
-            // Actually process the files
-            topicPaths.forEach((topic, paths) -> executor.submit(() -> {
-                try (FileCacheStore cache = fileStoreFactory.newFileCacheStore()) {
-                    for (Path filePath : paths) {
-                        // If JsonMappingException occurs, log the error and continue with other files
-                        try {
-                            this.processFile(filePath, topic, cache, offsets, bins, progressBar, lastUpdate);
-                        } catch (JsonMappingException exc) {
-                            logger.error("Cannot map values", exc);
-                        }
-                        processedFileCount.increment();
-                    }
-                    bins.flush();
-                    offsets.flush();
-                } catch (IOException ex) {
-                    logger.error("Failed to process file", ex);
-                }
-            }));
-
-            executor.shutdown();
-            executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
-            progressBar.update(toProcessRecordsCount);
+            processPaths(topicPaths, offsetFile, bins);
         } catch (InterruptedException e) {
             logger.error("Processing interrupted");
             Thread.currentThread().interrupt();
         }
 
-        logger.info("Files closed: {}", filesClosed.sum());
+        logger.debug("Files closed: {}", filesClosed.sum());
     }
 
     private Map<String, List<Path>> getTopicPaths(FileSystem fs, Path path, OffsetRangeSet seenFiles) {
@@ -216,8 +166,56 @@ public class RadarHdfsRestructure {
                 });
     }
 
+    private void processPaths(Map<String, List<Path>> topicPaths, OffsetRangeFile offsetFile, Frequency bins) throws InterruptedException {
+        long toProcessRecordsCount = topicPaths.values().parallelStream()
+                .flatMap(List::stream)
+                .map(p -> OffsetRange.parseFilename(p.getName()))
+                .mapToInt(r -> (int)(r.getOffsetTo() - r.getOffsetFrom()) + 1)
+                .sum();
+
+        long toProcessFileCount = topicPaths.values().parallelStream()
+                .mapToInt(List::size)
+                .sum();
+
+        logger.info("Converting {} files with {} records",
+                toProcessFileCount, toProcessRecordsCount);
+
+        processedFileCount = new LongAdder();
+        processedRecordsCount = new LongAdder();
+        filesClosed = new LongAdder();
+
+        ProgressBar progressBar = new ProgressBar(toProcessRecordsCount, 70);
+        progressBar.update(0);
+        AtomicLong lastUpdate = new AtomicLong(0L);
+
+        ExecutorService executor = Executors.newWorkStealingPool(getPathFactory().isTopicPartitioned() ? this.numThreads : 1);
+
+        // Actually process the files
+        topicPaths.forEach((topic, paths) -> executor.submit(() -> {
+            try (FileCacheStore cache = fileStoreFactory.newFileCacheStore()) {
+                for (Path filePath : paths) {
+                    // If JsonMappingException occurs, log the error and continue with other files
+                    try {
+                        this.processFile(filePath, topic, cache, offsetFile, bins, progressBar, lastUpdate);
+                    } catch (JsonMappingException exc) {
+                        logger.error("Cannot map values", exc);
+                    }
+                    processedFileCount.increment();
+                }
+                bins.flush();
+                offsetFile.flush();
+            } catch (IOException ex) {
+                logger.error("Failed to process file", ex);
+            }
+        }));
+
+        executor.shutdown();
+        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+        progressBar.update(toProcessRecordsCount);
+    }
+
     private void processFile(Path filePath, String topicName, FileCacheStore cache,
-            OffsetRangeFile.Writer offsets, Frequency bins, ProgressBar progressBar, AtomicLong lastUpdate) throws IOException {
+            OffsetRangeFile offsets, Frequency bins, ProgressBar progressBar, AtomicLong lastUpdate) throws IOException {
         logger.debug("Reading {}", filePath);
 
         // Read and parseFilename avro file
@@ -242,14 +240,14 @@ public class RadarHdfsRestructure {
 
             processedRecordsCount.increment();
             long now = System.nanoTime();
-            if (now == lastUpdate.updateAndGet(l -> now > l + 50_000_000L ? now : l)) {
+            if (now == lastUpdate.updateAndGet(l -> now > l + 100_000_000L ? now : l)) {
                 progressBar.update(processedRecordsCount.sum());
             }
         }
     }
 
     private void writeRecord(GenericRecord record, String topicName, FileCacheStore cache,
-            OffsetRangeFile.Writer offsets, Frequency bins, String filename, int suffix) throws IOException {
+            OffsetRangeFile offsets, Frequency bins, String filename, int suffix) throws IOException {
         GenericRecord keyField = (GenericRecord) record.get("key");
         GenericRecord valueField = (GenericRecord) record.get("value");
 

@@ -3,7 +3,6 @@ package org.radarcns.hdfs.data;
 import org.radarcns.hdfs.Plugin;
 
 import java.util.List;
-import java.util.Locale;
 
 public interface FormatProvider<T extends Format> extends Plugin {
     List<T> getAll();

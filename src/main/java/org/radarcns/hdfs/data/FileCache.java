@@ -35,12 +35,9 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.zip.ZipException;
 
 /** Keeps path handles of a path. */
 public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
