@@ -28,6 +28,8 @@ import static org.radarcns.hdfs.util.commandline.CommandLineArgs.nonNullOrDefaul
 
 public class Application implements FileStoreFactory {
     private static final Logger logger = LoggerFactory.getLogger(Application.class);
+    public static final int CACHE_SIZE_DEFAULT = 100;
+
     private final StorageDriver storageDriver;
     private final RecordConverterFactory converterFactory;
     private final Compression compression;
@@ -43,8 +45,6 @@ public class Application implements FileStoreFactory {
 
         converterFactory = builder.formatFactory.get(builder.format);
         compression = builder.compressionFactory.get(builder.compression);
-        hdfsReader = builder.hdfsReader;
-        hdfsReader.setFileStoreFactory(this);
         cacheSize = builder.cacheSize;
 
         pathFactory = builder.pathFactory;
@@ -53,6 +53,9 @@ public class Application implements FileStoreFactory {
         this.pathFactory.setRoot(Paths.get(builder.root.replaceAll("/$", "")));
 
         this.inputPaths = builder.inputPaths;
+
+        hdfsReader = builder.hdfsReader;
+        hdfsReader.setFileStoreFactory(this);
     }
 
     public static void main(String [] args) {
@@ -137,7 +140,7 @@ public class Application implements FileStoreFactory {
         Instant time1 = Instant.now();
 
         try {
-            for(String input : inputPaths) {
+            for (String input : inputPaths) {
                 logger.info("In:  {}", input);
                 logger.info("Out: {}", pathFactory.getRoot());
                 hdfsReader.start(input);
@@ -163,7 +166,7 @@ public class Application implements FileStoreFactory {
         private Map<String, String> properties = new HashMap<>();
         private RadarHdfsRestructure hdfsReader;
         private List<String> inputPaths;
-        private int cacheSize = 100;
+        private int cacheSize = CACHE_SIZE_DEFAULT;
 
         public Builder(RadarHdfsRestructure restr, String root) {
             this.hdfsReader = restr;

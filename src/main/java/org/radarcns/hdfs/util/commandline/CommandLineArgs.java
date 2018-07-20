@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
+import static org.radarcns.hdfs.Application.CACHE_SIZE_DEFAULT;
+
 public class CommandLineArgs {
 
     @Parameter(description = "<input_path_1> [<input_path_2> ...]", variableArity = true, required = true)
@@ -22,7 +24,7 @@ public class CommandLineArgs {
 
     // Default set to false because causes loss of records from Biovotion data. https://github.com/RADAR-base/Restructure-HDFS-topic/issues/16
     @Parameter(names = { "-d", "--deduplicate" }, description = "Boolean to define if to use deduplication or not.")
-    public boolean deduplicate;
+    public boolean deduplicate = false;
 
     @Parameter(names = { "-n", "--nameservice"}, description = "The HDFS name services to connect to. Eg - '<HOST>' for single configurations or <CLUSTER_ID> for high availability web services.", required = true, validateWith = { PathValidator.class })
     public String hdfsUri;
@@ -57,11 +59,11 @@ public class CommandLineArgs {
     @DynamicParameter(names = {"-p", "--property"}, description = "Properties used by custom plugins.")
     public Map<String, String> properties = new HashMap<>();
 
-    @Parameter(names = {"t", "--num-threads"}, description = "Number of threads to use for processing")
+    @Parameter(names = {"-t", "--num-threads"}, description = "Number of threads to use for processing")
     public int numThreads = 1;
 
-    @Parameter(names = {"-c", "--cache-size"}, description = "Number of files to keep in cache in a single thread.")
-    public Integer cacheSize;
+    @Parameter(names = {"-s", "--cache-size"}, description = "Number of files to keep in cache in a single thread.")
+    public int cacheSize = CACHE_SIZE_DEFAULT;
 
     public static <T> T nonNullOrDefault(T value, Supplier<T> defaultValue) {
         return value != null ? value : defaultValue.get();

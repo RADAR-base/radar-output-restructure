@@ -22,10 +22,9 @@ import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.mapred.FsInput;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.radarcns.hdfs.data.FileCacheStore;
 import org.radarcns.hdfs.data.StorageDriver;
 import org.radarcns.hdfs.util.ProgressBar;
@@ -38,13 +37,11 @@ import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Spliterator;
-import java.util.Spliterators;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -52,7 +49,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 
 public class RadarHdfsRestructure {
     private static final Logger logger = LoggerFactory.getLogger(RadarHdfsRestructure.class);
@@ -69,7 +65,6 @@ public class RadarHdfsRestructure {
     private final int numThreads;
 
     private final java.nio.file.Path offsetsPath;
-    private Frequency bins;
 
     private final Configuration conf;
     private final java.nio.file.Path outputPath;
@@ -79,6 +74,7 @@ public class RadarHdfsRestructure {
     private FileStoreFactory fileStoreFactory;
     private RecordPathFactory pathFactory;
     private StorageDriver storage;
+    private LongAdder filesClosed;
 
     private RadarHdfsRestructure(Builder builder) {
         conf = new Configuration();
@@ -105,7 +101,10 @@ public class RadarHdfsRestructure {
         Path path = new Path(directoryName);
         FileSystem fs = path.getFileSystem(conf);
 
-        try (OffsetRangeFile.Writer offsets = new OffsetRangeFile.Writer(storage, offsetsPath)) {
+
+
+        try (OffsetRangeFile.Writer offsets = new OffsetRangeFile.Writer(storage, offsetsPath);
+             Frequency bins = Frequency.read(storage, outputPath.resolve(BINS_FILE_NAME))) {
             OffsetRangeSet seenFiles;
             try {
                 seenFiles = OffsetRangeFile.read(storage, offsetsPath);
@@ -114,38 +113,27 @@ public class RadarHdfsRestructure {
                 seenFiles = new OffsetRangeSet();
             }
 
+            logger.info("Retrieving file list from {}", path);
+
+            Instant timeStart = Instant.now();
             // Get filenames to process
             Map<String, List<Path>> topicPaths = getTopicPaths(fs, path, seenFiles);
+            logger.info("Time retrieving file list: {}", Duration.between(timeStart, Instant.now()));
+
+            processedFileCount = new LongAdder();
+            processedRecordsCount = new LongAdder();
+            filesClosed = new LongAdder();
 
             long toProcessFileCount = topicPaths.values().stream()
                     .mapToInt(List::size)
                     .sum();
-
-            processedFileCount = new LongAdder();
-            processedRecordsCount = new LongAdder();
-
-            RemoteIterator<LocatedFileStatus> files = fs.listFiles(path, true);
-            while (files.hasNext()) {
-                LocatedFileStatus locatedFileStatus = files.next();
-                if (locatedFileStatus.isDirectory()) {
-                    continue;
-                }
-                Path filePath = locatedFileStatus.getPath();
-
-                String topic = getTopic(filePath, seenFiles);
-                if (topic != null) {
-                    topicPaths.computeIfAbsent(topic, k -> new ArrayList<>()).add(filePath);
-                    toProcessFileCount++;
-                }
-            }
 
             logger.info("Converting {} files", toProcessFileCount);
 
             ProgressBar progressBar = new ProgressBar(toProcessFileCount, 70);
             progressBar.update(0);
 
-            logger.info("Retrieving file list from {}", path);
-            ExecutorService executor = Executors.newFixedThreadPool(getPathFactory().isTopicPartitioned() ? this.numThreads : 1);
+            ExecutorService executor = Executors.newWorkStealingPool(getPathFactory().isTopicPartitioned() ? this.numThreads : 1);
 
             // Actually process the files
             topicPaths.forEach((topic, paths) -> executor.submit(() -> {
@@ -153,13 +141,15 @@ public class RadarHdfsRestructure {
                     for (Path filePath : paths) {
                         // If JsonMappingException occurs, log the error and continue with other files
                         try {
-                            this.processFile(filePath, topic, cache, offsets);
+                            this.processFile(filePath, topic, cache, offsets, bins);
                         } catch (JsonMappingException exc) {
                             logger.error("Cannot map values", exc);
                         }
                         processedFileCount.increment();
                         progressBar.update(processedFileCount.sum());
                     }
+                    bins.flush();
+                    offsets.flush();
                 } catch (IOException ex) {
                     logger.error("Failed to process file", ex);
                 }
@@ -172,8 +162,7 @@ public class RadarHdfsRestructure {
             Thread.currentThread().interrupt();
         }
 
-        logger.info("Cleaning offset file");
-        OffsetRangeFile.cleanUp(storage, offsetsPath);
+        logger.info("Files closed: {}", filesClosed.sum());
     }
 
     private Map<String, List<Path>> getTopicPaths(FileSystem fs, Path path, OffsetRangeSet seenFiles) {
@@ -188,40 +177,23 @@ public class RadarHdfsRestructure {
                 })
                 .collect(Collectors.groupingByConcurrent(f -> f.getParent().getParent().getName()));
 
-        System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism", oldParallelism);
+        if (oldParallelism == null) {
+            System.clearProperty("java.util.concurrent.ForkJoinPool.common.parallelism");
+        } else {
+            System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism", oldParallelism);
+        }
 
         return result;
     }
 
     private Stream<Path> walk(FileSystem fs, Path path) {
-        RemoteIterator<LocatedFileStatus> files;
+        FileStatus[] files;
         try {
-            files = fs.listFiles(path, false);
+            files = fs.listStatus(path);
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
-        Spliterator<LocatedFileStatus> spliterator = Spliterators.spliteratorUnknownSize(
-                new Iterator<LocatedFileStatus>() {
-                    @Override
-                    public boolean hasNext() {
-                        try {
-                            return files.hasNext();
-                        } catch (IOException e) {
-                            throw new IllegalStateException(e);
-                        }
-                    }
-
-                    @Override
-                    public LocatedFileStatus next() {
-                        try {
-                            return files.next();
-                        } catch (IOException e) {
-                            throw new IllegalStateException(e);
-                        }
-                    }
-                }, Spliterator.NONNULL | Spliterator.IMMUTABLE | Spliterator.DISTINCT);
-
-        return StreamSupport.stream(spliterator, true)
+        return Stream.of(files).parallel()
                 .flatMap(f -> {
                     if (f.isDirectory()) {
                         if (f.getPath().getName().equals("+tmp")) {
@@ -235,29 +207,8 @@ public class RadarHdfsRestructure {
                 });
     }
 
-    private static String getTopic(Path filePath, OffsetRangeSet seenFiles) {
-        if (filePath.toString().contains("+tmp")) {
-            return null;
-        }
-
-        String fileName = filePath.getName();
-        // Skip if extension is not .avro
-        if (!fileName.endsWith(".avro")) {
-            logger.info("Skipping non-avro file: {}", fileName);
-            return null;
-        }
-
-        OffsetRange range = OffsetRange.parseFilename(fileName);
-        // Skip already processed avro files
-        if (seenFiles.contains(range)) {
-            return null;
-        }
-
-        return filePath.getParent().getParent().getName();
-    }
-
     private void processFile(Path filePath, String topicName, FileCacheStore cache,
-            OffsetRangeFile.Writer offsets) throws IOException {
+            OffsetRangeFile.Writer offsets, Frequency bins) throws IOException {
         logger.debug("Reading {}", filePath);
 
         // Read and parseFilename avro file
@@ -278,12 +229,12 @@ public class RadarHdfsRestructure {
             record = dataFileReader.next(record);
 
             // Get the fields
-            this.writeRecord(record, topicName, cache, offsets, filePath.getName(), 0);
+            this.writeRecord(record, topicName, cache, offsets, bins, filePath.getName(), 0);
         }
     }
 
     private void writeRecord(GenericRecord record, String topicName, FileCacheStore cache,
-            OffsetRangeFile.Writer offsets, String filename, int suffix) throws IOException {
+            OffsetRangeFile.Writer offsets, Frequency bins, String filename, int suffix) throws IOException {
         GenericRecord keyField = (GenericRecord) record.get("key");
         GenericRecord valueField = (GenericRecord) record.get("value");
 
@@ -298,19 +249,18 @@ public class RadarHdfsRestructure {
         FileCacheStore.WriteResponse response = cache.writeRecord(metadata.getPath(), record, () -> {
             // Count data (binned and total)
             String timeBin = getPathFactory().getTimeBin(metadata.getTime());
-            bins.add(topicName, metadata.getCategory(), timeBin);
-            OffsetRange range = OffsetRange.parseFilename(filename);
-            try {
-                offsets.write(range);
-            } catch (IOException ex) {
-                logger.warn("Failed to update offset status. Continuing processing.", ex);
-            }
-        }, () -> bins.write());
+            bins.increment(new Frequency.Bin(topicName, metadata.getCategory(), timeBin));
+            offsets.add(OffsetRange.parseFilename(filename));
+        }, () -> {
+            offsets.triggerWrite();
+            bins.triggerWrite();
+            filesClosed.increment();
+        });
 
         if (!response.isSuccessful()) {
             // Write was unsuccessful due to different number of columns,
             // try again with new file name
-            writeRecord(record, topicName, cache, offsets, filename, ++suffix);
+            writeRecord(record, topicName, cache, offsets, bins, filename, ++suffix);
         } else {
             // Write was successful, finalize the write
             java.nio.file.Path schemaPath = metadata.getPath().resolveSibling(SCHEMA_OUTPUT_FILE_NAME);
@@ -329,7 +279,6 @@ public class RadarHdfsRestructure {
         this.fileStoreFactory = factory;
         this.pathFactory = factory.getPathFactory();
         this.storage = factory.getStorageDriver();
-        bins = Frequency.read(storage, outputPath.resolve(BINS_FILE_NAME));
     }
 
     private synchronized RecordPathFactory getPathFactory() {

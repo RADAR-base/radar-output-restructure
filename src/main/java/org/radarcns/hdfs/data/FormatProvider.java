@@ -3,6 +3,7 @@ package org.radarcns.hdfs.data;
 import org.radarcns.hdfs.Plugin;
 
 import java.util.List;
+import java.util.Locale;
 
 public interface FormatProvider<T extends Format> extends Plugin {
     List<T> getAll();
@@ -14,5 +15,14 @@ public interface FormatProvider<T extends Format> extends Plugin {
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Format " + format + " is not supported"));
+    }
+
+    default T getForFile(String fileName) {
+        return getAll()
+                .stream()
+                .filter(r -> r.matchesFilename(fileName))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "File name " + fileName + " is not supported"));
     }
 }

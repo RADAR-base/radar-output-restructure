@@ -62,8 +62,8 @@ public class OffsetRangeFileTest {
     @Test
     public void write() throws IOException {
         try (OffsetRangeFile.Writer rangeFile = new OffsetRangeFile.Writer(storage, testFile)) {
-            rangeFile.write(OffsetRange.parseFilename("a+0+0+1"));
-            rangeFile.write(OffsetRange.parseFilename("a+0+1+2"));
+            rangeFile.add(OffsetRange.parseFilename("a+0+0+1"));
+            rangeFile.add(OffsetRange.parseFilename("a+0+1+2"));
         }
 
         OffsetRangeSet set = OffsetRangeFile.read(storage, testFile);
@@ -79,27 +79,16 @@ public class OffsetRangeFileTest {
     @Test
     public void cleanUp() throws IOException {
         try (OffsetRangeFile.Writer rangeFile = new OffsetRangeFile.Writer(storage, testFile)) {
-            rangeFile.write(OffsetRange.parseFilename("a+0+0+1"));
-            rangeFile.write(OffsetRange.parseFilename("a+0+1+2"));
-            rangeFile.write(OffsetRange.parseFilename("a+0+4+4"));
+            rangeFile.add(OffsetRange.parseFilename("a+0+0+1"));
+            rangeFile.add(OffsetRange.parseFilename("a+0+1+2"));
+            rangeFile.add(OffsetRange.parseFilename("a+0+4+4"));
         }
-
-        try (BufferedReader br = storage.newBufferedReader(testFile)) {
-            assertEquals(4, br.lines().count());
-        }
-
-        OffsetRangeSet rangeSet = OffsetRangeFile.read(storage, testFile);
-        assertEquals(2, rangeSet.size("a", 0));
-
-        OffsetRangeFile.cleanUp(storage, testFile);
 
         try (BufferedReader br = storage.newBufferedReader(testFile)) {
             assertEquals(3, br.lines().count());
         }
 
-        OffsetRangeSet updatedRangeSet = OffsetRangeFile.read(storage, testFile);
+        OffsetRangeSet rangeSet = OffsetRangeFile.read(storage, testFile);
         assertEquals(2, rangeSet.size("a", 0));
-
-        assertEquals(rangeSet, updatedRangeSet);
     }
 }

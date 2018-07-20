@@ -17,6 +17,7 @@
 package org.radarcns.hdfs.data;
 
 import org.apache.avro.generic.GenericRecord;
+import org.radarcns.hdfs.util.ThrowingConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,34 +72,38 @@ public class FileCacheStore implements Flushable, Closeable {
     public WriteResponse writeRecord(Path path, GenericRecord record, CacheCloseListener callback,
             CacheFinalizeListener finalizeListener) throws IOException {
         FileCache cache = caches.get(path);
-        if (cache != null) {
-            if(cache.writeRecord(record)){
-                cache.addOnCacheCloseListener(callback);
-                cache.setCacheFinalizeListener(finalizeListener);
-                return WriteResponse.CACHE_AND_WRITE;
-            } else {
-                // This is the case when cache is used but write is unsuccessful
-                // because of different number columns in same topic
-                return WriteResponse.CACHE_AND_NO_WRITE;
-            }
-        } else {
+        boolean hasCache = cache != null;
+        if (!hasCache) {
             ensureCapacity();
 
             Path dir = path.getParent();
             Files.createDirectories(dir);
 
-            cache = new FileCache(storageDriver, converterFactory, path, record, compression, tmpDir);
+            try {
+                cache = new FileCache(storageDriver, converterFactory, path, record, compression, tmpDir);
+            } catch (IOException ex) {
+                logger.error("Could not open cache for {}", path, ex);
+                return WriteResponse.NO_CACHE_AND_NO_WRITE;
+            }
             caches.put(path, cache);
+        }
+
+        try {
             if (cache.writeRecord(record)) {
                 cache.addOnCacheCloseListener(callback);
                 cache.setCacheFinalizeListener(finalizeListener);
-                return WriteResponse.NO_CACHE_AND_WRITE;
+                return hasCache ? WriteResponse.CACHE_AND_WRITE : WriteResponse.NO_CACHE_AND_WRITE;
             } else {
                 // The file path was not in cache but the file exists and this write is
                 // unsuccessful because of different number of columns
-                return WriteResponse.NO_CACHE_AND_NO_WRITE;
+                return hasCache ? WriteResponse.CACHE_AND_NO_WRITE : WriteResponse.NO_CACHE_AND_NO_WRITE;
             }
-
+        } catch (IOException ex) {
+            logger.error("Failed to write record. Closing cache {}.", cache.getPath(), ex);
+            cache.markError();
+            caches.remove(cache.getPath());
+            cache.close();
+            return WriteResponse.NO_CACHE_AND_NO_WRITE;
         }
     }
 
@@ -114,7 +119,7 @@ public class FileCacheStore implements Flushable, Closeable {
                 caches.remove(rmCache.getPath());
                 rmCache.close();
                 if (deduplicate) {
-                    converterFactory.sortUnique(rmCache.getPath());
+                    converterFactory.sortUnique(storageDriver, rmCache.getPath(), compression);
                 }
             }
         }
@@ -122,20 +127,18 @@ public class FileCacheStore implements Flushable, Closeable {
 
     @Override
     public void flush() throws IOException {
-        for (FileCache cache : caches.values()) {
-            cache.flush();
-        }
+        allCaches(FileCache::flush);
     }
 
     @Override
     public void close() throws IOException {
         try {
-            for (FileCache cache : caches.values()) {
-                cache.close();
+            allCaches(c -> {
+                c.close();
                 if (deduplicate) {
-                    converterFactory.sortUnique(cache.getPath());
+                    converterFactory.sortUnique(storageDriver, c.getPath(), compression);
                 }
-            }
+            });
             if (tmpDir != null) {
                 Files.walk(tmpDir)
                         .sorted(Comparator.reverseOrder())
@@ -144,6 +147,17 @@ public class FileCacheStore implements Flushable, Closeable {
             }
         } finally {
             caches.clear();
+        }
+    }
+
+    private void allCaches(ThrowingConsumer<FileCache> cacheHandler) throws IOException {
+        try {
+            caches.values().parallelStream()
+                    .forEach(tryCatch(cacheHandler, (c, ex) -> {
+                        throw new IllegalStateException(ex);
+                    }));
+        } catch (IllegalStateException ex) {
+            throw (IOException) ex.getCause();
         }
     }
 

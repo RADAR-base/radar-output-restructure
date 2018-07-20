@@ -16,86 +16,110 @@
 
 package org.radarcns.hdfs;
 
-import javax.annotation.Nonnull;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.SortedMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Map;
 import java.util.SortedSet;
-import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.LongAdder;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.stream.Stream;
 
 /** Encompasses a range of offsets. */
-public class OffsetRangeSet implements Iterable<OffsetRange> {
-    private final SortedMap<String, SortedSet<OffsetRange>> ranges;
+public class OffsetRangeSet {
+    private static final Logger logger = LoggerFactory.getLogger(OffsetRangeSet.class);
+    private final ConcurrentMap<String, SynchronizedSortedSet<OffsetRange>> ranges;
 
     public OffsetRangeSet() {
-        ranges = new TreeMap<>();
+        ranges = new ConcurrentHashMap<>();
     }
 
     /** Add given offset range to seen offsets. */
     public void add(OffsetRange range) {
-        SortedSet<OffsetRange> topicRanges = ranges.computeIfAbsent(
-                key(range.getTopic(), range.getPartition()), k -> new TreeSet<>());
+        SynchronizedSortedSet<OffsetRange> syncSet = ranges.computeIfAbsent(
+                key(range.getTopic(), range.getPartition()), k -> new SynchronizedSortedSet<>());
 
-        SortedSet<OffsetRange> tail = topicRanges.tailSet(range);
-        SortedSet<OffsetRange> head = topicRanges.headSet(range);
+        SortedSet<OffsetRange> topicRanges = syncSet.writeSet();
 
-        OffsetRange next = !tail.isEmpty() ? tail.first() : null;
-        OffsetRange previous = !head.isEmpty() ? head.last() : null;
+        try {
+            SortedSet<OffsetRange> tail = topicRanges.tailSet(range);
+            SortedSet<OffsetRange> head = topicRanges.headSet(range);
 
-        if (next != null) {
-            if (next.equals(range)) {
-                return;
-            }
+            OffsetRange next = !tail.isEmpty() ? tail.first() : null;
+            OffsetRange previous = !head.isEmpty() ? head.last() : null;
 
-            if (next.getOffsetFrom() <= range.getOffsetTo() + 1) {
-                if (previous != null && previous.getOffsetTo() >= range.getOffsetFrom() - 1) {
-                    next.setOffsetFrom(previous.getOffsetFrom());
-                    topicRanges.remove(previous);
-                } else {
-                    next.setOffsetFrom(range.getOffsetFrom());
+            if (next != null) {
+                if (next.equals(range)) {
+                    return;
                 }
+
+                if (next.getOffsetFrom() <= range.getOffsetTo() + 1) {
+                    if (previous != null && previous.getOffsetTo() >= range.getOffsetFrom() - 1) {
+                        next.setOffsetFrom(previous.getOffsetFrom());
+                        topicRanges.remove(previous);
+                    } else {
+                        next.setOffsetFrom(range.getOffsetFrom());
+                    }
+                    return;
+                }
+            }
+
+            if (previous != null && previous.getOffsetTo() >= range.getOffsetFrom() - 1) {
+                previous.setOffsetTo(range.getOffsetTo());
                 return;
             }
-        }
 
-        if (previous != null && previous.getOffsetTo() >= range.getOffsetFrom() - 1) {
-            previous.setOffsetTo(range.getOffsetTo());
-            return;
+            topicRanges.add(range);
+        } finally {
+            syncSet.releaseWrite();
         }
-
-        topicRanges.add(range);
     }
 
     /** Whether this range set completely contains the given range. */
     public boolean contains(OffsetRange range) {
-        SortedSet<OffsetRange> topicRanges = ranges.get(key(range.getTopic(), range.getPartition()));
-        if (topicRanges == null) {
+        SynchronizedSortedSet<OffsetRange> syncSet = ranges.get(key(range.getTopic(), range.getPartition()));
+
+        if (syncSet == null) {
             return false;
         }
 
-        if (topicRanges.contains(range)) {
-            return true;
+        SortedSet<OffsetRange> topicRanges = syncSet.readSet();
+
+        try {
+            if (topicRanges.contains(range)) {
+                return true;
+            }
+
+            SortedSet<OffsetRange> tail = topicRanges.tailSet(range);
+            OffsetRange next = !tail.isEmpty() ? tail.first() : null;
+
+            if (next != null
+                    && next.getOffsetFrom() == range.getOffsetFrom()
+                    && next.getOffsetTo() >= range.getOffsetTo()) {
+                return true;
+            }
+
+            SortedSet<OffsetRange> head = topicRanges.headSet(range);
+            OffsetRange previous = !head.isEmpty() ? head.last() : null;
+            return previous != null && previous.getOffsetTo() >= range.getOffsetTo();
+        } finally {
+            syncSet.releaseRead();
         }
-
-        SortedSet<OffsetRange> tail = topicRanges.tailSet(range);
-        OffsetRange next = !tail.isEmpty() ? tail.first() : null;
-
-        if (next != null
-                && next.getOffsetFrom() == range.getOffsetFrom()
-                && next.getOffsetTo() >= range.getOffsetTo()) {
-            return true;
-        }
-
-        SortedSet<OffsetRange> head = topicRanges.headSet(range);
-        OffsetRange previous = !head.isEmpty() ? head.last() : null;
-        return previous != null && previous.getOffsetTo() >= range.getOffsetTo();
     }
 
     public int size(String topic, int partition) {
-        SortedSet<OffsetRange> rangeSet = ranges.get(key(topic, partition));
-        if (rangeSet != null) {
-            return rangeSet.size();
+        SynchronizedSortedSet<OffsetRange> syncSet = ranges.get(key(topic, partition));
+        if (syncSet != null) {
+            int size = syncSet.readSet().size();
+            syncSet.releaseRead();
+            return size;
         } else {
             return 0;
         }
@@ -115,31 +139,16 @@ public class OffsetRangeSet implements Iterable<OffsetRange> {
         return topic + '+' + partition;
     }
 
-    @Override
-    @Nonnull
-    public Iterator<OffsetRange> iterator() {
-        final Iterator<SortedSet<OffsetRange>> partitionIterator = ranges.values().iterator();
-        return new Iterator<OffsetRange>() {
-            Iterator<OffsetRange> rangeIterator;
-            @Override
-            public boolean hasNext() {
-                while (rangeIterator == null || !rangeIterator.hasNext()) {
-                    if (!partitionIterator.hasNext()) {
-                        return false;
+    public Stream<OffsetRange> ranges() {
+        return ranges.entrySet().stream()
+                .sorted(Comparator.comparing(Map.Entry::getKey))
+                .flatMap(v -> {
+                    try {
+                        return new ArrayList<>(v.getValue().readSet()).stream();
+                    } finally {
+                        v.getValue().releaseRead();
                     }
-                    rangeIterator = partitionIterator.next().iterator();
-                }
-                return rangeIterator.hasNext();
-            }
-
-            @Override
-            public OffsetRange next() {
-                if (!hasNext()) {
-                    throw new NoSuchElementException();
-                }
-                return rangeIterator.next();
-            }
-        };
+                });
     }
 
     @Override
@@ -153,5 +162,63 @@ public class OffsetRangeSet implements Iterable<OffsetRange> {
     @Override
     public int hashCode() {
         return ranges.hashCode();
+    }
+
+    private static class SynchronizedSortedSet<T> {
+        private final ReadWriteLock lock = new ReentrantReadWriteLock();
+        private final SortedSet<T> set;
+        private final Lock readLock;
+        private final Lock writeLock;
+
+        SynchronizedSortedSet() {
+            this.set = new TreeSet<>();
+            this.readLock = lock.readLock();
+            this.writeLock = lock.writeLock();
+        }
+
+        SortedSet<T> readSet() {
+            readLock.lock();
+            return set;
+        }
+
+        SortedSet<T> writeSet() {
+            writeLock.lock();
+            return set;
+        }
+
+        void releaseRead() {
+            readLock.unlock();
+
+        }
+        void releaseWrite() {
+            writeLock.unlock();
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            SynchronizedSortedSet<?> that = (SynchronizedSortedSet<?>) o;
+
+            try {
+                return readSet().equals(that.readSet());
+            } finally {
+                that.releaseRead();
+                releaseRead();
+            }
+        }
+
+        @Override
+        public int hashCode() {
+            try {
+                return readSet().hashCode();
+            } finally {
+                releaseRead();
+            }
+        }
     }
 }

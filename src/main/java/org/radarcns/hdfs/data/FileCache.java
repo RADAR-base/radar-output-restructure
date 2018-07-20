@@ -35,8 +35,11 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.zip.ZipException;
 
 /** Keeps path handles of a path. */
@@ -51,6 +54,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
     private final List<CacheCloseListener> cacheCloseListeners;
     private CacheFinalizeListener cacheFinalizeListener;
     private long lastUse;
+    private final AtomicBoolean hasError;
 
     /**
      * File cache of given path, using given converter factory.
@@ -78,9 +82,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
             inputStream = compression.decompress(
                     new BufferedInputStream(storageDriver.newInputStream(path)));
 
-            try {
-                copy(path, outStream, compression);
-            } catch (ZipException ex) {
+            if (!copy(path, outStream, compression)) {
                 // restart output buffer
                 outStream.close();
                 // clear output file
@@ -101,6 +103,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
             }
             throw ex;
         }
+        hasError = new AtomicBoolean(false);
     }
 
     /**
@@ -115,15 +118,22 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
         return result;
     }
 
+    public void markError() {
+        this.hasError.set(true);
+    }
+
     @Override
     public void close() throws IOException {
         recordConverter.close();
         writer.close();
-        storageDriver.store(tmpPath, path);
 
-        cacheCloseListeners.forEach(CacheCloseListener::onCacheClosed);
-        if (cacheFinalizeListener != null) {
-            cacheFinalizeListener.onCacheCloseFinished();
+        if (!hasError.get()) {
+            storageDriver.store(tmpPath, path);
+
+            cacheCloseListeners.forEach(CacheCloseListener::onCacheClosed);
+            if (cacheFinalizeListener != null) {
+                cacheFinalizeListener.onCacheCloseFinished();
+            }
         }
     }
 
@@ -151,11 +161,12 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
         return path;
     }
 
-    private void copy(Path source, OutputStream sink, Compression compression) throws IOException {
+    private boolean copy(Path source, OutputStream sink, Compression compression) throws IOException {
         try (InputStream fileStream = storageDriver.newInputStream(source);
                 InputStream copyStream = compression.decompress(fileStream)) {
             StorageDriver.copy(copyStream, sink);
-        } catch (ZipException ex) {
+            return true;
+        } catch (IOException ex) {
             Path corruptPath = null;
             String suffix = "";
             for (int i = 0; corruptPath == null && i < 100; i++) {
@@ -166,14 +177,14 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
                 suffix = "-" + i;
             }
             if (corruptPath != null) {
-                logger.error("Original file {} was corrupted: {}."
-                        + " Moved to {}.", source, ex, corruptPath);
+                logger.error("Original file {} could not be read: {}."
+                        + " Moved to {}.", source, corruptPath, ex);
                 storageDriver.move(source, corruptPath);
             } else {
-                logger.error("Original file {} was corrupted: {}."
+                logger.error("Original file {} could not be read: {}."
                         + " Too many corrupt backups stored, removing file.", source, ex);
             }
-            throw ex;
+            return false;
         }
     }
 
