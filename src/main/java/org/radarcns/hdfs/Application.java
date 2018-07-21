@@ -9,11 +9,14 @@ import org.radarcns.hdfs.data.FormatFactory;
 import org.radarcns.hdfs.data.LocalStorageDriver;
 import org.radarcns.hdfs.data.RecordConverterFactory;
 import org.radarcns.hdfs.data.StorageDriver;
+import org.radarcns.hdfs.util.Timer;
 import org.radarcns.hdfs.util.commandline.CommandLineArgs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
@@ -39,6 +42,7 @@ public class Application implements FileStoreFactory {
     private final RecordPathFactory pathFactory;
     private final List<String> inputPaths;
     private final int cacheSize;
+    private final Path tmpDir;
 
     private Application(Builder builder) {
         this.storageDriver = builder.storageDriver;
@@ -52,6 +56,7 @@ public class Application implements FileStoreFactory {
         String extension = converterFactory.getExtension() + compression.getExtension();
         this.pathFactory.setExtension(extension);
         this.pathFactory.setRoot(Paths.get(builder.root.replaceAll("/$", "")));
+        this.tmpDir = builder.tmpDir;
 
         this.inputPaths = builder.inputPaths;
 
@@ -103,6 +108,7 @@ public class Application implements FileStoreFactory {
                     .properties(commandLineArgs.properties)
                     .inputPaths(commandLineArgs.inputPaths)
                     .cacheSize(commandLineArgs.cacheSize)
+                    .tmpDir(commandLineArgs.tmpDir)
                     .build();
         } catch (IllegalArgumentException ex) {
             logger.error("HDFS High availability name node configuration is incomplete."
@@ -123,7 +129,7 @@ public class Application implements FileStoreFactory {
     }
 
     public FileCacheStore newFileCacheStore() throws IOException {
-        return new FileCacheStore(storageDriver, converterFactory, cacheSize, compression,
+        return new FileCacheStore(storageDriver, converterFactory, cacheSize, compression, tmpDir,
                 doDeduplicate);
     }
 
@@ -153,6 +159,7 @@ public class Application implements FileStoreFactory {
         logger.info("Processed {} files and {} records",
                 hdfsReader.getProcessedFileCount(), hdfsReader.getProcessedRecordsCount());
         logger.info("Time taken: {}", formatTime(Duration.between(timeStart, Instant.now())));
+        logger.info("{}", Timer.getInstance());
     }
 
     public static class Builder {
@@ -168,6 +175,7 @@ public class Application implements FileStoreFactory {
         private RadarHdfsRestructure hdfsReader;
         private List<String> inputPaths;
         private int cacheSize = CACHE_SIZE_DEFAULT;
+        private Path tmpDir;
 
         public Builder(RadarHdfsRestructure restr, String root) {
             this.hdfsReader = restr;
@@ -240,12 +248,24 @@ public class Application implements FileStoreFactory {
             compressionFactory.init(properties);
             formatFactory = nonNullOrDefault(formatFactory, FormatFactory::new);
             formatFactory.init(properties);
+            tmpDir = nonNullOrDefault(tmpDir, () -> {
+                try {
+                    return Files.createTempDirectory("radar-hdfs-restructure");
+                } catch (IOException ex) {
+                    throw new IllegalStateException("Cannot create temporary directory");
+                }
+            });
 
             return new Application(this);
         }
 
         public Builder inputPaths(List<String> inputPaths) {
             this.inputPaths = inputPaths;
+            return this;
+        }
+
+        public Builder tmpDir(String tmpDir) {
+            this.tmpDir = Paths.get(tmpDir);
             return this;
         }
     }

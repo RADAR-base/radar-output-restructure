@@ -62,6 +62,9 @@ public class CommandLineArgs {
     @Parameter(names = {"-t", "--num-threads"}, description = "Number of threads to use for processing")
     public int numThreads = 1;
 
+    @Parameter(names = {"--tmp-dir"}, description = "Temporary staging directory")
+    public String tmpDir = null;
+
     @Parameter(names = {"-s", "--cache-size"}, description = "Number of files to keep in cache in a single thread.")
     public int cacheSize = CACHE_SIZE_DEFAULT;
 

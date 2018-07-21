@@ -28,6 +28,7 @@ import org.apache.hadoop.fs.Path;
 import org.radarcns.hdfs.data.FileCacheStore;
 import org.radarcns.hdfs.data.StorageDriver;
 import org.radarcns.hdfs.util.ProgressBar;
+import org.radarcns.hdfs.util.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -228,12 +229,14 @@ public class RadarHdfsRestructure {
             return;
         }
 
+        long timeRead = System.nanoTime();
         DataFileReader<GenericRecord> dataFileReader = new DataFileReader<>(input,
                 new GenericDatumReader<>());
 
         GenericRecord record = null;
         while (dataFileReader.hasNext()) {
             record = dataFileReader.next(record);
+            Timer.getInstance().add("read", System.nanoTime() - timeRead);
 
             // Get the fields
             this.writeRecord(record, topicName, cache, offsets, bins, filePath.getName(), 0);
@@ -243,6 +246,7 @@ public class RadarHdfsRestructure {
             if (now == lastUpdate.updateAndGet(l -> now > l + 100_000_000L ? now : l)) {
                 progressBar.update(processedRecordsCount.sum());
             }
+            timeRead = System.nanoTime();
         }
     }
 

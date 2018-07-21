@@ -62,7 +62,7 @@ public class FileCacheStoreTest {
         LongAdder f1Counter = new LongAdder();
         LongAdder f1FinalizeCounter = new LongAdder();
 
-        try (FileCacheStore cache = new FileCacheStore(new LocalStorageDriver(), csvFactory, 2, new IdentityCompression(), false)) {
+        try (FileCacheStore cache = new FileCacheStore(new LocalStorageDriver(), csvFactory, 2, new IdentityCompression(), tmpDir, false)) {
             record = new GenericRecordBuilder(simpleSchema).set("a", "something").build();
             assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE, cache.writeRecord(f1, record, f1Counter::increment, f1FinalizeCounter::increment));
             record = new GenericRecordBuilder(simpleSchema).set("a", "somethingElse").build();

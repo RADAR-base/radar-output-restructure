@@ -17,6 +17,7 @@
 package org.radarcns.hdfs.data;
 
 import org.apache.avro.generic.GenericRecord;
+import org.radarcns.hdfs.util.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,6 +77,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
         if (fileIsNew) {
             inputStream = new ByteArrayInputStream(new byte[0]);
         } else {
+            long timeStart = System.nanoTime();
             inputStream = compression.decompress(
                     new BufferedInputStream(storageDriver.newInputStream(path)));
 
@@ -86,6 +88,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
                 outStream = compression.compress(
                         new BufferedOutputStream(Files.newOutputStream(tmpPath)));
             }
+            Timer.getInstance().add("copy", System.nanoTime() - timeStart);
         }
 
         this.writer = new OutputStreamWriter(outStream);
@@ -110,8 +113,10 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
      * @throws IOException if the record cannot be used.
      */
     public boolean writeRecord(GenericRecord record) throws IOException {
+        long timeStart = System.nanoTime();
         boolean result = this.recordConverter.writeRecord(record);
         lastUse = System.nanoTime();
+        Timer.getInstance().add("write", lastUse - timeStart);
         return result;
     }
 
@@ -121,22 +126,28 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
 
     @Override
     public void close() throws IOException {
+        long timeClose = System.nanoTime();
         recordConverter.close();
         writer.close();
 
         if (!hasError.get()) {
+            long timeStart = System.nanoTime();
             storageDriver.store(tmpPath, path);
+            Timer.getInstance().add("store", System.nanoTime() - timeStart);
 
             cacheCloseListeners.forEach(CacheCloseListener::onCacheClosed);
             if (cacheFinalizeListener != null) {
                 cacheFinalizeListener.onCacheCloseFinished();
             }
         }
+        Timer.getInstance().add("close", System.nanoTime() - timeClose);
     }
 
     @Override
     public void flush() throws IOException {
+        long timeStart = System.nanoTime();
         recordConverter.flush();
+        Timer.getInstance().add("flush", System.nanoTime() - timeStart);
     }
 
     /**

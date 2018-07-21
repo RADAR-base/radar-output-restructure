@@ -17,6 +17,7 @@
 package org.radarcns.hdfs.data;
 
 import org.apache.avro.generic.GenericRecord;
+import org.radarcns.hdfs.util.Timer;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -52,6 +53,7 @@ public interface RecordConverterFactory extends Format {
 
     default void sortUnique(StorageDriver storage, Path path, Compression compression)
             throws IOException {
+        long timeStart = System.nanoTime();
         // read all lines into memory; assume a 100-byte line length
         List<String> sortedLines = new ArrayList<>((int)(Files.size(path) / 100));
         Path tempOut = Files.createTempFile("tempfile", ".tmp");
@@ -76,6 +78,7 @@ public interface RecordConverterFactory extends Format {
         }
 
         storage.store(tempOut, path);
+        Timer.getInstance().add("deduplicate", System.nanoTime() - timeStart);
     }
 
     /**

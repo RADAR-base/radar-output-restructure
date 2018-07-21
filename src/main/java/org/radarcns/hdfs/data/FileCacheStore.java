@@ -31,6 +31,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
 
@@ -50,14 +51,15 @@ public class FileCacheStore implements Flushable, Closeable {
     private final int maxFiles;
     private final Map<Path, FileCache> caches;
 
-    public FileCacheStore(StorageDriver storageDriver, RecordConverterFactory converterFactory, int maxFiles, Compression compression, boolean deduplicate) throws IOException {
+    public FileCacheStore(StorageDriver storageDriver, RecordConverterFactory converterFactory, int maxFiles, Compression compression, Path tmpDir, boolean deduplicate) throws IOException {
         this.storageDriver = storageDriver;
         this.converterFactory = converterFactory;
         this.maxFiles = maxFiles;
         this.caches = new HashMap<>(maxFiles * 4 / 3 + 1);
         this.compression = compression;
         this.deduplicate = deduplicate;
-        this.tmpDir = Files.createTempDirectory("restructurehdfs");
+        this.tmpDir = tmpDir.resolve(UUID.randomUUID().toString());
+        Files.createDirectories(this.tmpDir);
     }
 
     /**
