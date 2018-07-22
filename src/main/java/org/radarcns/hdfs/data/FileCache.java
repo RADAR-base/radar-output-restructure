@@ -17,6 +17,10 @@
 package org.radarcns.hdfs.data;
 
 import org.apache.avro.generic.GenericRecord;
+import org.radarcns.hdfs.Frequency;
+import org.radarcns.hdfs.OffsetRange;
+import org.radarcns.hdfs.OffsetRangeFile;
+import org.radarcns.hdfs.OffsetRangeSet;
 import org.radarcns.hdfs.util.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,7 +41,9 @@ import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Keeps path handles of a path. */
@@ -48,11 +54,18 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
     private final RecordConverter recordConverter;
     private final StorageDriver storageDriver;
     private final Path path;
+    private final boolean deduplicate;
     private final Path tmpPath;
     private final List<CacheCloseListener> cacheCloseListeners;
+    private final Compression compression;
+    private final RecordConverterFactory converterFactory;
+    private final OffsetRangeSet offsets;
+    private final Frequency binFile;
+    private final OffsetRangeFile offsetFile;
     private CacheFinalizeListener cacheFinalizeListener;
     private long lastUse;
     private final AtomicBoolean hasError;
+    private Map<Frequency.Bin, Long> bins;
 
     /**
      * File cache of given path, using given converter factory.
@@ -60,16 +73,26 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
      * @param path path to cache.
      * @param record example record to create converter from, this is not written to path.
      * @param compression file compression to use
+     * @param deduplicate
      * @throws IOException if the file and/or temporary files cannot be correctly read or written to.
      */
     public FileCache(StorageDriver driver, RecordConverterFactory converterFactory, Path path,
-            GenericRecord record, Compression compression, @Nonnull Path tmpDir) throws IOException {
+            GenericRecord record, Compression compression, @Nonnull Path tmpDir, boolean deduplicate,
+            OffsetRangeFile offsetFile, Frequency binFile) throws IOException {
         storageDriver = driver;
         this.path = path;
+        this.deduplicate = deduplicate;
+        this.offsets = new OffsetRangeSet();
+        this.binFile = binFile;
         boolean fileIsNew = !storageDriver.exists(path) || storageDriver.size(path) == 0;
         this.tmpPath = Files.createTempFile(tmpDir, path.getFileName().toString(),
                 ".tmp" + compression.getExtension());
         this.cacheCloseListeners = new ArrayList<>();
+        this.compression = compression;
+        this.converterFactory = converterFactory;
+        this.offsetFile = offsetFile;
+        this.bins = new HashMap<>();
+
         OutputStream outStream = compression.compress(
                 new BufferedOutputStream(Files.newOutputStream(tmpPath)));
 
@@ -112,10 +135,14 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
      * @return true or false based on {@link RecordConverter} write result
      * @throws IOException if the record cannot be used.
      */
-    public boolean writeRecord(GenericRecord record) throws IOException {
+    public boolean writeRecord(OffsetRange offset, Frequency.Bin bin, GenericRecord record) throws IOException {
         long timeStart = System.nanoTime();
         boolean result = this.recordConverter.writeRecord(record);
         lastUse = System.nanoTime();
+        if (result) {
+            this.offsets.add(offset);
+            this.bins.compute(bin, (b, vOld) -> vOld == null ? 1L : vOld + 1L);
+        }
         Timer.getInstance().add("write", lastUse - timeStart);
         return result;
     }
@@ -131,14 +158,18 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
         writer.close();
 
         if (!hasError.get()) {
+            if (deduplicate) {
+                converterFactory.sortUnique(tmpPath, tmpPath, compression);
+            }
+
             long timeStart = System.nanoTime();
             storageDriver.store(tmpPath, path);
             Timer.getInstance().add("store", System.nanoTime() - timeStart);
 
-            cacheCloseListeners.forEach(CacheCloseListener::onCacheClosed);
-            if (cacheFinalizeListener != null) {
-                cacheFinalizeListener.onCacheCloseFinished();
-            }
+            binFile.putAll(bins);
+            binFile.triggerWrite();
+            offsetFile.addAll(offsets);
+            offsetFile.triggerWrite();
         }
         Timer.getInstance().add("close", System.nanoTime() - timeClose);
     }

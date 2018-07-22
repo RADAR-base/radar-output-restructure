@@ -75,6 +75,16 @@ public class OffsetRange implements Comparable<OffsetRange> {
         this.offsetTo = offsetTo;
     }
 
+    public OffsetRange createSingleOffset(int index) {
+        if (index < 0 || index > offsetTo - offsetFrom) {
+            throw new IndexOutOfBoundsException("Index " + index + " does not reference offsets "
+                    + offsetFrom + " to " + offsetTo);
+        }
+
+        long singleOffset = offsetFrom + index;
+        return new OffsetRange(topic, partition, singleOffset, singleOffset);
+    }
+
     @Override
     public String toString() {
         return topic + '+' + partition + '+' + offsetFrom + '+' + offsetTo;

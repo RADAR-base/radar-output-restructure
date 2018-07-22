@@ -24,6 +24,9 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.radarcns.hdfs.Frequency;
+import org.radarcns.hdfs.OffsetRange;
+import org.radarcns.hdfs.OffsetRangeFile;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -49,11 +52,17 @@ public class FileCacheTest {
     private RecordConverterFactory csvFactory;
     private Record exampleRecord;
     private Path tmpDir;
+    private boolean deduplicate;
+    private Frequency bins;
+    private OffsetRangeFile offsets;
+    private Frequency.Bin bin;
+    private OffsetRange offsetRange;
 
     @Before
     public void setUp() throws IOException {
         this.path = folder.newFile("f").toPath();
         this.tmpDir = folder.newFolder().toPath();
+        this.deduplicate = false;
 
         this.csvFactory = CsvAvroConverter.getFactory();
         Schema schema = SchemaBuilder.record("simple").fields()
@@ -61,12 +70,16 @@ public class FileCacheTest {
                 .endRecord();
         this.exampleRecord = new GenericRecordBuilder(schema).set("a", "something").build();
         this.storageDriver = new LocalStorageDriver();
+        this.offsets = OffsetRangeFile.read(storageDriver, folder.newFile().toPath());
+        this.bins = Frequency.read(storageDriver, folder.newFile().toPath());
+        this.bin = new Frequency.Bin("t", "c", "00");
+        this.offsetRange = new OffsetRange("t", 0, 0, 10);
     }
 
     @Test
     public void testGzip() throws IOException {
-        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new GzipCompression(), tmpDir)) {
-            cache.writeRecord(exampleRecord);
+        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new GzipCompression(), tmpDir, deduplicate, offsets, bins)) {
+            cache.writeRecord(offsetRange.createSingleOffset(0), bin, exampleRecord);
         }
 
         System.out.println("Gzip: " + Files.size(path));
@@ -83,12 +96,12 @@ public class FileCacheTest {
 
     @Test
     public void testGzipAppend() throws IOException {
-        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new GzipCompression(), tmpDir)) {
-            cache.writeRecord(exampleRecord);
+        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new GzipCompression(), tmpDir, deduplicate, offsets, bins)) {
+            cache.writeRecord(offsetRange.createSingleOffset(0), bin, exampleRecord);
         }
 
-        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new GzipCompression(), tmpDir)) {
-            cache.writeRecord(exampleRecord);
+        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new GzipCompression(), tmpDir, deduplicate, offsets, bins)) {
+            cache.writeRecord(offsetRange.createSingleOffset(1), bin, exampleRecord);
         }
 
         System.out.println("Gzip appended: " + Files.size(path));
@@ -107,8 +120,8 @@ public class FileCacheTest {
 
     @Test
     public void testPlain() throws IOException {
-        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new IdentityCompression(), tmpDir)) {
-            cache.writeRecord(exampleRecord);
+        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new IdentityCompression(), tmpDir, deduplicate, offsets, bins)) {
+            cache.writeRecord(offsetRange.createSingleOffset(0), bin, exampleRecord);
         }
 
         System.out.println("Plain: " + Files.size(path));
@@ -123,12 +136,12 @@ public class FileCacheTest {
     @Test
     public void testPlainAppend() throws IOException {
 
-        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new IdentityCompression(), tmpDir)) {
-            cache.writeRecord(exampleRecord);
+        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new IdentityCompression(), tmpDir, deduplicate, offsets, bins)) {
+            cache.writeRecord(offsetRange.createSingleOffset(0), bin, exampleRecord);
         }
 
-        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new IdentityCompression(), tmpDir)) {
-            cache.writeRecord(exampleRecord);
+        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new IdentityCompression(), tmpDir, deduplicate, offsets, bins)) {
+            cache.writeRecord(offsetRange.createSingleOffset(1), bin, exampleRecord);
         }
 
         System.out.println("Plain appended: " + Files.size(path));
@@ -146,21 +159,21 @@ public class FileCacheTest {
         Path file3 = folder.newFile("g").toPath();
         Path tmpDir = folder.newFolder().toPath();
 
-        try (FileCache cache1 = new FileCache(storageDriver, csvFactory, path, exampleRecord, new IdentityCompression(), tmpDir);
-             FileCache cache2 = new FileCache(storageDriver, csvFactory, path, exampleRecord, new IdentityCompression(), tmpDir);
-             FileCache cache3 = new FileCache(storageDriver, csvFactory, file3, exampleRecord, new IdentityCompression(), tmpDir)) {
+        try (FileCache cache1 = new FileCache(storageDriver, csvFactory, path, exampleRecord, new IdentityCompression(), tmpDir, deduplicate, offsets, bins);
+             FileCache cache2 = new FileCache(storageDriver, csvFactory, path, exampleRecord, new IdentityCompression(), tmpDir, deduplicate, offsets, bins);
+             FileCache cache3 = new FileCache(storageDriver, csvFactory, file3, exampleRecord, new IdentityCompression(), tmpDir, deduplicate, offsets, bins)) {
             assertEquals(0, cache1.compareTo(cache2));
             // filenames are not equal
             assertEquals(-1, cache1.compareTo(cache3));
-            cache1.writeRecord(exampleRecord);
+            cache1.writeRecord(offsetRange.createSingleOffset(0), bin, exampleRecord);
             // last used
             assertEquals(1, cache1.compareTo(cache2));
             // last used takes precedence over filename
             assertEquals(1, cache1.compareTo(cache3));
 
             // last used reversal
-            cache2.writeRecord(exampleRecord);
-            cache3.writeRecord(exampleRecord);
+            cache2.writeRecord(offsetRange.createSingleOffset(1), bin, exampleRecord);
+            cache3.writeRecord(offsetRange.createSingleOffset(2), bin, exampleRecord);
             assertEquals(-1, cache1.compareTo(cache2));
             assertEquals(-1, cache1.compareTo(cache3));
         }

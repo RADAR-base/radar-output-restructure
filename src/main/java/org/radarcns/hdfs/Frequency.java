@@ -33,6 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.stream.Collectors;
 
 
 public class Frequency extends PostponedWriter {
@@ -79,11 +80,22 @@ public class Frequency extends PostponedWriter {
     }
 
     public void increment(Bin bin) {
-        bins.computeIfAbsent(bin, b -> new LongAdder()).increment();
+        add(bin, 1L);
     }
 
-    public void print() {
-        bins.forEach((k, v) -> System.out.printf("%s - %d\n", k, v.sum()));
+    public void add(Bin bin, long value) {
+        bins.computeIfAbsent(bin, b -> new LongAdder()).add(value);
+    }
+
+    public void putAll(Map<? extends Bin, ? extends Number> binMap) {
+        binMap.forEach((bin, v) -> add(bin, v.longValue()));
+    }
+
+    @Override
+    public String toString() {
+        return bins.entrySet().stream()
+                .map(e -> e.getKey() + " - " + e.getValue().sum())
+                .collect(Collectors.joining("\n"));
     }
 
     protected void doWrite() {

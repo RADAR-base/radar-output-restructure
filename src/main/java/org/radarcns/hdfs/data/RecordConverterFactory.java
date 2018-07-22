@@ -19,7 +19,9 @@ package org.radarcns.hdfs.data;
 import org.apache.avro.generic.GenericRecord;
 import org.radarcns.hdfs.util.Timer;
 
+import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -29,10 +31,8 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.regex.Pattern;
 
 public interface RecordConverterFactory extends Format {
@@ -51,33 +51,27 @@ public interface RecordConverterFactory extends Format {
         return false;
     }
 
-    default void sortUnique(StorageDriver storage, Path path, Compression compression)
+    default void sortUnique(Path source, Path target, Compression compression)
             throws IOException {
         long timeStart = System.nanoTime();
         // read all lines into memory; assume a 100-byte line length
-        List<String> sortedLines = new ArrayList<>((int)(Files.size(path) / 100));
-        Path tempOut = Files.createTempFile("tempfile", ".tmp");
+        LinkedHashSet<String> sortedLines = new LinkedHashSet<>((int)(Files.size(source) / 100));
         String header;
         boolean withHeader = hasHeader();
 
-        try (InputStream fileIn = compression.decompress(storage.newInputStream(path));
-             Reader inReader = new InputStreamReader(fileIn);
-             BufferedReader reader = new BufferedReader(inReader)) {
-            if (testSortedAndUnique(reader, withHeader)) {
-                return;
-            }
-        }
-        try (InputStream fileIn = compression.decompress(storage.newInputStream(path));
-             Reader inReader = new InputStreamReader(fileIn);
+        try (InputStream inFile = Files.newInputStream(source);
+             InputStream zipIn = compression.decompress(inFile);
+             Reader inReader = new InputStreamReader(zipIn);
              BufferedReader reader = new BufferedReader(inReader)) {
             header = readFile(reader, sortedLines, withHeader);
         }
-        try (OutputStream fileOut = compression.compress(Files.newOutputStream(tempOut));
-             Writer writer = new OutputStreamWriter(fileOut)) {
+        try (OutputStream fileOut = Files.newOutputStream(target);
+             OutputStream bufOut = new BufferedOutputStream(fileOut);
+             OutputStream zipOut = compression.compress(bufOut);
+             Writer writer = new OutputStreamWriter(zipOut)) {
             writeFile(writer, header, sortedLines);
         }
 
-        storage.store(tempOut, path);
         Timer.getInstance().add("deduplicate", System.nanoTime() - timeStart);
     }
 
@@ -102,50 +96,16 @@ public interface RecordConverterFactory extends Format {
         return header;
     }
 
-    static void writeFile(Writer writer, String header, List<String> lines) throws IOException {
+    static void writeFile(Writer writer, String header, Collection<String> lines) throws IOException {
         if (header != null) {
             writer.write(header);
-            writer.write("\n");
+            writer.write('\n');
         }
-        // in a sorted collection, the duplicate lines will follow another
-        // only need to keep the previous unique line in memory
-        Collections.sort(lines);
-        String previousLine = null;
+
         for (String line : lines) {
-            if (line.equals(previousLine)) {
-                continue;
-            }
             writer.write(line);
-            writer.write("\n");
-            previousLine = line;
+            writer.write('\n');
         }
-    }
-
-    static boolean testSortedAndUnique(BufferedReader reader, boolean withHeader) throws IOException {
-        String line = reader.readLine();
-        if (withHeader) {
-            if (line == null) {
-                throw new IOException("header expected but not found");
-            }
-            line = reader.readLine();
-        }
-
-        // no lines -> sorted & unique
-        if (line == null) {
-            return true;
-        }
-
-        String previousLine = line;
-        line = reader.readLine();
-
-        while (line != null) {
-            if (line.compareTo(previousLine) <= 0) {
-                return false;
-            }
-            previousLine = line;
-            line = reader.readLine();
-        }
-        return true;
     }
 
     default boolean matchesFilename(String name) {

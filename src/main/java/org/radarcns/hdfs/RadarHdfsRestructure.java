@@ -78,7 +78,6 @@ public class RadarHdfsRestructure {
     private FileStoreFactory fileStoreFactory;
     private RecordPathFactory pathFactory;
     private StorageDriver storage;
-    private LongAdder filesClosed;
 
     private RadarHdfsRestructure(Builder builder) {
         conf = new Configuration();
@@ -121,8 +120,6 @@ public class RadarHdfsRestructure {
             logger.error("Processing interrupted");
             Thread.currentThread().interrupt();
         }
-
-        logger.debug("Files closed: {}", filesClosed.sum());
     }
 
     private Map<String, List<Path>> getTopicPaths(FileSystem fs, Path path, OffsetRangeSet seenFiles) {
@@ -183,7 +180,6 @@ public class RadarHdfsRestructure {
 
         processedFileCount = new LongAdder();
         processedRecordsCount = new LongAdder();
-        filesClosed = new LongAdder();
 
         ProgressBar progressBar = new ProgressBar(toProcessRecordsCount, 70);
         progressBar.update(0);
@@ -194,10 +190,11 @@ public class RadarHdfsRestructure {
         // Actually process the files
         topicPaths.forEach((topic, paths) -> executor.submit(() -> {
             try (FileCacheStore cache = fileStoreFactory.newFileCacheStore()) {
+                cache.setBookkeeping(offsetFile, bins);
                 for (Path filePath : paths) {
                     // If JsonMappingException occurs, log the error and continue with other files
                     try {
-                        this.processFile(filePath, topic, cache, offsetFile, bins, progressBar, lastUpdate);
+                        this.processFile(filePath, topic, cache, progressBar, lastUpdate);
                     } catch (JsonMappingException exc) {
                         logger.error("Cannot map values", exc);
                     }
@@ -216,7 +213,7 @@ public class RadarHdfsRestructure {
     }
 
     private void processFile(Path filePath, String topicName, FileCacheStore cache,
-            OffsetRangeFile offsets, Frequency bins, ProgressBar progressBar, AtomicLong lastUpdate) throws IOException {
+            ProgressBar progressBar, AtomicLong lastUpdate) throws IOException {
         logger.debug("Reading {}", filePath);
 
         // Read and parseFilename avro file
@@ -233,13 +230,17 @@ public class RadarHdfsRestructure {
         DataFileReader<GenericRecord> dataFileReader = new DataFileReader<>(input,
                 new GenericDatumReader<>());
 
+        OffsetRange offsets = OffsetRange.parseFilename(filePath.getName());
+
         GenericRecord record = null;
+        int i = 0;
         while (dataFileReader.hasNext()) {
             record = dataFileReader.next(record);
             Timer.getInstance().add("read", System.nanoTime() - timeRead);
 
+            OffsetRange singleOffset = offsets.createSingleOffset(i++);
             // Get the fields
-            this.writeRecord(record, topicName, cache, offsets, bins, filePath.getName(), 0);
+            this.writeRecord(record, topicName, cache, singleOffset, 0);
 
             processedRecordsCount.increment();
             long now = System.nanoTime();
@@ -251,7 +252,7 @@ public class RadarHdfsRestructure {
     }
 
     private void writeRecord(GenericRecord record, String topicName, FileCacheStore cache,
-            OffsetRangeFile offsets, Frequency bins, String filename, int suffix) throws IOException {
+            OffsetRange offset, int suffix) throws IOException {
         GenericRecord keyField = (GenericRecord) record.get("key");
         GenericRecord valueField = (GenericRecord) record.get("value");
 
@@ -262,22 +263,16 @@ public class RadarHdfsRestructure {
 
         RecordPathFactory.RecordOrganization metadata = pathFactory.getRecordOrganization(topicName, record, suffix);
 
+        String timeBin = getPathFactory().getTimeBin(metadata.getTime());
+        Frequency.Bin bin = new Frequency.Bin(topicName, metadata.getCategory(), timeBin);
+
         // Write data
-        FileCacheStore.WriteResponse response = cache.writeRecord(metadata.getPath(), record, () -> {
-            // Count data (binned and total)
-            String timeBin = getPathFactory().getTimeBin(metadata.getTime());
-            bins.increment(new Frequency.Bin(topicName, metadata.getCategory(), timeBin));
-            offsets.add(OffsetRange.parseFilename(filename));
-        }, () -> {
-            offsets.triggerWrite();
-            bins.triggerWrite();
-            filesClosed.increment();
-        });
+        FileCacheStore.WriteResponse response = cache.writeRecord(metadata.getPath(), record, offset, bin);
 
         if (!response.isSuccessful()) {
             // Write was unsuccessful due to different number of columns,
             // try again with new file name
-            writeRecord(record, topicName, cache, offsets, bins, filename, ++suffix);
+            writeRecord(record, topicName, cache, offset, ++suffix);
         } else {
             // Write was successful, finalize the write
             java.nio.file.Path schemaPath = metadata.getPath().resolveSibling(SCHEMA_OUTPUT_FILE_NAME);

@@ -193,8 +193,8 @@ public class CsvAvroConverterTest {
         try (BufferedWriter writer = Files.newBufferedWriter(path)) {
             writeTestNumbers(writer);
         }
-        CsvAvroConverter.getFactory().sortUnique(new LocalStorageDriver(), path, new IdentityCompression());
-        assertEquals(Arrays.asList("a,b", "1,2", "1,3", "3,4", "a,a"), Files.readAllLines(path));
+        CsvAvroConverter.getFactory().sortUnique(path, path, new IdentityCompression());
+        assertEquals(Arrays.asList("a,b", "1,2", "3,4", "1,3", "a,a"), Files.readAllLines(path));
     }
 
 
@@ -206,15 +206,15 @@ public class CsvAvroConverterTest {
              Writer writer = new OutputStreamWriter(gzipOut)) {
             writeTestNumbers(writer);
         }
-        CsvAvroConverter.getFactory().sortUnique(new LocalStorageDriver(), path, new GzipCompression());
+        CsvAvroConverter.getFactory().sortUnique(path, path, new GzipCompression());
         try (InputStream in = Files.newInputStream(path);
                 GZIPInputStream gzipIn = new GZIPInputStream(in);
                 Reader inReader = new InputStreamReader(gzipIn);
                 BufferedReader reader = new BufferedReader(inReader)) {
             assertEquals("a,b", reader.readLine());
             assertEquals("1,2", reader.readLine());
-            assertEquals("1,3", reader.readLine());
             assertEquals("3,4", reader.readLine());
+            assertEquals("1,3", reader.readLine());
             assertEquals("a,a", reader.readLine());
             assertNull(reader.readLine());
         }

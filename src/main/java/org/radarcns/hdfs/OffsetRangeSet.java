@@ -81,6 +81,10 @@ public class OffsetRangeSet {
         }
     }
 
+    public void addAll(OffsetRangeSet set) {
+        set.ranges().forEach(this::add);
+    }
+
     /** Whether this range set completely contains the given range. */
     public boolean contains(OffsetRange range) {
         SynchronizedSortedSet<OffsetRange> syncSet = ranges.get(key(range.getTopic(), range.getPartition()));

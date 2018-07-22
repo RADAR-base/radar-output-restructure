@@ -97,6 +97,10 @@ public final class OffsetRangeFile extends PostponedWriter {
         offsets.add(range);
     }
 
+    public void addAll(OffsetRangeSet rangeSet) {
+        offsets.addAll(rangeSet);
+    }
+
     protected void doWrite() {
         BufferedOutputStream out;
         CsvGenerator generator;

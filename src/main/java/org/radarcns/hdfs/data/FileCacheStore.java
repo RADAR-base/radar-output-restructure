@@ -17,6 +17,9 @@
 package org.radarcns.hdfs.data;
 
 import org.apache.avro.generic.GenericRecord;
+import org.radarcns.hdfs.Frequency;
+import org.radarcns.hdfs.OffsetRange;
+import org.radarcns.hdfs.OffsetRangeFile;
 import org.radarcns.hdfs.util.ThrowingConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +53,8 @@ public class FileCacheStore implements Flushable, Closeable {
     private RecordConverterFactory converterFactory;
     private final int maxFiles;
     private final Map<Path, FileCache> caches;
+    private OffsetRangeFile offsets;
+    private Frequency bins;
 
     public FileCacheStore(StorageDriver storageDriver, RecordConverterFactory converterFactory, int maxFiles, Compression compression, Path tmpDir, boolean deduplicate) throws IOException {
         this.storageDriver = storageDriver;
@@ -62,6 +67,11 @@ public class FileCacheStore implements Flushable, Closeable {
         Files.createDirectories(this.tmpDir);
     }
 
+    public void setBookkeeping(OffsetRangeFile offsets, Frequency bins) {
+        this.offsets = offsets;
+        this.bins = bins;
+    }
+
     /**
      * Append a record to given file. If the file handle and writer are already open in this cache,
      * those will be used. Otherwise, the file will be opened and the file handle cached.
@@ -71,8 +81,7 @@ public class FileCacheStore implements Flushable, Closeable {
      * @return Integer value according to one of the response codes.
      * @throws IOException when failing to open a file or writing to it.
      */
-    public WriteResponse writeRecord(Path path, GenericRecord record, CacheCloseListener callback,
-            CacheFinalizeListener finalizeListener) throws IOException {
+    public WriteResponse writeRecord(Path path, GenericRecord record, OffsetRange range, Frequency.Bin bin) throws IOException {
         FileCache cache = caches.get(path);
         boolean hasCache = cache != null;
         if (!hasCache) {
@@ -82,7 +91,8 @@ public class FileCacheStore implements Flushable, Closeable {
             Files.createDirectories(dir);
 
             try {
-                cache = new FileCache(storageDriver, converterFactory, path, record, compression, tmpDir);
+                cache = new FileCache(storageDriver, converterFactory, path, record, compression,
+                        tmpDir, deduplicate, offsets, bins);
             } catch (IOException ex) {
                 logger.error("Could not open cache for {}", path, ex);
                 return WriteResponse.NO_CACHE_AND_NO_WRITE;
@@ -91,9 +101,7 @@ public class FileCacheStore implements Flushable, Closeable {
         }
 
         try {
-            if (cache.writeRecord(record)) {
-                cache.addOnCacheCloseListener(callback);
-                cache.setCacheFinalizeListener(finalizeListener);
+            if (cache.writeRecord(range, bin, record)) {
                 return hasCache ? WriteResponse.CACHE_AND_WRITE : WriteResponse.NO_CACHE_AND_WRITE;
             } else {
                 // The file path was not in cache but the file exists and this write is
@@ -120,9 +128,6 @@ public class FileCacheStore implements Flushable, Closeable {
                 FileCache rmCache = cacheList.get(i);
                 caches.remove(rmCache.getPath());
                 rmCache.close();
-                if (deduplicate) {
-                    converterFactory.sortUnique(storageDriver, rmCache.getPath(), compression);
-                }
             }
         }
     }
@@ -135,12 +140,7 @@ public class FileCacheStore implements Flushable, Closeable {
     @Override
     public void close() throws IOException {
         try {
-            allCaches(c -> {
-                c.close();
-                if (deduplicate) {
-                    converterFactory.sortUnique(storageDriver, c.getPath(), compression);
-                }
-            });
+            allCaches(FileCache::close);
             if (tmpDir != null) {
                 Files.walk(tmpDir)
                         .sorted(Comparator.reverseOrder())
