@@ -56,13 +56,11 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
     private final Path path;
     private final boolean deduplicate;
     private final Path tmpPath;
-    private final List<CacheCloseListener> cacheCloseListeners;
     private final Compression compression;
     private final RecordConverterFactory converterFactory;
     private final OffsetRangeSet offsets;
     private final Frequency binFile;
     private final OffsetRangeFile offsetFile;
-    private CacheFinalizeListener cacheFinalizeListener;
     private long lastUse;
     private final AtomicBoolean hasError;
     private Map<Frequency.Bin, Long> bins;
@@ -73,7 +71,6 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
      * @param path path to cache.
      * @param record example record to create converter from, this is not written to path.
      * @param compression file compression to use
-     * @param deduplicate
      * @throws IOException if the file and/or temporary files cannot be correctly read or written to.
      */
     public FileCache(StorageDriver driver, RecordConverterFactory converterFactory, Path path,
@@ -87,7 +84,6 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
         boolean fileIsNew = !storageDriver.exists(path) || storageDriver.size(path) == 0;
         this.tmpPath = Files.createTempFile(tmpDir, path.getFileName().toString(),
                 ".tmp" + compression.getExtension());
-        this.cacheCloseListeners = new ArrayList<>();
         this.compression = compression;
         this.converterFactory = converterFactory;
         this.offsetFile = offsetFile;
@@ -225,13 +221,5 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
             }
             return false;
         }
-    }
-
-    public void addOnCacheCloseListener(CacheCloseListener callback) {
-        cacheCloseListeners.add(callback);
-    }
-
-    public void setCacheFinalizeListener(CacheFinalizeListener cacheFinalizeListener) {
-        this.cacheFinalizeListener = cacheFinalizeListener;
     }
 }
