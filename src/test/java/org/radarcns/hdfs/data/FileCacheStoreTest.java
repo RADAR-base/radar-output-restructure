@@ -23,9 +23,10 @@ import org.apache.avro.generic.GenericRecordBuilder;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-import org.radarcns.hdfs.Frequency;
-import org.radarcns.hdfs.OffsetRange;
-import org.radarcns.hdfs.OffsetRangeFile;
+import org.radarcns.hdfs.accounting.Bin;
+import org.radarcns.hdfs.accounting.BinFile;
+import org.radarcns.hdfs.accounting.OffsetRange;
+import org.radarcns.hdfs.accounting.OffsetRangeFile;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -50,7 +51,7 @@ public class FileCacheStoreTest {
 
         StorageDriver storage = new LocalStorageDriver();
         OffsetRangeFile offsets = OffsetRangeFile.read(storage, folder.newFile().toPath());
-        Frequency bins = Frequency.read(storage, folder.newFile().toPath());
+        BinFile bins = BinFile.read(storage, folder.newFile().toPath());
 
         Files.delete(f1);
         Files.delete(d4);
@@ -69,10 +70,10 @@ public class FileCacheStoreTest {
 
         OffsetRange offsetRange0 = new OffsetRange("t", 0, 0, 0);
         OffsetRange offsetRange1 = new OffsetRange("t", 1, 0, 8);
-        Frequency.Bin bin = new Frequency.Bin("t", "c", "00");
+        Bin bin = new Bin("t", "c", "00");
 
         try (FileCacheStore cache = new FileCacheStore(new LocalStorageDriver(), csvFactory, 2, new IdentityCompression(), tmpDir, false)) {
-            cache.setBookkeeping(offsets, bins);
+            cache.setAccountant(offsets, bins);
             int i0 = 0;
             int i1 = 0;
 

@@ -25,6 +25,11 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.radarcns.hdfs.accounting.Accountant;
+import org.radarcns.hdfs.accounting.Bin;
+import org.radarcns.hdfs.accounting.OffsetRange;
+import org.radarcns.hdfs.accounting.OffsetRangeSet;
+import org.radarcns.hdfs.accounting.Transaction;
 import org.radarcns.hdfs.data.FileCacheStore;
 import org.radarcns.hdfs.data.StorageDriver;
 import org.radarcns.hdfs.util.ProgressBar;
@@ -40,7 +45,6 @@ import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
@@ -57,8 +61,6 @@ import static org.radarcns.hdfs.util.ProgressBar.formatTime;
 public class RadarHdfsRestructure {
     private static final Logger logger = LoggerFactory.getLogger(RadarHdfsRestructure.class);
 
-    private static final java.nio.file.Path OFFSETS_FILE_NAME = Paths.get("offsets.csv");
-    private static final java.nio.file.Path BINS_FILE_NAME = Paths.get("bins.csv");
     private static final java.nio.file.Path SCHEMA_OUTPUT_FILE_NAME = Paths.get("schema.json");
     private static final SimpleDateFormat FILE_DATE_FORMAT = new SimpleDateFormat("yyyyMMdd_HH");
 
@@ -67,28 +69,21 @@ public class RadarHdfsRestructure {
     }
 
     private final int numThreads;
-
-    private final java.nio.file.Path offsetsPath;
-
     private final Configuration conf;
-    private final java.nio.file.Path outputPath;
+    private final FileStoreFactory fileStoreFactory;
+    private final RecordPathFactory pathFactory;
+    private final StorageDriver storage;
 
     private LongAdder processedFileCount;
     private LongAdder processedRecordsCount;
-    private FileStoreFactory fileStoreFactory;
-    private RecordPathFactory pathFactory;
-    private StorageDriver storage;
 
-    private RadarHdfsRestructure(Builder builder) {
-        conf = new Configuration();
-        conf.set("fs.defaultFS", "hdfs://" + builder.hdfsUri);
-        outputPath = Paths.get(builder.root.replaceAll("/$", ""));
-        offsetsPath = outputPath.resolve(OFFSETS_FILE_NAME);
-        this.numThreads = builder.numThreads;
-
-        for (Map.Entry<String, String> hdfsConf : builder.hdfsConf.entrySet()) {
-            conf.set(hdfsConf.getKey(), hdfsConf.getValue());
-        }
+    public RadarHdfsRestructure(FileStoreFactory factory) {
+        conf = factory.getHdfsSettings().getConfiguration();
+        conf.set("fs.defaultFS", "hdfs://" + factory.getHdfsSettings().getHdfsName());
+        this.numThreads = factory.getSettings().getNumThreads();
+        this.fileStoreFactory = factory;
+        this.pathFactory = factory.getPathFactory();
+        this.storage = factory.getStorageDriver();
     }
 
     public long getProcessedFileCount() {
@@ -104,18 +99,16 @@ public class RadarHdfsRestructure {
         Path path = new Path(directoryName);
         FileSystem fs = path.getFileSystem(conf);
 
-        try (OffsetRangeFile offsetFile = OffsetRangeFile.read(storage, offsetsPath);
-             Frequency bins = Frequency.read(storage, outputPath.resolve(BINS_FILE_NAME))) {
-
+        try (Accountant accountant = new Accountant(fileStoreFactory)) {
             logger.info("Retrieving file list from {}", path);
 
             Instant timeStart = Instant.now();
             // Get filenames to process
-            Map<String, List<Path>> topicPaths = getTopicPaths(fs, path, offsetFile.getOffsets());
+            Map<String, List<Path>> topicPaths = getTopicPaths(fs, path, accountant.getOffsets());
             logger.info("Time retrieving file list: {}",
                     formatTime(Duration.between(timeStart, Instant.now())));
 
-            processPaths(topicPaths, offsetFile, bins);
+            processPaths(topicPaths, accountant);
         } catch (InterruptedException e) {
             logger.error("Processing interrupted");
             Thread.currentThread().interrupt();
@@ -164,7 +157,7 @@ public class RadarHdfsRestructure {
                 });
     }
 
-    private void processPaths(Map<String, List<Path>> topicPaths, OffsetRangeFile offsetFile, Frequency bins) throws InterruptedException {
+    private void processPaths(Map<String, List<Path>> topicPaths, Accountant accountant) throws InterruptedException {
         long toProcessRecordsCount = topicPaths.values().parallelStream()
                 .flatMap(List::stream)
                 .map(p -> OffsetRange.parseFilename(p.getName()))
@@ -185,12 +178,11 @@ public class RadarHdfsRestructure {
         progressBar.update(0);
         AtomicLong lastUpdate = new AtomicLong(0L);
 
-        ExecutorService executor = Executors.newWorkStealingPool(getPathFactory().isTopicPartitioned() ? this.numThreads : 1);
+        ExecutorService executor = Executors.newWorkStealingPool(pathFactory.isTopicPartitioned() ? this.numThreads : 1);
 
         // Actually process the files
         topicPaths.forEach((topic, paths) -> executor.submit(() -> {
-            try (FileCacheStore cache = fileStoreFactory.newFileCacheStore()) {
-                cache.setBookkeeping(offsetFile, bins);
+            try (FileCacheStore cache = fileStoreFactory.newFileCacheStore(accountant)) {
                 for (Path filePath : paths) {
                     // If JsonMappingException occurs, log the error and continue with other files
                     try {
@@ -200,8 +192,7 @@ public class RadarHdfsRestructure {
                     }
                     processedFileCount.increment();
                 }
-                bins.flush();
-                offsetFile.flush();
+                accountant.flush();
             } catch (IOException ex) {
                 logger.error("Failed to process file", ex);
             }
@@ -253,21 +244,14 @@ public class RadarHdfsRestructure {
 
     private void writeRecord(GenericRecord record, String topicName, FileCacheStore cache,
             OffsetRange offset, int suffix) throws IOException {
-        GenericRecord keyField = (GenericRecord) record.get("key");
-        GenericRecord valueField = (GenericRecord) record.get("value");
-
-        if (keyField == null || valueField == null) {
-            logger.error("Failed to process {}", record);
-            throw new IOException("Failed to process " + record + "; no key or value");
-        }
-
         RecordPathFactory.RecordOrganization metadata = pathFactory.getRecordOrganization(topicName, record, suffix);
 
-        String timeBin = getPathFactory().getTimeBin(metadata.getTime());
-        Frequency.Bin bin = new Frequency.Bin(topicName, metadata.getCategory(), timeBin);
+        String timeBin = pathFactory.getTimeBin(metadata.getTime());
+        Bin bin = new Bin(topicName, metadata.getCategory(), timeBin);
 
         // Write data
-        FileCacheStore.WriteResponse response = cache.writeRecord(metadata.getPath(), record, offset, bin);
+        FileCacheStore.WriteResponse response = cache.writeRecord(
+                metadata.getPath(), record, new Transaction(offset, bin));
 
         if (!response.isSuccessful()) {
             // Write was unsuccessful due to different number of columns,
@@ -282,73 +266,6 @@ public class RadarHdfsRestructure {
                     writer.write(record.getSchema().toString(true));
                 }
             }
-        }
-    }
-
-    public synchronized void setFileStoreFactory(FileStoreFactory factory) {
-        this.fileStoreFactory = factory;
-        this.pathFactory = factory.getPathFactory();
-        this.storage = factory.getStorageDriver();
-    }
-
-    private synchronized RecordPathFactory getPathFactory() {
-        return pathFactory;
-    }
-
-    @SuppressWarnings({"UnusedReturnValue", "WeakerAccess"})
-    public static class Builder {
-        public String root;
-        private String hdfsUri;
-        private final Map<String, String> hdfsConf = new HashMap<>();
-        private int numThreads = 1;
-
-        public Builder(final String uri, String root) {
-            this.hdfsUri = uri;
-            this.root = root;
-        }
-
-        public Builder numThreads(int num) {
-            if (num < 1) {
-                throw new IllegalArgumentException("Number of threads must be at least 1");
-            }
-            this.numThreads = num;
-            return this;
-        }
-
-        public Builder hdfsHighAvailability(String hdfsHa, String hdfsNameNode1, String hdfsNameNode2) {
-            // Configure high availability
-            if (hdfsHa == null && hdfsNameNode1 == null && hdfsNameNode2 == null) {
-                return this;
-            }
-            if (hdfsHa == null || hdfsNameNode1 == null || hdfsNameNode2 == null) {
-                throw new IllegalArgumentException("HDFS High availability name node configuration is incomplete.");
-            }
-
-            String[] haNames = hdfsHa.split(",");
-            if (haNames.length != 2) {
-                logger.error("Cannot process HDFS High Availability mode for other than two name nodes.");
-                System.exit(1);
-            }
-
-            putHdfsConfig("dfs.nameservices", hdfsUri)
-                    .putHdfsConfig("dfs.ha.namenodes." + hdfsUri, hdfsHa)
-                    .putHdfsConfig("dfs.namenode.rpc-address." + hdfsUri + "." + haNames[0],
-                            hdfsNameNode1 + ":8020")
-                    .putHdfsConfig("dfs.namenode.rpc-address." + hdfsUri + "." + haNames[1],
-                            hdfsNameNode2 + ":8020")
-                    .putHdfsConfig("dfs.client.failover.proxy.provider." + hdfsUri,
-                            "org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider");
-
-            return this;
-        }
-
-        public Builder putHdfsConfig(String name, String value) {
-            hdfsConf.put(name, value);
-            return this;
-        }
-
-        public RadarHdfsRestructure build() {
-            return new RadarHdfsRestructure(this);
         }
     }
 }

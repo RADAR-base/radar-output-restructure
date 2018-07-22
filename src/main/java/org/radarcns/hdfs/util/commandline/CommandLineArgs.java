@@ -27,7 +27,7 @@ public class CommandLineArgs {
     public boolean deduplicate = false;
 
     @Parameter(names = { "-n", "--nameservice"}, description = "The HDFS name services to connect to. Eg - '<HOST>' for single configurations or <CLUSTER_ID> for high availability web services.", required = true, validateWith = { PathValidator.class })
-    public String hdfsUri;
+    public String hdfsName;
 
     @Parameter(names = { "--namenode-1" }, description = "High availability HDFS first name node hostname.", validateWith = { PathValidator.class })
     public String hdfsUri1;

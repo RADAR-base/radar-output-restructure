@@ -2,6 +2,9 @@ package org.radarcns.hdfs;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.ParameterException;
+import org.radarcns.hdfs.accounting.Accountant;
+import org.radarcns.hdfs.config.HdfsSettings;
+import org.radarcns.hdfs.config.RestructureSettings;
 import org.radarcns.hdfs.data.Compression;
 import org.radarcns.hdfs.data.CompressionFactory;
 import org.radarcns.hdfs.data.FileCacheStore;
@@ -15,9 +18,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
@@ -37,31 +37,26 @@ public class Application implements FileStoreFactory {
     private final StorageDriver storageDriver;
     private final RecordConverterFactory converterFactory;
     private final Compression compression;
-    private final boolean doDeduplicate;
-    private final RadarHdfsRestructure hdfsReader;
+    private final HdfsSettings hdfsSettings;
     private final RecordPathFactory pathFactory;
     private final List<String> inputPaths;
-    private final int cacheSize;
-    private final Path tmpDir;
+    private final RestructureSettings settings;
 
     private Application(Builder builder) {
         this.storageDriver = builder.storageDriver;
-        this.doDeduplicate = builder.doDeduplicate;
+        this.settings = builder.settings;
 
-        converterFactory = builder.formatFactory.get(builder.format);
-        compression = builder.compressionFactory.get(builder.compression);
-        cacheSize = builder.cacheSize;
+        converterFactory = builder.formatFactory.get(settings.getFormat());
+        compression = builder.compressionFactory.get(settings.getCompression());
 
         pathFactory = builder.pathFactory;
         String extension = converterFactory.getExtension() + compression.getExtension();
         this.pathFactory.setExtension(extension);
-        this.pathFactory.setRoot(Paths.get(builder.root.replaceAll("/$", "")));
-        this.tmpDir = builder.tmpDir;
+        this.pathFactory.setRoot(settings.getOutputPath());
 
         this.inputPaths = builder.inputPaths;
 
-        hdfsReader = builder.hdfsReader;
-        hdfsReader.setFileStoreFactory(this);
+        hdfsSettings = builder.hdfsSettings;
     }
 
     public static void main(String [] args) {
@@ -86,29 +81,30 @@ public class Application implements FileStoreFactory {
         logger.info("Starting...");
 
 
-        RadarHdfsRestructure restr;
+        RestructureSettings settings = new RestructureSettings.Builder(commandLineArgs.outputDirectory)
+                .compression(commandLineArgs.compression)
+                .cacheSize(commandLineArgs.cacheSize)
+                .format(commandLineArgs.format)
+                .doDeduplicate(commandLineArgs.deduplicate)
+                .tempDir(commandLineArgs.tmpDir)
+                .numThreads(commandLineArgs.numThreads)
+                .build();
+
+        HdfsSettings hdfsSettings = new HdfsSettings.Builder(commandLineArgs.hdfsName)
+                .hdfsHighAvailability(commandLineArgs.hdfsHa,
+                        commandLineArgs.hdfsUri1, commandLineArgs.hdfsUri2)
+                .build();
 
         Application application;
 
         try {
-            restr = new RadarHdfsRestructure.Builder(commandLineArgs.hdfsUri, commandLineArgs.outputDirectory)
-                    .hdfsHighAvailability(commandLineArgs.hdfsHa,
-                            commandLineArgs.hdfsUri1, commandLineArgs.hdfsUri2)
-                    .numThreads(commandLineArgs.numThreads)
-                    .build();
-
-            application = new Builder(restr, commandLineArgs.outputDirectory)
-                    .compression(commandLineArgs.compression)
-                    .doDeduplicate(commandLineArgs.deduplicate)
-                    .format(commandLineArgs.format)
+            application = new Builder(settings, hdfsSettings)
                     .pathFactory(commandLineArgs.pathFactory)
                     .compressionFactory(commandLineArgs.compressionFactory)
                     .formatFactory(commandLineArgs.formatFactory)
                     .storageDriver(commandLineArgs.storageDriver)
                     .properties(commandLineArgs.properties)
                     .inputPaths(commandLineArgs.inputPaths)
-                    .cacheSize(commandLineArgs.cacheSize)
-                    .tmpDir(commandLineArgs.tmpDir)
                     .build();
         } catch (IllegalArgumentException ex) {
             logger.error("HDFS High availability name node configuration is incomplete."
@@ -128,9 +124,9 @@ public class Application implements FileStoreFactory {
         application.start();
     }
 
-    public FileCacheStore newFileCacheStore() throws IOException {
-        return new FileCacheStore(storageDriver, converterFactory, cacheSize, compression, tmpDir,
-                doDeduplicate);
+    @Override
+    public FileCacheStore newFileCacheStore(Accountant accountant) throws IOException {
+        return new FileCacheStore(this, accountant);
     }
 
     @Override
@@ -143,9 +139,29 @@ public class Application implements FileStoreFactory {
         return storageDriver;
     }
 
+    @Override
+    public Compression getCompression() {
+        return compression;
+    }
+
+    @Override
+    public RecordConverterFactory getRecordConverter() {
+        return converterFactory;
+    }
+
+    @Override
+    public RestructureSettings getSettings() {
+        return settings;
+    }
+
+    @Override
+    public HdfsSettings getHdfsSettings() {
+        return hdfsSettings;
+    }
+
     public void start() {
         Instant timeStart = Instant.now();
-
+        RadarHdfsRestructure hdfsReader = new RadarHdfsRestructure(this);
         try {
             for (String input : inputPaths) {
                 logger.info("In:  {}", input);
@@ -163,38 +179,18 @@ public class Application implements FileStoreFactory {
     }
 
     public static class Builder {
-        private final String root;
+        private final RestructureSettings settings;
+        private final HdfsSettings hdfsSettings;
         private StorageDriver storageDriver;
-        private boolean doDeduplicate;
-        private String compression;
-        private String format;
         private RecordPathFactory pathFactory;
         private CompressionFactory compressionFactory;
         private FormatFactory formatFactory;
         private Map<String, String> properties = new HashMap<>();
-        private RadarHdfsRestructure hdfsReader;
         private List<String> inputPaths;
-        private int cacheSize = CACHE_SIZE_DEFAULT;
-        private Path tmpDir;
 
-        public Builder(RadarHdfsRestructure restr, String root) {
-            this.hdfsReader = restr;
-            this.root = root;
-        }
-
-        public Builder compression(final String compression) {
-            this.compression = compression;
-            return this;
-        }
-
-        public Builder doDeduplicate(final boolean dedup) {
-            this.doDeduplicate = dedup;
-            return this;
-        }
-
-        public Builder format(final String format) {
-            this.format = format;
-            return this;
+        public Builder(RestructureSettings settings, HdfsSettings hdfsSettings) {
+            this.settings = settings;
+            this.hdfsSettings = hdfsSettings;
         }
 
         public Builder storageDriver(String storageDriver)
@@ -226,20 +222,7 @@ public class Application implements FileStoreFactory {
             return this;
         }
 
-        public Builder cacheSize(Integer size) {
-            if (size == null) {
-                return this;
-            }
-            if (size < 1) {
-                throw new IllegalArgumentException("Cannot use cache size smaller than 1");
-            }
-            cacheSize = size;
-            return this;
-        }
-
         public Application build() throws IOException {
-            compression = nonNullOrDefault(compression, () -> "identity");
-            format = nonNullOrDefault(format, () -> "csv");
             pathFactory = nonNullOrDefault(pathFactory, ObservationKeyPathFactory::new);
             pathFactory.init(properties);
             storageDriver = nonNullOrDefault(storageDriver, LocalStorageDriver::new);
@@ -248,24 +231,12 @@ public class Application implements FileStoreFactory {
             compressionFactory.init(properties);
             formatFactory = nonNullOrDefault(formatFactory, FormatFactory::new);
             formatFactory.init(properties);
-            tmpDir = nonNullOrDefault(tmpDir, () -> {
-                try {
-                    return Files.createTempDirectory("radar-hdfs-restructure");
-                } catch (IOException ex) {
-                    throw new IllegalStateException("Cannot create temporary directory");
-                }
-            });
 
             return new Application(this);
         }
 
         public Builder inputPaths(List<String> inputPaths) {
             this.inputPaths = inputPaths;
-            return this;
-        }
-
-        public Builder tmpDir(String tmpDir) {
-            this.tmpDir = Paths.get(tmpDir);
             return this;
         }
     }

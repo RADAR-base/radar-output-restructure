@@ -17,9 +17,10 @@
 package org.radarcns.hdfs.data;
 
 import org.apache.avro.generic.GenericRecord;
-import org.radarcns.hdfs.Frequency;
-import org.radarcns.hdfs.OffsetRange;
-import org.radarcns.hdfs.OffsetRangeFile;
+import org.radarcns.hdfs.FileStoreFactory;
+import org.radarcns.hdfs.accounting.Accountant;
+import org.radarcns.hdfs.accounting.Transaction;
+import org.radarcns.hdfs.config.RestructureSettings;
 import org.radarcns.hdfs.util.ThrowingConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,31 +46,21 @@ import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
 public class FileCacheStore implements Flushable, Closeable {
     private static final Logger logger = LoggerFactory.getLogger(FileCacheStore.class);
 
-    private final boolean deduplicate;
     private final Path tmpDir;
-    private final Compression compression;
 
-    private final StorageDriver storageDriver;
-    private RecordConverterFactory converterFactory;
-    private final int maxFiles;
     private final Map<Path, FileCache> caches;
-    private OffsetRangeFile offsets;
-    private Frequency bins;
+    private final FileStoreFactory factory;
+    private final int maxCacheSize;
+    private final Accountant accountant;
 
-    public FileCacheStore(StorageDriver storageDriver, RecordConverterFactory converterFactory, int maxFiles, Compression compression, Path tmpDir, boolean deduplicate) throws IOException {
-        this.storageDriver = storageDriver;
-        this.converterFactory = converterFactory;
-        this.maxFiles = maxFiles;
-        this.caches = new HashMap<>(maxFiles * 4 / 3 + 1);
-        this.compression = compression;
-        this.deduplicate = deduplicate;
-        this.tmpDir = tmpDir.resolve(UUID.randomUUID().toString());
+    public FileCacheStore(FileStoreFactory factory, Accountant accountant) throws IOException {
+        this.factory = factory;
+        RestructureSettings settings = factory.getSettings();
+        this.maxCacheSize = settings.getCacheSize();
+        this.caches = new HashMap<>(maxCacheSize * 4 / 3 + 1);
+        this.tmpDir = settings.getTempDir().resolve(UUID.randomUUID().toString());
+        this.accountant = accountant;
         Files.createDirectories(this.tmpDir);
-    }
-
-    public void setBookkeeping(OffsetRangeFile offsets, Frequency bins) {
-        this.offsets = offsets;
-        this.bins = bins;
     }
 
     /**
@@ -81,7 +72,7 @@ public class FileCacheStore implements Flushable, Closeable {
      * @return Integer value according to one of the response codes.
      * @throws IOException when failing to open a file or writing to it.
      */
-    public WriteResponse writeRecord(Path path, GenericRecord record, OffsetRange range, Frequency.Bin bin) throws IOException {
+    public WriteResponse writeRecord(Path path, GenericRecord record, Transaction transaction) throws IOException {
         FileCache cache = caches.get(path);
         boolean hasCache = cache != null;
         if (!hasCache) {
@@ -91,8 +82,7 @@ public class FileCacheStore implements Flushable, Closeable {
             Files.createDirectories(dir);
 
             try {
-                cache = new FileCache(storageDriver, converterFactory, path, record, compression,
-                        tmpDir, deduplicate, offsets, bins);
+                cache = new FileCache(factory, path, record, tmpDir, accountant);
             } catch (IOException ex) {
                 logger.error("Could not open cache for {}", path, ex);
                 return WriteResponse.NO_CACHE_AND_NO_WRITE;
@@ -101,7 +91,7 @@ public class FileCacheStore implements Flushable, Closeable {
         }
 
         try {
-            if (cache.writeRecord(range, bin, record)) {
+            if (cache.writeRecord(record, transaction)) {
                 return hasCache ? WriteResponse.CACHE_AND_WRITE : WriteResponse.NO_CACHE_AND_WRITE;
             } else {
                 // The file path was not in cache but the file exists and this write is
@@ -121,7 +111,7 @@ public class FileCacheStore implements Flushable, Closeable {
      * Ensure that a new filecache can be added. Evict files used longest ago from cache if needed.
      */
     private void ensureCapacity() throws IOException {
-        if (caches.size() == maxFiles) {
+        if (caches.size() == maxCacheSize) {
             ArrayList<FileCache> cacheList = new ArrayList<>(caches.values());
             Collections.sort(cacheList);
             for (int i = 0; i < cacheList.size() / 2; i++) {

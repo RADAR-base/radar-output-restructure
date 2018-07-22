@@ -21,6 +21,9 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
+import org.radarcns.hdfs.accounting.OffsetRange;
+import org.radarcns.hdfs.accounting.OffsetRangeFile;
+import org.radarcns.hdfs.accounting.OffsetRangeSet;
 import org.radarcns.hdfs.data.LocalStorageDriver;
 import org.radarcns.hdfs.data.StorageDriver;
 

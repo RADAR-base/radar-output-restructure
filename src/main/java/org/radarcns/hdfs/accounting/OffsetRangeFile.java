@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarcns.hdfs;
+package org.radarcns.hdfs.accounting;
 
 import com.fasterxml.jackson.databind.MappingIterator;
 import com.fasterxml.jackson.databind.ObjectReader;
@@ -106,7 +106,7 @@ public final class OffsetRangeFile extends PostponedWriter {
         CsvGenerator generator;
 
         try {
-            Path tmpPath = Files.createTempFile("offsets", ".csv");
+            Path tmpPath = createTempFile("offsets", ".csv");
             out = new BufferedOutputStream(Files.newOutputStream(tmpPath), 8192);
             generator = CSV_FACTORY.createGenerator(out);
             ObjectWriter writer = CSV_MAPPER.writerFor(OffsetRange.class).with(SCHEMA);

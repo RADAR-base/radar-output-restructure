@@ -14,10 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarcns.hdfs;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+package org.radarcns.hdfs.accounting;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -33,7 +30,6 @@ import java.util.stream.Stream;
 
 /** Encompasses a range of offsets. */
 public class OffsetRangeSet {
-    private static final Logger logger = LoggerFactory.getLogger(OffsetRangeSet.class);
     private final ConcurrentMap<String, SynchronizedSortedSet<OffsetRange>> ranges;
 
     public OffsetRangeSet() {

@@ -24,9 +24,10 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-import org.radarcns.hdfs.Frequency;
-import org.radarcns.hdfs.OffsetRange;
-import org.radarcns.hdfs.OffsetRangeFile;
+import org.radarcns.hdfs.accounting.Bin;
+import org.radarcns.hdfs.accounting.BinFile;
+import org.radarcns.hdfs.accounting.OffsetRange;
+import org.radarcns.hdfs.accounting.OffsetRangeFile;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -53,9 +54,9 @@ public class FileCacheTest {
     private Record exampleRecord;
     private Path tmpDir;
     private boolean deduplicate;
-    private Frequency bins;
+    private BinFile bins;
     private OffsetRangeFile offsets;
-    private Frequency.Bin bin;
+    private Bin bin;
     private OffsetRange offsetRange;
 
     @Before
@@ -71,8 +72,8 @@ public class FileCacheTest {
         this.exampleRecord = new GenericRecordBuilder(schema).set("a", "something").build();
         this.storageDriver = new LocalStorageDriver();
         this.offsets = OffsetRangeFile.read(storageDriver, folder.newFile().toPath());
-        this.bins = Frequency.read(storageDriver, folder.newFile().toPath());
-        this.bin = new Frequency.Bin("t", "c", "00");
+        this.bins = BinFile.read(storageDriver, folder.newFile().toPath());
+        this.bin = new Bin("t", "c", "00");
         this.offsetRange = new OffsetRange("t", 0, 0, 10);
     }
 

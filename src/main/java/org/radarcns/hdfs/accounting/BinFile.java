@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarcns.hdfs;
+package org.radarcns.hdfs.accounting;
 
 import org.radarcns.hdfs.data.StorageDriver;
 import org.radarcns.hdfs.util.PostponedWriter;
@@ -36,14 +36,14 @@ import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 
 
-public class Frequency extends PostponedWriter {
-    private static final Logger logger = LoggerFactory.getLogger(Frequency.class);
+public class BinFile extends PostponedWriter {
+    private static final Logger logger = LoggerFactory.getLogger(BinFile.class);
 
     private final ConcurrentMap<Bin, LongAdder> bins;
     private final Path path;
     private final StorageDriver storage;
 
-    public Frequency(@Nonnull StorageDriver storageDriver, @Nonnull Path path,
+    public BinFile(@Nonnull StorageDriver storageDriver, @Nonnull Path path,
             @Nonnull ConcurrentMap<Bin, LongAdder> initialData) {
         super("bins", 5, TimeUnit.SECONDS);
         Objects.requireNonNull(path);
@@ -53,7 +53,7 @@ public class Frequency extends PostponedWriter {
         this.bins = initialData;
     }
 
-    public static Frequency read(StorageDriver storage, Path path) {
+    public static BinFile read(StorageDriver storage, Path path) {
         ConcurrentMap<Bin, LongAdder> map = new ConcurrentHashMap<>();
         try (BufferedReader input = storage.newBufferedReader(path)){
             // Read in all lines as multikeymap (key, key, key, value)
@@ -76,7 +76,7 @@ public class Frequency extends PostponedWriter {
         } catch (IOException e) {
             logger.warn("Could not read the file with bins. Creating new file when writing.");
         }
-        return new Frequency(storage, path, map);
+        return new BinFile(storage, path, map);
     }
 
     public void increment(Bin bin) {
@@ -100,66 +100,31 @@ public class Frequency extends PostponedWriter {
 
     protected void doWrite() {
         try {
-            Path tmpPath = Files.createTempFile("bins", ".csv");
+            Path tempPath = createTempFile("bins", ".csv");
 
             // Write all bins to csv
-            try (BufferedWriter bw = Files.newBufferedWriter(tmpPath)) {
+            try (BufferedWriter bw = Files.newBufferedWriter(tempPath)) {
                 String header = String.join(",", "topic", "device", "timestamp", "count");
                 bw.write(header);
                 bw.write('\n');
 
                 for (Map.Entry<Bin, LongAdder> entry : bins.entrySet()) {
                     Bin bin = entry.getKey();
-                    bw.write(bin.topic);
+                    bw.write(bin.getTopic());
                     bw.write(',');
-                    bw.write(bin.category);
+                    bw.write(bin.getCategory());
                     bw.write(',');
-                    bw.write(bin.time);
+                    bw.write(bin.getTime());
                     bw.write(',');
                     bw.write(String.valueOf(entry.getValue().sum()));
                     bw.write('\n');
                 }
             }
 
-            storage.store(tmpPath, path);
+            storage.store(tempPath, path);
         } catch (IOException e) {
             logger.error("Failed to write bins", e);
         }
     }
 
-    public static class Bin {
-        private final String topic;
-        private final String category;
-        private final String time;
-
-        public Bin(@Nonnull String topic, @Nonnull String category, @Nonnull String time) {
-            this.topic = topic;
-            this.category = category;
-            this.time = time;
-        }
-
-        @Override
-        public String toString() {
-            return topic + '|' + category + '|' + time;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (o == null || getClass() != o.getClass()) {
-                return false;
-            }
-            Bin bin = (Bin) o;
-            return topic.equals(bin.topic) &&
-                    category.equals(bin.category) &&
-                    time.equals(bin.time);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(topic, category, time);
-        }
-    }
 }

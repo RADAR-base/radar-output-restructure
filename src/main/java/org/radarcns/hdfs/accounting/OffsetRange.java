@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarcns.hdfs;
+package org.radarcns.hdfs.accounting;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;

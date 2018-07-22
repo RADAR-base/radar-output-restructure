@@ -6,6 +6,8 @@ import org.slf4j.LoggerFactory;
 import java.io.Closeable;
 import java.io.Flushable;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -22,6 +24,7 @@ public abstract class PostponedWriter implements Closeable, Flushable {
     private final TimeUnit timeoutUnit;
     private final String name;
     private final AtomicReference<Future<?>> writeFuture;
+    private Path tempDir;
 
     public PostponedWriter(String name, long timeout, TimeUnit timeoutUnit) {
         this.name = name;
@@ -81,5 +84,13 @@ public abstract class PostponedWriter implements Closeable, Flushable {
     @Override
     public void flush() throws IOException {
         doFlush(false);
+    }
+
+    protected Path createTempFile(String prefix, String suffix) throws IOException {
+        return Files.createTempFile(tempDir, prefix, suffix);
+    }
+
+    public void setTempDir(Path tempDir) {
+        this.tempDir = tempDir;
     }
 }

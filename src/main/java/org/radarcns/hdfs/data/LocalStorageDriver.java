@@ -3,9 +3,11 @@ package org.radarcns.hdfs.data;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 import static java.nio.file.StandardOpenOption.APPEND;
 import static java.nio.file.StandardOpenOption.CREATE;
@@ -32,7 +34,11 @@ public class LocalStorageDriver implements StorageDriver {
 
     @Override
     public void move(Path oldPath, Path newPath) throws IOException {
-        Files.move(oldPath, newPath, REPLACE_EXISTING);
+        try {
+            Files.move(oldPath, newPath, REPLACE_EXISTING, ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException ex) {
+            Files.move(oldPath, newPath, REPLACE_EXISTING);
+        }
     }
 
     @Override
