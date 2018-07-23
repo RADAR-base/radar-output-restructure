@@ -107,14 +107,13 @@ public final class OffsetRangeFile extends PostponedWriter {
 
         try {
             Path tmpPath = createTempFile("offsets", ".csv");
-            out = new BufferedOutputStream(Files.newOutputStream(tmpPath), 8192);
+            out = new BufferedOutputStream(Files.newOutputStream(tmpPath));
             generator = CSV_FACTORY.createGenerator(out);
             ObjectWriter writer = CSV_MAPPER.writerFor(OffsetRange.class).with(SCHEMA);
 
             offsets.ranges()
-                    .forEach(tryCatch(r -> writer.writeValue(generator, r), (r, ex) -> {
-                        throw new IllegalStateException("Failed to write value", ex);
-                    }));
+                    .forEach(tryCatch(r -> writer.writeValue(generator, r),
+                            "Failed to write value"));
 
             generator.flush();
             generator.close();

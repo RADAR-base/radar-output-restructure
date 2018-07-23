@@ -1,5 +1,6 @@
 package org.radarcns.hdfs.accounting;
 
+import com.google.common.primitives.UnsignedLong;
 import org.radarcns.hdfs.FileStoreFactory;
 import org.radarcns.hdfs.config.RestructureSettings;
 import org.radarcns.hdfs.data.StorageDriver;
@@ -94,6 +95,10 @@ public class Accountant implements Flushable, Closeable {
         if (exception != null) {
             throw exception;
         }
+    }
+
+    public BinFile getBins() {
+        return binFile;
     }
 
     public static class Ledger {

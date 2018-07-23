@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 
-
+/** Store overview of records written, divided into bins. */
 public class BinFile extends PostponedWriter {
     private static final Logger logger = LoggerFactory.getLogger(BinFile.class);
 
@@ -79,14 +79,12 @@ public class BinFile extends PostponedWriter {
         return new BinFile(storage, path, map);
     }
 
-    public void increment(Bin bin) {
-        add(bin, 1L);
-    }
-
+    /** Add number of instances to given bin. */
     public void add(Bin bin, long value) {
         bins.computeIfAbsent(bin, b -> new LongAdder()).add(value);
     }
 
+    /** Put a map of bins. */
     public void putAll(Map<? extends Bin, ? extends Number> binMap) {
         binMap.forEach((bin, v) -> add(bin, v.longValue()));
     }
@@ -98,6 +96,7 @@ public class BinFile extends PostponedWriter {
                 .collect(Collectors.joining("\n"));
     }
 
+    @Override
     protected void doWrite() {
         try {
             Path tempPath = createTempFile("bins", ".csv");

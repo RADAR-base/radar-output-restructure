@@ -2,6 +2,10 @@ package org.radarcns.hdfs.util.commandline;
 
 import com.beust.jcommander.DynamicParameter;
 import com.beust.jcommander.Parameter;
+import com.beust.jcommander.ParameterException;
+import com.beust.jcommander.converters.BaseConverter;
+import com.beust.jcommander.validators.PositiveInteger;
+import org.radarcns.hdfs.Plugin;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -26,40 +30,40 @@ public class CommandLineArgs {
     @Parameter(names = { "-d", "--deduplicate" }, description = "Boolean to define if to use deduplication or not.")
     public boolean deduplicate = false;
 
-    @Parameter(names = { "-n", "--nameservice"}, description = "The HDFS name services to connect to. Eg - '<HOST>' for single configurations or <CLUSTER_ID> for high availability web services.", required = true, validateWith = { PathValidator.class })
+    @Parameter(names = { "-n", "--nameservice"}, description = "The HDFS name services to connect to. Eg - '<HOST>' for single configurations or <CLUSTER_ID> for high availability web services.", required = true, validateWith = NonEmptyValidator.class)
     public String hdfsName;
 
-    @Parameter(names = { "--namenode-1" }, description = "High availability HDFS first name node hostname.", validateWith = { PathValidator.class })
+    @Parameter(names = { "--namenode-1" }, description = "High availability HDFS first name node hostname.", validateWith = NonEmptyValidator.class)
     public String hdfsUri1;
 
-    @Parameter(names = { "--namenode-2" }, description = "High availability HDFS second name node hostname. Eg - '<HOST>'.", validateWith = { PathValidator.class })
+    @Parameter(names = { "--namenode-2" }, description = "High availability HDFS second name node hostname. Eg - '<HOST>'.", validateWith = NonEmptyValidator.class)
     public String hdfsUri2;
 
-    @Parameter(names = { "--namenode-ha"}, description = "High availability HDFS name node names. Eg - 'nn1,nn2'.", validateWith = { PathValidator.class })
+    @Parameter(names = { "--namenode-ha"}, description = "High availability HDFS name node names. Eg - 'nn1,nn2'.", validateWith = NonEmptyValidator.class)
     public String hdfsHa;
 
-    @Parameter(names = { "-o", "--output-directory"}, description = "The output folder where the files are to be extracted.", required = true, validateWith = PathValidator.class)
+    @Parameter(names = { "-o", "--output-directory"}, description = "The output folder where the files are to be extracted.", required = true, validateWith = NonEmptyValidator.class)
     public String outputDirectory;
 
     @Parameter(names = { "-h", "--help"}, help = true, description = "Display the usage of the program with available options.")
     public boolean help;
 
-    @Parameter(names = { "--path-factory" }, description = "Factory to create path names with")
-    public String pathFactory;
+    @Parameter(names = { "--path-factory" }, description = "Factory to create path names with", converter = InstantiatePluginConverter.class)
+    public Plugin pathFactory;
 
-    @Parameter(names = {"--storage-driver"}, description = "Storage driver to use for storing data")
-    public String storageDriver;
+    @Parameter(names = {"--storage-driver"}, description = "Storage driver to use for storing data", converter = InstantiatePluginConverter.class)
+    public Plugin storageDriver;
 
-    @Parameter(names = {"--format-factory"}, description = "Format factory class to use for storing data")
-    public String formatFactory;
+    @Parameter(names = {"--format-factory"}, description = "Format factory class to use for storing data", converter = InstantiatePluginConverter.class)
+    public Plugin formatFactory;
 
-    @Parameter(names = {"--compression-factory"}, description = "Compression factory class to use for compressing/decompressing data")
-    public String compressionFactory;
+    @Parameter(names = {"--compression-factory"}, description = "Compression factory class to use for compressing/decompressing data", converter = InstantiatePluginConverter.class)
+    public Plugin compressionFactory;
 
     @DynamicParameter(names = {"-p", "--property"}, description = "Properties used by custom plugins.")
     public Map<String, String> properties = new HashMap<>();
 
-    @Parameter(names = {"-t", "--num-threads"}, description = "Number of threads to use for processing")
+    @Parameter(names = {"-t", "--num-threads"}, description = "Number of threads to use for processing", validateWith = PositiveInteger.class)
     public int numThreads = 1;
 
     @Parameter(names = {"--timer"}, description = "Enable timers")
@@ -68,19 +72,26 @@ public class CommandLineArgs {
     @Parameter(names = {"--tmp-dir"}, description = "Temporary staging directory")
     public String tmpDir = null;
 
-    @Parameter(names = {"-s", "--cache-size"}, description = "Number of files to keep in cache in a single thread.")
+    @Parameter(names = {"-s", "--cache-size"}, description = "Number of files to keep in cache in a single thread.", validateWith = PositiveInteger.class)
     public int cacheSize = CACHE_SIZE_DEFAULT;
 
     public static <T> T nonNullOrDefault(T value, Supplier<T> defaultValue) {
         return value != null ? value : defaultValue.get();
     }
 
-    public static <T> T instantiate(String clsName, Class<T> superClass)
-            throws ReflectiveOperationException, ClassCastException {
-        if (clsName == null) {
-            return null;
+    public static class InstantiatePluginConverter extends BaseConverter<Plugin> {
+        public InstantiatePluginConverter(String optionName) {
+            super(optionName);
         }
-        Class cls = Class.forName(clsName);
-        return superClass.cast(cls.newInstance());
+
+        @Override
+        public Plugin convert(String value) {
+            try {
+                Class cls = Class.forName(value);
+                return (Plugin)cls.newInstance();
+            } catch (ReflectiveOperationException | ClassCastException ex) {
+                throw new ParameterException("Cannot convert " + value + " to Plugin instance", ex);
+            }
+        }
     }
 }

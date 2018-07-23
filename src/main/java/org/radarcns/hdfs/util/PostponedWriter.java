@@ -16,6 +16,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * File writer where data is written in a separate thread with a timeout.
+ */
 public abstract class PostponedWriter implements Closeable, Flushable {
     private static final Logger logger = LoggerFactory.getLogger(PostponedWriter.class);
 
@@ -26,6 +29,12 @@ public abstract class PostponedWriter implements Closeable, Flushable {
     private final AtomicReference<Future<?>> writeFuture;
     private Path tempDir;
 
+    /**
+     * Constructor with timeout.
+     * @param name thread name.
+     * @param timeout maximum time between triggering a write and actually writing the file.
+     * @param timeoutUnit timeout unit.
+     */
     public PostponedWriter(String name, long timeout, TimeUnit timeoutUnit) {
         this.name = name;
         executor = Executors.newScheduledThreadPool(1, r -> new Thread(r, name));
@@ -34,6 +43,10 @@ public abstract class PostponedWriter implements Closeable, Flushable {
         writeFuture = new AtomicReference<>(null);
     }
 
+    /**
+     * Trigger a write to occur within set timeout. If a write was already triggered earlier but has
+     * not yet taken place, the write will occur earlier.
+     */
     public void triggerWrite() {
         Future<?> localWriteFuture = writeFuture.get();
         if (localWriteFuture == null) {
@@ -44,11 +57,13 @@ public abstract class PostponedWriter implements Closeable, Flushable {
         }
     }
 
+    /** Start the write in the writer thread. */
     protected void startWrite() {
         writeFuture.set(null);
         doWrite();
     }
 
+    /** Perform the write. */
     protected abstract void doWrite();
 
     @Override
@@ -86,10 +101,16 @@ public abstract class PostponedWriter implements Closeable, Flushable {
         doFlush(false);
     }
 
+    /** Create temporary file to write to. */
     protected Path createTempFile(String prefix, String suffix) throws IOException {
-        return Files.createTempFile(tempDir, prefix, suffix);
+        if (tempDir == null) {
+            return Files.createTempFile(prefix, suffix);
+        } else {
+            return Files.createTempFile(tempDir, prefix, suffix);
+        }
     }
 
+    /** Directory to write temporary files in. */
     public void setTempDir(Path tempDir) {
         this.tempDir = tempDir;
     }

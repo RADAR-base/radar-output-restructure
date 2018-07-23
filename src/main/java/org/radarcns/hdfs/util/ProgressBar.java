@@ -17,6 +17,7 @@
 package org.radarcns.hdfs.util;
 
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Progress bar.
@@ -26,7 +27,7 @@ public class ProgressBar {
     private final long total;
     private final int numStripes;
     private final long startTime;
-    private int previousPercentage;
+    private final AtomicBoolean isDone;
 
     public ProgressBar(long total, int numStripes) {
         if (total < 0) {
@@ -37,8 +38,8 @@ public class ProgressBar {
         }
         this.total = total;
         this.numStripes = numStripes;
-        this.previousPercentage = -1;
         this.startTime = System.currentTimeMillis();
+        this.isDone = new AtomicBoolean(false);
     }
 
     public synchronized void update(long remain) {
@@ -46,21 +47,42 @@ public class ProgressBar {
             throw new IllegalArgumentException(
                     "Update value " + remain + " out of range [0, " + total + "].");
         }
-        int remainPercent;
-        if (total > 0) {
-            remainPercent = Math.min((int) ((100 * remain) / total), 100);
-        } else {
-            remainPercent = 100;
-        }
-        if (remainPercent == previousPercentage) {
+
+        if (remain == total && !isDone.compareAndSet(false, true)) {
             return;
         }
-        previousPercentage = remainPercent;
-        int stripesFilled = numStripes * remainPercent / 100;
+
+        StringBuilder builder = new StringBuilder(numStripes + 25);
+
+        float remainPercent;
+        if (total > 0) {
+            remainPercent = Math.min(((100f * remain) / total), 100f);
+        } else {
+            remainPercent = 100f;
+        }
+
+        bar(builder, remainPercent);
+        builder.append(' ');
+        percentage(builder, remainPercent);
+        builder.append(" - ");
+        eta(builder, remain);
+
+        if (remain >= total) {
+            builder.append('\n');
+        }
+
+        System.out.print(builder.toString());
+    }
+
+    private void percentage(StringBuilder builder, float remainPercent) {
+        builder.append((int)remainPercent).append('%');
+    }
+
+    private void bar(StringBuilder builder, float remainPercent) {
+        int stripesFilled = (int) (numStripes * remainPercent / 100);
         char notFilled = '-';
         char filled = '*';
         // 2 init + numStripes + 2 end + 4 percentage
-        StringBuilder builder = new StringBuilder(numStripes + 25);
         builder.append("\r[");
         for (int i = 0; i < stripesFilled; i++) {
             builder.append(filled);
@@ -68,20 +90,16 @@ public class ProgressBar {
         for (int i = stripesFilled; i < numStripes; i++) {
             builder.append(notFilled);
         }
-        builder.append("] ").append(remainPercent)
-                .append("% - ETA ");
+        builder.append(']');
+    }
 
+    private void eta(StringBuilder builder, long remain) {
+        builder.append("ETA ");
         if (remain > 0) {
             long duration = (System.currentTimeMillis() - startTime);
             formatTime(builder,duration * (total - remain) / (remain * 1000L));
         } else {
             builder.append('-');
-        }
-
-        if (remain < total) {
-            System.out.print(builder.toString());
-        } else {
-            System.out.println(builder.toString());
         }
     }
 
@@ -100,7 +118,6 @@ public class ProgressBar {
         return builder;
     }
 
-
     public static String formatTime(Duration duration) {
         long millis = duration.toMillis();
         StringBuilder builder = new StringBuilder(16);
@@ -114,9 +131,5 @@ public class ProgressBar {
             builder.append('0');
         }
         return builder.append(millisLast).toString();
-    }
-
-    public boolean isDone() {
-        return previousPercentage == 100;
     }
 }

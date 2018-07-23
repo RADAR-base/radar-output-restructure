@@ -11,6 +11,7 @@ import org.radarcns.hdfs.data.StorageDriver;
 import java.io.IOException;
 import java.nio.channels.AcceptPendingException;
 
+/** Factory for all factory classes and settings. */
 public interface FileStoreFactory {
     FileCacheStore newFileCacheStore(Accountant accountant) throws IOException;
     RecordPathFactory getPathFactory();

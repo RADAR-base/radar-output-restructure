@@ -23,10 +23,14 @@ import org.apache.avro.generic.GenericRecordBuilder;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.radarcns.hdfs.Application;
+import org.radarcns.hdfs.FileStoreFactory;
+import org.radarcns.hdfs.accounting.Accountant;
 import org.radarcns.hdfs.accounting.Bin;
 import org.radarcns.hdfs.accounting.BinFile;
 import org.radarcns.hdfs.accounting.OffsetRange;
 import org.radarcns.hdfs.accounting.OffsetRangeFile;
+import org.radarcns.hdfs.config.RestructureSettings;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -49,14 +53,9 @@ public class FileCacheStoreTest {
         Path newFile = folder.newFile().toPath();
         Path tmpDir = folder.newFolder().toPath();
 
-        StorageDriver storage = new LocalStorageDriver();
-        OffsetRangeFile offsets = OffsetRangeFile.read(storage, folder.newFile().toPath());
-        BinFile bins = BinFile.read(storage, folder.newFile().toPath());
-
         Files.delete(f1);
         Files.delete(d4);
 
-        RecordConverterFactory csvFactory = CsvAvroConverter.getFactory();
         Schema simpleSchema = SchemaBuilder.record("simple").fields()
                 .name("a").type("string").noDefault()
                 .endRecord();
@@ -72,51 +71,71 @@ public class FileCacheStoreTest {
         OffsetRange offsetRange1 = new OffsetRange("t", 1, 0, 8);
         Bin bin = new Bin("t", "c", "00");
 
-        try (FileCacheStore cache = new FileCacheStore(new LocalStorageDriver(), csvFactory, 2, new IdentityCompression(), tmpDir, false)) {
-            cache.setAccountant(offsets, bins);
+        RestructureSettings settings = new RestructureSettings.Builder(folder.getRoot().toString())
+                .cacheSize(2)
+                .tempDir(tmpDir.toString())
+                .build();
+
+        FileStoreFactory factory = new Application.Builder(settings).build();
+        Accountant accountant = new Accountant(factory);
+
+        try (FileCacheStore cache = factory.newFileCacheStore(accountant)) {
             int i0 = 0;
             int i1 = 0;
+            Accountant.Transaction transaction;
 
             record = new GenericRecordBuilder(simpleSchema).set("a", "something").build();
-            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE, cache.writeRecord(
-                    f1, record, offsetRange1.createSingleOffset(i1++), bin));
+            transaction = new Accountant.Transaction(offsetRange1.createSingleOffset(i1++), bin);
+            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
+                    cache.writeRecord(f1, record, transaction));
             record = new GenericRecordBuilder(simpleSchema).set("a", "somethingElse").build();
-            assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE, cache.writeRecord(
-                    f1, record, offsetRange1.createSingleOffset(i1++), bin));
+            transaction = new Accountant.Transaction(offsetRange1.createSingleOffset(i1++), bin);
+            assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE,
+                    cache.writeRecord(f1, record, transaction));
             record = new GenericRecordBuilder(simpleSchema).set("a", "something").build();
-            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE, cache.writeRecord(
-                    f2, record, offsetRange0.createSingleOffset(i0++), bin));
+            transaction = new Accountant.Transaction(offsetRange0.createSingleOffset(i0++), bin);
+            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
+                    cache.writeRecord(f2, record, transaction));
             record = new GenericRecordBuilder(simpleSchema).set("a", "third").build();
-            assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE, cache.writeRecord(
-                    f1, record, offsetRange1.createSingleOffset(i1++), bin));
+            transaction = new Accountant.Transaction(offsetRange1.createSingleOffset(i1++), bin);
+            assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE,
+                    cache.writeRecord(f1, record, transaction));
             record = new GenericRecordBuilder(simpleSchema).set("a", "f3").build();
-            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE, cache.writeRecord(
-                    f3, record, offsetRange1.createSingleOffset(i1++), bin));
+            transaction = new Accountant.Transaction(offsetRange1.createSingleOffset(i1++), bin);
+            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
+                    cache.writeRecord(f3, record, transaction));
             record = new GenericRecordBuilder(simpleSchema).set("a", "f2").build();
-            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE, cache.writeRecord(
-                    f2, record, offsetRange1.createSingleOffset(i1++), bin));
+            transaction = new Accountant.Transaction(offsetRange1.createSingleOffset(i1++), bin);
+            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
+                    cache.writeRecord(f2, record, transaction));
             record = new GenericRecordBuilder(simpleSchema).set("a", "f3").build();
-            assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE, cache.writeRecord(
-                    f3, record, offsetRange1.createSingleOffset(i1++), bin));
+            transaction = new Accountant.Transaction(offsetRange1.createSingleOffset(i1++), bin);
+            assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE,
+                    cache.writeRecord(f3, record, transaction));
             record = new GenericRecordBuilder(simpleSchema).set("a", "f4").build();
-            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE, cache.writeRecord(
-                    f4, record, offsetRange1.createSingleOffset(i1++), bin));
+            transaction = new Accountant.Transaction(offsetRange1.createSingleOffset(i1++), bin);
+            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
+                    cache.writeRecord(f4, record, transaction));
             record = new GenericRecordBuilder(simpleSchema).set("a", "f3").build();
-            assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE, cache.writeRecord(
-                    f3, record, offsetRange1.createSingleOffset(i1++), bin));
+            transaction = new Accountant.Transaction(offsetRange1.createSingleOffset(i1++), bin);
+            assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE,
+                    cache.writeRecord(f3, record, transaction));
             record = new GenericRecordBuilder(conflictSchema).set("a", "f3"). set("b", "conflict").build();
-            assertEquals(FileCacheStore.WriteResponse.CACHE_AND_NO_WRITE, cache.writeRecord(
-                    f3, record, offsetRange1.createSingleOffset(i1), bin));
+            transaction = new Accountant.Transaction(offsetRange1.createSingleOffset(i1), bin);
+            assertEquals(FileCacheStore.WriteResponse.CACHE_AND_NO_WRITE,
+                    cache.writeRecord(f3, record, transaction));
             record = new GenericRecordBuilder(conflictSchema).set("a", "f1"). set("b", "conflict").build();
             // Cannot write to file even though the file is not in cache since schema is different
-            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_NO_WRITE, cache.writeRecord(f1, record, offsetRange1.createSingleOffset(i1), bin));
+            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_NO_WRITE,
+                    cache.writeRecord(f1, record, transaction));
             // Can write the same record to a new file
-            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE, cache.writeRecord(newFile, record, offsetRange1.createSingleOffset(i1++), bin));
+            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
+                    cache.writeRecord(newFile, record, transaction));
         }
 
-        assertTrue(offsets.getOffsets().contains(offsetRange0));
-        assertTrue(offsets.getOffsets().contains(offsetRange1));
-        assertTrue(bins.toString().contains(" - 10"));
+        assertTrue(accountant.getOffsets().contains(offsetRange0));
+        assertTrue(accountant.getOffsets().contains(offsetRange1));
+        assertTrue(accountant.getBins().toString().contains(" - 10"));
 
         assertEquals("a\nsomething\nsomethingElse\nthird\n", new String(Files.readAllBytes(f1)));
         assertEquals("a\nsomething\nf2\n", new String(Files.readAllBytes(f2)));

@@ -9,7 +9,8 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 
-public class Timer {
+/** Timer for multi-threaded timings. The timer may be disabled to increase program performance. */
+public final class Timer {
     private final ConcurrentMap<Category, LongAdder> times;
     private static final Timer instance = new Timer();
     private volatile boolean isEnabled;
@@ -20,8 +21,10 @@ public class Timer {
 
     private Timer() {
         this.times = new ConcurrentHashMap<>();
+        this.isEnabled = true;
     }
 
+    /** Add number of nanoseconds to given type of measurement. */
     public void add(String type, long nanoTime) {
         if (isEnabled) {
             Category cat = new Category(type);
@@ -29,6 +32,10 @@ public class Timer {
         }
     }
 
+    /**
+     * Enable or disable timer. A disabled timer will have much less performance impact on
+     * timed code.
+     */
     public void setEnabled(boolean enabled) {
         isEnabled = enabled;
     }

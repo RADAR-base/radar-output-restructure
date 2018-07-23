@@ -144,9 +144,7 @@ public class FileCacheStore implements Flushable, Closeable {
     private void allCaches(ThrowingConsumer<FileCache> cacheHandler) throws IOException {
         try {
             caches.values().parallelStream()
-                    .forEach(tryCatch(cacheHandler, (c, ex) -> {
-                        throw new IllegalStateException(ex);
-                    }));
+                    .forEach(tryCatch(cacheHandler, "Failed to update caches."));
         } catch (IllegalStateException ex) {
             throw (IOException) ex.getCause();
         }

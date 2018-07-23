@@ -24,10 +24,11 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.radarcns.hdfs.Application;
+import org.radarcns.hdfs.accounting.Accountant;
 import org.radarcns.hdfs.accounting.Bin;
-import org.radarcns.hdfs.accounting.BinFile;
 import org.radarcns.hdfs.accounting.OffsetRange;
-import org.radarcns.hdfs.accounting.OffsetRangeFile;
+import org.radarcns.hdfs.config.RestructureSettings;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -45,42 +46,49 @@ import static org.junit.Assert.assertNull;
  * Created by joris on 03/07/2017.
  */
 public class FileCacheTest {
-    private LocalStorageDriver storageDriver;
 
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
     private Path path;
-    private RecordConverterFactory csvFactory;
     private Record exampleRecord;
     private Path tmpDir;
-    private boolean deduplicate;
-    private BinFile bins;
-    private OffsetRangeFile offsets;
     private Bin bin;
     private OffsetRange offsetRange;
+    private Application factory;
+    private Accountant accountant;
 
     @Before
     public void setUp() throws IOException {
         this.path = folder.newFile("f").toPath();
         this.tmpDir = folder.newFolder().toPath();
-        this.deduplicate = false;
 
-        this.csvFactory = CsvAvroConverter.getFactory();
         Schema schema = SchemaBuilder.record("simple").fields()
                 .name("a").type("string").noDefault()
                 .endRecord();
         this.exampleRecord = new GenericRecordBuilder(schema).set("a", "something").build();
-        this.storageDriver = new LocalStorageDriver();
-        this.offsets = OffsetRangeFile.read(storageDriver, folder.newFile().toPath());
-        this.bins = BinFile.read(storageDriver, folder.newFile().toPath());
+
+        setUp(settingsBuilder().build());
+
         this.bin = new Bin("t", "c", "00");
         this.offsetRange = new OffsetRange("t", 0, 0, 10);
     }
 
+    private RestructureSettings.Builder settingsBuilder() {
+        return new RestructureSettings.Builder(folder.getRoot().toString());
+    }
+
+    private void setUp(RestructureSettings settings) throws IOException {
+        this.factory = new Application.Builder(settings).build();
+        this.accountant = new Accountant(factory);
+    }
+
     @Test
     public void testGzip() throws IOException {
-        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new GzipCompression(), tmpDir, deduplicate, offsets, bins)) {
-            cache.writeRecord(offsetRange.createSingleOffset(0), bin, exampleRecord);
+        setUp(settingsBuilder().compression("gzip").build());
+
+        try (FileCache cache = new FileCache(factory, path, exampleRecord, tmpDir, accountant)) {
+            cache.writeRecord(exampleRecord,
+                    new Accountant.Transaction(offsetRange.createSingleOffset(0), bin));
         }
 
         System.out.println("Gzip: " + Files.size(path));
@@ -97,12 +105,16 @@ public class FileCacheTest {
 
     @Test
     public void testGzipAppend() throws IOException {
-        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new GzipCompression(), tmpDir, deduplicate, offsets, bins)) {
-            cache.writeRecord(offsetRange.createSingleOffset(0), bin, exampleRecord);
+        setUp(settingsBuilder().compression("gzip").build());
+
+        try (FileCache cache = new FileCache(factory, path, exampleRecord, tmpDir, accountant)) {
+            cache.writeRecord(exampleRecord,
+                    new Accountant.Transaction(offsetRange.createSingleOffset(0), bin));
         }
 
-        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new GzipCompression(), tmpDir, deduplicate, offsets, bins)) {
-            cache.writeRecord(offsetRange.createSingleOffset(1), bin, exampleRecord);
+        try (FileCache cache = new FileCache(factory, path, exampleRecord, tmpDir, accountant)) {
+            cache.writeRecord(exampleRecord,
+                    new Accountant.Transaction(offsetRange.createSingleOffset(0), bin));
         }
 
         System.out.println("Gzip appended: " + Files.size(path));
@@ -121,8 +133,9 @@ public class FileCacheTest {
 
     @Test
     public void testPlain() throws IOException {
-        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new IdentityCompression(), tmpDir, deduplicate, offsets, bins)) {
-            cache.writeRecord(offsetRange.createSingleOffset(0), bin, exampleRecord);
+        try (FileCache cache = new FileCache(factory, path, exampleRecord, tmpDir, accountant)) {
+            cache.writeRecord(exampleRecord,
+                    new Accountant.Transaction(offsetRange.createSingleOffset(0), bin));
         }
 
         System.out.println("Plain: " + Files.size(path));
@@ -137,12 +150,14 @@ public class FileCacheTest {
     @Test
     public void testPlainAppend() throws IOException {
 
-        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new IdentityCompression(), tmpDir, deduplicate, offsets, bins)) {
-            cache.writeRecord(offsetRange.createSingleOffset(0), bin, exampleRecord);
+        try (FileCache cache = new FileCache(factory, path, exampleRecord, tmpDir, accountant)) {
+            cache.writeRecord(exampleRecord,
+                    new Accountant.Transaction(offsetRange.createSingleOffset(0), bin));
         }
 
-        try (FileCache cache = new FileCache(storageDriver, csvFactory, path, exampleRecord, new IdentityCompression(), tmpDir, deduplicate, offsets, bins)) {
-            cache.writeRecord(offsetRange.createSingleOffset(1), bin, exampleRecord);
+        try (FileCache cache = new FileCache(factory, path, exampleRecord, tmpDir, accountant)) {
+            cache.writeRecord(exampleRecord,
+                    new Accountant.Transaction(offsetRange.createSingleOffset(1), bin));
         }
 
         System.out.println("Plain appended: " + Files.size(path));
@@ -160,21 +175,21 @@ public class FileCacheTest {
         Path file3 = folder.newFile("g").toPath();
         Path tmpDir = folder.newFolder().toPath();
 
-        try (FileCache cache1 = new FileCache(storageDriver, csvFactory, path, exampleRecord, new IdentityCompression(), tmpDir, deduplicate, offsets, bins);
-             FileCache cache2 = new FileCache(storageDriver, csvFactory, path, exampleRecord, new IdentityCompression(), tmpDir, deduplicate, offsets, bins);
-             FileCache cache3 = new FileCache(storageDriver, csvFactory, file3, exampleRecord, new IdentityCompression(), tmpDir, deduplicate, offsets, bins)) {
+        try (FileCache cache1 = new FileCache(factory, path, exampleRecord, tmpDir, accountant);
+             FileCache cache2 = new FileCache(factory, path, exampleRecord, tmpDir, accountant);
+             FileCache cache3 = new FileCache(factory, file3, exampleRecord, tmpDir, accountant)) {
             assertEquals(0, cache1.compareTo(cache2));
             // filenames are not equal
             assertEquals(-1, cache1.compareTo(cache3));
-            cache1.writeRecord(offsetRange.createSingleOffset(0), bin, exampleRecord);
+            cache1.writeRecord(exampleRecord, new Accountant.Transaction(offsetRange.createSingleOffset(0), bin));
             // last used
             assertEquals(1, cache1.compareTo(cache2));
             // last used takes precedence over filename
             assertEquals(1, cache1.compareTo(cache3));
 
             // last used reversal
-            cache2.writeRecord(offsetRange.createSingleOffset(1), bin, exampleRecord);
-            cache3.writeRecord(offsetRange.createSingleOffset(2), bin, exampleRecord);
+            cache2.writeRecord(exampleRecord, new Accountant.Transaction(offsetRange.createSingleOffset(1), bin));
+            cache3.writeRecord(exampleRecord, new Accountant.Transaction(offsetRange.createSingleOffset(2), bin));
             assertEquals(-1, cache1.compareTo(cache2));
             assertEquals(-1, cache1.compareTo(cache3));
         }

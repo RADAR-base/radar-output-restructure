@@ -27,9 +27,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.radarcns.hdfs.util.ProgressBar.formatTime;
-import static org.radarcns.hdfs.util.commandline.CommandLineArgs.instantiate;
 import static org.radarcns.hdfs.util.commandline.CommandLineArgs.nonNullOrDefault;
 
+/** Main application. */
 public class Application implements FileStoreFactory {
     private static final Logger logger = LoggerFactory.getLogger(Application.class);
     public static final int CACHE_SIZE_DEFAULT = 100;
@@ -99,7 +99,8 @@ public class Application implements FileStoreFactory {
                             commandLineArgs.hdfsUri1, commandLineArgs.hdfsUri2)
                     .build();
 
-            application = new Builder(settings, hdfsSettings)
+            application = new Builder(settings)
+                    .hdfsSettings(hdfsSettings)
                     .pathFactory(commandLineArgs.pathFactory)
                     .compressionFactory(commandLineArgs.compressionFactory)
                     .formatFactory(commandLineArgs.formatFactory)
@@ -116,7 +117,7 @@ public class Application implements FileStoreFactory {
             logger.error("Failed to initialize plugins", ex);
             System.exit(1);
             return;
-        } catch (ReflectiveOperationException | ClassCastException e) {
+        } catch (ClassCastException e) {
             logger.error("Cannot find factory", e);
             System.exit(1);
             return;
@@ -181,7 +182,7 @@ public class Application implements FileStoreFactory {
 
     public static class Builder {
         private final RestructureSettings settings;
-        private final HdfsSettings hdfsSettings;
+        private HdfsSettings hdfsSettings;
         private StorageDriver storageDriver;
         private RecordPathFactory pathFactory;
         private CompressionFactory compressionFactory;
@@ -189,32 +190,33 @@ public class Application implements FileStoreFactory {
         private Map<String, String> properties = new HashMap<>();
         private List<String> inputPaths;
 
-        public Builder(RestructureSettings settings, HdfsSettings hdfsSettings) {
+        public Builder(RestructureSettings settings) {
             this.settings = settings;
+        }
+
+        public Builder hdfsSettings(HdfsSettings hdfsSettings) {
             this.hdfsSettings = hdfsSettings;
-        }
-
-        public Builder storageDriver(String storageDriver)
-                throws ReflectiveOperationException, ClassCastException {
-            this.storageDriver = instantiate(storageDriver, StorageDriver.class);
             return this;
         }
 
-        public Builder pathFactory(String factoryClassName)
-                throws ReflectiveOperationException, ClassCastException {
-            this.pathFactory = instantiate(factoryClassName, RecordPathFactory.class);
+        public Builder storageDriver(Object storageDriver) throws ClassCastException {
+            this.storageDriver = (StorageDriver) storageDriver;
             return this;
         }
 
-        public Builder compressionFactory(String factoryClassName)
-                throws ReflectiveOperationException, ClassCastException {
-            this.compressionFactory = instantiate(factoryClassName, CompressionFactory.class);
+        public Builder pathFactory(Object factory)
+                throws ClassCastException {
+            this.pathFactory = (RecordPathFactory) factory;
             return this;
         }
 
-        public Builder formatFactory(String factoryClassName)
-                throws ReflectiveOperationException, ClassCastException {
-            this.formatFactory = instantiate(factoryClassName, FormatFactory.class);
+        public Builder compressionFactory(Object factory) throws ClassCastException {
+            this.compressionFactory = (CompressionFactory) factory;
+            return this;
+        }
+
+        public Builder formatFactory(Object factory) throws ClassCastException {
+            this.formatFactory = (FormatFactory) factory;
             return this;
         }
 

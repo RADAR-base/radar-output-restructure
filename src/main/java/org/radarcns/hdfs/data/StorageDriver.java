@@ -29,11 +29,6 @@ public interface StorageDriver extends Plugin {
         return new BufferedReader(reader);
     }
 
-    default BufferedWriter newBufferedWriter(Path path, boolean append) throws IOException {
-        Writer writer = new OutputStreamWriter(newOutputStream(path, append));
-        return new BufferedWriter(writer);
-    }
-
     /**
      * Reads all bytes from an input stream and writes them to an output stream.
      */
