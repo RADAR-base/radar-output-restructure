@@ -216,17 +216,17 @@ public class RadarHdfsRestructure {
             return;
         }
 
+        OffsetRange offsets = OffsetRange.parseFilename(filePath.getName());
+
         long timeRead = System.nanoTime();
         DataFileReader<GenericRecord> dataFileReader = new DataFileReader<>(input,
                 new GenericDatumReader<>());
-
-        OffsetRange offsets = OffsetRange.parseFilename(filePath.getName());
 
         GenericRecord record = null;
         int i = 0;
         while (dataFileReader.hasNext()) {
             record = dataFileReader.next(record);
-            Timer.getInstance().add("read", System.nanoTime() - timeRead);
+            Timer.getInstance().add("read", timeRead);
 
             OffsetRange singleOffset = offsets.createSingleOffset(i++);
             // Get the fields
@@ -249,8 +249,10 @@ public class RadarHdfsRestructure {
         Bin bin = new Bin(topicName, metadata.getCategory(), timeBin);
 
         // Write data
+        long timeWrite = System.nanoTime();
         FileCacheStore.WriteResponse response = cache.writeRecord(
                 metadata.getPath(), record, new Accountant.Transaction(offset, bin));
+        Timer.getInstance().add("write", timeWrite);
 
         if (!response.isSuccessful()) {
             // Write was unsuccessful due to different number of columns,

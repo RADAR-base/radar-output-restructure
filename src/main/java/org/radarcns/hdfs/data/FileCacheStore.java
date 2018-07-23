@@ -21,6 +21,7 @@ import org.radarcns.hdfs.FileStoreFactory;
 import org.radarcns.hdfs.accounting.Accountant;
 import org.radarcns.hdfs.config.RestructureSettings;
 import org.radarcns.hdfs.util.ThrowingConsumer;
+import org.radarcns.hdfs.util.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,7 +82,9 @@ public class FileCacheStore implements Flushable, Closeable {
             Files.createDirectories(dir);
 
             try {
+                long timeOpen = System.nanoTime();
                 cache = new FileCache(factory, path, record, tmpDir, accountant);
+                Timer.getInstance().add("write.open", timeOpen);
             } catch (IOException ex) {
                 logger.error("Could not open cache for {}", path, ex);
                 return WriteResponse.NO_CACHE_AND_NO_WRITE;

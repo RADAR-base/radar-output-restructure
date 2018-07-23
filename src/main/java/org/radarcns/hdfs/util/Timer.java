@@ -1,6 +1,7 @@
 package org.radarcns.hdfs.util;
 
 import javax.annotation.Nonnull;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -25,10 +26,11 @@ public final class Timer {
     }
 
     /** Add number of nanoseconds to given type of measurement. */
-    public void add(String type, long nanoTime) {
+    public void add(String type, long nanoTimeStart) {
         if (isEnabled) {
+            long time = System.nanoTime() - nanoTimeStart;
             Category cat = new Category(type);
-            times.computeIfAbsent(cat, c -> new LongAdder()).add(nanoTime);
+            times.computeIfAbsent(cat, c -> new LongAdder()).add(time);
         }
     }
 
@@ -52,23 +54,30 @@ public final class Timer {
                 .entrySet().stream()
                 .collect(Collectors.groupingByConcurrent(c -> c.getKey().type));
 
-        for (List<Map.Entry<Category, LongAdder>> value : timesByType.values()) {
-            long time = value.stream().mapToLong(e -> e.getValue().sum()).sum();
-            builder.append("\n\t");
-            builder.append(value.get(0).getKey().type);
-            builder.append(" - time: ");
-            int seconds = (int)(time / 1_000_000_000L);
-            int millis = (int) (time / 1_000_000L);
-            ProgressBar.formatTime(builder, seconds);
-            builder.append('.');
-            if (millis < 100) builder.append('0');
-            if (millis < 10) builder.append('0');
-            builder.append(millis);
-            builder.append(" - threads: ");
-            builder.append(value.size());
-        }
+        timesByType.entrySet().stream()
+                .sorted(Comparator.comparing(Map.Entry::getKey))
+                .forEach(entry -> {
+                    builder.append("\n\t");
+                    builder.append(entry.getKey());
+                    builder.append(" - time: ");
+                    formatTime(builder, entry.getValue().stream()
+                            .mapToLong(e -> e.getValue().sum())
+                            .sum());
+                    builder.append(" - threads: ");
+                    builder.append(entry.getValue().size());
+                });
 
         return builder.toString();
+    }
+
+    private static void formatTime(StringBuilder builder, long nanoTime) {
+        int seconds = (int)(nanoTime / 1_000_000_000L);
+        int millis = (int) (nanoTime / 1_000_000L);
+        ProgressBar.formatTime(builder, seconds);
+        builder.append('.');
+        if (millis < 100) builder.append('0');
+        if (millis < 10) builder.append('0');
+        builder.append(millis);
     }
 
     private static class Category {

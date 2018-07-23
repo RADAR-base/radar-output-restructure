@@ -53,7 +53,6 @@ public interface RecordConverterFactory extends Format {
 
     default void sortUnique(Path source, Path target, Compression compression)
             throws IOException {
-        long timeStart = System.nanoTime();
         // read all lines into memory; assume a 100-byte line length
         LinkedHashSet<String> sortedLines = new LinkedHashSet<>((int)(Files.size(source) / 100));
         String header;
@@ -71,8 +70,6 @@ public interface RecordConverterFactory extends Format {
              Writer writer = new OutputStreamWriter(zipOut)) {
             writeFile(writer, header, sortedLines);
         }
-
-        Timer.getInstance().add("deduplicate", System.nanoTime() - timeStart);
     }
 
     /**

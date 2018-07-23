@@ -95,7 +95,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
                 outStream = compression.compress(
                         new BufferedOutputStream(Files.newOutputStream(tmpPath)));
             }
-            Timer.getInstance().add("copy", System.nanoTime() - timeStart);
+            Timer.getInstance().add("copy", timeStart);
         }
 
         this.writer = new OutputStreamWriter(outStream);
@@ -122,11 +122,11 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
     public boolean writeRecord(GenericRecord record, Accountant.Transaction transaction) throws IOException {
         long timeStart = System.nanoTime();
         boolean result = this.recordConverter.writeRecord(record);
+        Timer.getInstance().add("write.convert", timeStart);
         lastUse = System.nanoTime();
         if (result) {
             ledger.add(transaction);
         }
-        Timer.getInstance().add("write", lastUse - timeStart);
         return result;
     }
 
@@ -142,23 +142,25 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
 
         if (!hasError.get()) {
             if (deduplicate) {
+                long timeDedup = System.nanoTime();
                 converterFactory.sortUnique(tmpPath, tmpPath, compression);
+                Timer.getInstance().add("close.deduplicate", timeDedup);
             }
 
-            long timeStart = System.nanoTime();
+            long timeStore = System.nanoTime();
             storageDriver.store(tmpPath, path);
-            Timer.getInstance().add("store", System.nanoTime() - timeStart);
+            Timer.getInstance().add("close.store", timeStore);
 
             accountant.process(ledger);
         }
-        Timer.getInstance().add("close", System.nanoTime() - timeClose);
+        Timer.getInstance().add("close", timeClose);
     }
 
     @Override
     public void flush() throws IOException {
-        long timeStart = System.nanoTime();
+        long timeFlush = System.nanoTime();
         recordConverter.flush();
-        Timer.getInstance().add("flush", System.nanoTime() - timeStart);
+        Timer.getInstance().add("flush", timeFlush);
     }
 
     /**
