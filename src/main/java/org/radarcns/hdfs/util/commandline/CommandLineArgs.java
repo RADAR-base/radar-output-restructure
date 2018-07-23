@@ -62,6 +62,9 @@ public class CommandLineArgs {
     @Parameter(names = {"-t", "--num-threads"}, description = "Number of threads to use for processing")
     public int numThreads = 1;
 
+    @Parameter(names = {"--timer"}, description = "Enable timers")
+    public boolean enableTimer = false;
+
     @Parameter(names = {"--tmp-dir"}, description = "Temporary staging directory")
     public String tmpDir = null;
 

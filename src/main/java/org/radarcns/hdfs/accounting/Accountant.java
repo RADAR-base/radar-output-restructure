@@ -12,6 +12,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
 
@@ -36,9 +38,9 @@ public class Accountant implements Flushable, Closeable {
     }
 
     public void process(Ledger ledger) {
-        binFile.putAll(ledger.getBins());
+        binFile.putAll(ledger.bins);
         binFile.triggerWrite();
-        offsetFile.addAll(ledger.getOffsets());
+        offsetFile.addAll(ledger.offsets);
         offsetFile.triggerWrite();
     }
 
@@ -91,6 +93,31 @@ public class Accountant implements Flushable, Closeable {
 
         if (exception != null) {
             throw exception;
+        }
+    }
+
+    public static class Ledger {
+        private final OffsetRangeSet offsets;
+        private final Map<Bin, Long> bins;
+
+        public Ledger() {
+            offsets = new OffsetRangeSet();
+            bins = new HashMap<>();
+        }
+
+        public void add(Transaction transaction) {
+            offsets.add(transaction.offset);
+            bins.compute(transaction.bin, (b, vOld) -> vOld == null ? 1L : vOld + 1L);
+        }
+    }
+
+    public static class Transaction {
+        private final OffsetRange offset;
+        private final Bin bin;
+
+        public Transaction(OffsetRange offset, Bin bin) {
+            this.offset = offset;
+            this.bin = bin;
         }
     }
 }

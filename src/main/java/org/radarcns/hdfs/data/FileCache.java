@@ -19,8 +19,6 @@ package org.radarcns.hdfs.data;
 import org.apache.avro.generic.GenericRecord;
 import org.radarcns.hdfs.FileStoreFactory;
 import org.radarcns.hdfs.accounting.Accountant;
-import org.radarcns.hdfs.accounting.Ledger;
-import org.radarcns.hdfs.accounting.Transaction;
 import org.radarcns.hdfs.util.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,7 +52,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
     private final Compression compression;
     private final RecordConverterFactory converterFactory;
     private final boolean deduplicate;
-    private final Ledger ledger;
+    private final Accountant.Ledger ledger;
     private final Accountant accountant;
     private long lastUse;
     private final AtomicBoolean hasError;
@@ -71,7 +69,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
         storageDriver = factory.getStorageDriver();
         this.path = path;
         this.deduplicate = factory.getSettings().isDeduplicate();
-        this.ledger = new Ledger();
+        this.ledger = new Accountant.Ledger();
         this.compression = factory.getCompression();
         boolean fileIsNew = !storageDriver.exists(path) || storageDriver.size(path) == 0;
         this.tmpPath = Files.createTempFile(tmpDir, path.getFileName().toString(),
@@ -121,7 +119,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
      * @return true or false based on {@link RecordConverter} write result
      * @throws IOException if the record cannot be used.
      */
-    public boolean writeRecord(GenericRecord record, Transaction transaction) throws IOException {
+    public boolean writeRecord(GenericRecord record, Accountant.Transaction transaction) throws IOException {
         long timeStart = System.nanoTime();
         boolean result = this.recordConverter.writeRecord(record);
         lastUse = System.nanoTime();

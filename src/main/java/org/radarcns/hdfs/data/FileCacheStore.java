@@ -19,7 +19,6 @@ package org.radarcns.hdfs.data;
 import org.apache.avro.generic.GenericRecord;
 import org.radarcns.hdfs.FileStoreFactory;
 import org.radarcns.hdfs.accounting.Accountant;
-import org.radarcns.hdfs.accounting.Transaction;
 import org.radarcns.hdfs.config.RestructureSettings;
 import org.radarcns.hdfs.util.ThrowingConsumer;
 import org.slf4j.Logger;
@@ -72,7 +71,7 @@ public class FileCacheStore implements Flushable, Closeable {
      * @return Integer value according to one of the response codes.
      * @throws IOException when failing to open a file or writing to it.
      */
-    public WriteResponse writeRecord(Path path, GenericRecord record, Transaction transaction) throws IOException {
+    public WriteResponse writeRecord(Path path, GenericRecord record, Accountant.Transaction transaction) throws IOException {
         FileCache cache = caches.get(path);
         boolean hasCache = cache != null;
         if (!hasCache) {

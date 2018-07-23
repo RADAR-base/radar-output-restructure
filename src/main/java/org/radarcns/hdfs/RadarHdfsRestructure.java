@@ -29,7 +29,6 @@ import org.radarcns.hdfs.accounting.Accountant;
 import org.radarcns.hdfs.accounting.Bin;
 import org.radarcns.hdfs.accounting.OffsetRange;
 import org.radarcns.hdfs.accounting.OffsetRangeSet;
-import org.radarcns.hdfs.accounting.Transaction;
 import org.radarcns.hdfs.data.FileCacheStore;
 import org.radarcns.hdfs.data.StorageDriver;
 import org.radarcns.hdfs.util.ProgressBar;
@@ -251,7 +250,7 @@ public class RadarHdfsRestructure {
 
         // Write data
         FileCacheStore.WriteResponse response = cache.writeRecord(
-                metadata.getPath(), record, new Transaction(offset, bin));
+                metadata.getPath(), record, new Accountant.Transaction(offset, bin));
 
         if (!response.isSuccessful()) {
             // Write was unsuccessful due to different number of columns,

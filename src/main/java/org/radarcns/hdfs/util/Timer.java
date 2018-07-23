@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 public class Timer {
     private final ConcurrentMap<Category, LongAdder> times;
     private static final Timer instance = new Timer();
+    private volatile boolean isEnabled;
 
     public static Timer getInstance() {
         return instance;
@@ -22,12 +23,21 @@ public class Timer {
     }
 
     public void add(String type, long nanoTime) {
-        Category cat = new Category(type);
-        times.computeIfAbsent(cat, c -> new LongAdder()).add(nanoTime);
+        if (isEnabled) {
+            Category cat = new Category(type);
+            times.computeIfAbsent(cat, c -> new LongAdder()).add(nanoTime);
+        }
+    }
+
+    public void setEnabled(boolean enabled) {
+        isEnabled = enabled;
     }
 
     @Override
     public String toString() {
+        if (!isEnabled) {
+            return "Timings: disabled";
+        }
         StringBuilder builder = new StringBuilder();
         builder.append("Timings:");
 

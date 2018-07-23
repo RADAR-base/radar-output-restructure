@@ -80,6 +80,7 @@ public class Application implements FileStoreFactory {
         logger.info(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
         logger.info("Starting...");
 
+        Timer.getInstance().setEnabled(commandLineArgs.enableTimer);
 
         RestructureSettings settings = new RestructureSettings.Builder(commandLineArgs.outputDirectory)
                 .compression(commandLineArgs.compression)
@@ -90,14 +91,14 @@ public class Application implements FileStoreFactory {
                 .numThreads(commandLineArgs.numThreads)
                 .build();
 
-        HdfsSettings hdfsSettings = new HdfsSettings.Builder(commandLineArgs.hdfsName)
-                .hdfsHighAvailability(commandLineArgs.hdfsHa,
-                        commandLineArgs.hdfsUri1, commandLineArgs.hdfsUri2)
-                .build();
-
         Application application;
 
         try {
+            HdfsSettings hdfsSettings = new HdfsSettings.Builder(commandLineArgs.hdfsName)
+                    .hdfsHighAvailability(commandLineArgs.hdfsHa,
+                            commandLineArgs.hdfsUri1, commandLineArgs.hdfsUri2)
+                    .build();
+
             application = new Builder(settings, hdfsSettings)
                     .pathFactory(commandLineArgs.pathFactory)
                     .compressionFactory(commandLineArgs.compressionFactory)
