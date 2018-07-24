@@ -17,6 +17,7 @@
 package org.radarcns.hdfs.data;
 
 import com.fasterxml.jackson.databind.MappingIterator;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.dataformat.csv.CsvFactory;
@@ -46,12 +47,19 @@ import java.util.Map;
  * records need to have exactly the same hierarchy (or at least a subset of it.)
  */
 public class CsvAvroConverter implements RecordConverter {
+    private static final CsvSchema EMPTY_SCHEMA = CsvSchema.emptySchema().withHeader();
+
     public static RecordConverterFactory getFactory() {
-        CsvFactory factory = new CsvFactory();
         return new RecordConverterFactory() {
+            private final CsvFactory CSV_FACTORY = new CsvFactory();
+            private final ObjectMapper CSV_MAPPER = new ObjectMapper(CSV_FACTORY);
+
             @Override
-            public RecordConverter converterFor(Writer writer, GenericRecord record, boolean writeHeader, Reader reader) throws IOException {
-                return new CsvAvroConverter(factory, writer, record, writeHeader, reader);
+            public RecordConverter converterFor(Writer writer, GenericRecord record,
+                    boolean writeHeader, Reader reader) throws IOException {
+                return new CsvAvroConverter(CSV_FACTORY, CSV_MAPPER,
+                        CSV_MAPPER.readerFor(Map.class).with(EMPTY_SCHEMA), writer, record,
+                        writeHeader, reader);
             }
 
             @Override
@@ -76,20 +84,19 @@ public class CsvAvroConverter implements RecordConverter {
     private final CsvGenerator generator;
     private CsvSchema schema;
 
-    public CsvAvroConverter(CsvFactory factory, Writer writer, GenericRecord record, boolean writeHeader, Reader reader)
+    public CsvAvroConverter(CsvFactory factory, ObjectMapper mapper, ObjectReader schemaReader,
+            Writer writer, GenericRecord record, boolean writeHeader, Reader reader)
             throws IOException {
         map = new LinkedHashMap<>();
 
-        CsvMapper mapper = new CsvMapper(factory);
         Map<String, Object> value;
 
-        schema = CsvSchema.emptySchema().withHeader();
         if (!writeHeader) {
             // If file already exists read the schema from the CSV file
-            ObjectReader objectReader = mapper.readerFor(Map.class).with(schema);
-            MappingIterator<Map<String,Object>> iterator = objectReader.readValues(reader);
+            MappingIterator<Map<String,Object>> iterator = schemaReader.readValues(reader);
             value = iterator.next();
         } else {
+            schema = EMPTY_SCHEMA;
             value = convertRecord(record);
         }
 
@@ -105,7 +112,6 @@ public class CsvAvroConverter implements RecordConverter {
 
         generator = factory.createGenerator(writer);
         csvWriter = mapper.writer(schema);
-
     }
 
     /**
@@ -117,13 +123,14 @@ public class CsvAvroConverter implements RecordConverter {
     @Override
     public boolean writeRecord(GenericRecord record) throws IOException {
         Map<String, Object> localMap = convertRecord(record);
+        int len = schema.size();
 
-        if(localMap.size() > schema.size()) {
+        if (localMap.size() != len) {
             // Cannot write to same file so return false
             return false;
         } else {
             Iterator<String> localColumnIterator = localMap.keySet().iterator();
-            for(int i = 0; i < schema.size(); i++) {
+            for (int i = 0; i < len; i++) {
                 if (!schema.columnName(i).equals(localColumnIterator.next())) {
                     /* The order or name of columns is different and
                     thus cannot write to this csv file. return false.
@@ -167,10 +174,9 @@ public class CsvAvroConverter implements RecordConverter {
                 break;
             }
             case ARRAY: {
-                List<?> origList = (List<?>)data;
                 Schema itemType = schema.getElementType();
                 int i = 0;
-                for (Object orig : origList) {
+                for (Object orig : (List<?>)data) {
                     convertAvro(orig, itemType, prefix + '.' + i);
                     i++;
                 }

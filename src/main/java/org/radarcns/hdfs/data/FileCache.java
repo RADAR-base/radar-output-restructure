@@ -84,9 +84,8 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
         if (fileIsNew) {
             inputStream = new ByteArrayInputStream(new byte[0]);
         } else {
-            long timeStart = System.nanoTime();
-            inputStream = compression.decompress(
-                    new BufferedInputStream(storageDriver.newInputStream(path)));
+            long timeCopy = System.nanoTime();
+            inputStream = compression.decompress(storageDriver.newInputStream(path));
 
             if (!copy(path, outStream, compression)) {
                 // restart output buffer
@@ -95,7 +94,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
                 outStream = compression.compress(
                         new BufferedOutputStream(Files.newOutputStream(tmpPath)));
             }
-            Timer.getInstance().add("copy", timeStart);
+            Timer.getInstance().add("write.copyOriginal", timeCopy);
         }
 
         this.writer = new OutputStreamWriter(outStream);
