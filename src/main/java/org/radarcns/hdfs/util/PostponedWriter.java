@@ -70,9 +70,9 @@ public abstract class PostponedWriter implements Closeable, Flushable {
     public void close() throws IOException {
         doFlush(true);
         try {
-            executor.awaitTermination(5, TimeUnit.SECONDS);
+            executor.awaitTermination(30, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
-            logger.error("Failed to write data {}", name, e);
+            logger.error("Failed to write {} data: interrupted", name);
         }
     }
 
@@ -87,12 +87,12 @@ public abstract class PostponedWriter implements Closeable, Flushable {
         }
 
         try {
-            localFuture.get(5, TimeUnit.SECONDS);
+            localFuture.get(30, TimeUnit.SECONDS);
         } catch (ExecutionException ex) {
-            logger.error("Failed to write data", ex);
+            logger.error("Failed to write data for {}", name, ex.getCause());
             throw new IOException("Failed to write data", ex.getCause());
         } catch (InterruptedException | TimeoutException e) {
-            logger.error("Failed to write data: timeout");
+            logger.error("Failed to write {} data: timeout", name);
         }
     }
 

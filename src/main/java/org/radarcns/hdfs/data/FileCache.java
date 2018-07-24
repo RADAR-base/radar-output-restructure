@@ -198,7 +198,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
             }
             if (corruptPath != null) {
                 logger.error("Original file {} could not be read: {}."
-                        + " Moved to {}.", source, corruptPath, ex);
+                        + " Moved to {}.", source, ex, corruptPath);
                 storageDriver.move(source, corruptPath);
             } else {
                 logger.error("Original file {} could not be read: {}."
