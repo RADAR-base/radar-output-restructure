@@ -17,7 +17,9 @@
 package org.radarcns.hdfs.util;
 
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Progress bar.
@@ -28,8 +30,11 @@ public class ProgressBar {
     private final int numStripes;
     private final long startTime;
     private final AtomicBoolean isDone;
+    private final long updateIntervalNanos;
+    private final AtomicLong lastUpdate;
 
-    public ProgressBar(long total, int numStripes) {
+    public ProgressBar(long total, int numStripes, long updateInterval, TimeUnit updateIntervalUnit) {
+        this.updateIntervalNanos = updateIntervalUnit.toNanos(updateInterval);
         if (total < 0) {
             throw new IllegalArgumentException("Total of progress bar must be positive");
         }
@@ -38,48 +43,54 @@ public class ProgressBar {
         }
         this.total = total;
         this.numStripes = numStripes;
-        this.startTime = System.currentTimeMillis();
+        this.startTime = System.nanoTime();
+        this.lastUpdate = new AtomicLong(0L);
         this.isDone = new AtomicBoolean(false);
     }
 
-    public synchronized void update(long remain) {
-        if (remain > total || remain < 0) {
-            throw new IllegalArgumentException(
-                    "Update value " + remain + " out of range [0, " + total + "].");
+    public synchronized void update(long progress) {
+        long now = System.nanoTime();
+        if (updateIntervalNanos <= 0 || lastUpdate.updateAndGet(l -> now > l + updateIntervalNanos ? now : l) != now) {
+            return;
         }
 
-        if (remain == total && !isDone.compareAndSet(false, true)) {
+        if (progress > total || progress < 0) {
+            throw new IllegalArgumentException(
+                    "Update value " + progress + " out of range [0, " + total + "].");
+        }
+
+        if (progress == total && !isDone.compareAndSet(false, true)) {
             return;
         }
 
         StringBuilder builder = new StringBuilder(numStripes + 25);
 
-        float remainPercent;
+        float progressPercent;
         if (total > 0) {
-            remainPercent = Math.min(((100f * remain) / total), 100f);
+            progressPercent = Math.min(((100f * progress) / total), 100f);
         } else {
-            remainPercent = 100f;
+            progressPercent = 100f;
         }
 
-        bar(builder, remainPercent);
+        bar(builder, progressPercent);
         builder.append(' ');
-        percentage(builder, remainPercent);
+        percentage(builder, progressPercent);
         builder.append(" - ");
-        eta(builder, remain);
+        eta(builder, progress);
 
-        if (remain >= total) {
+        if (progress >= total) {
             builder.append('\n');
         }
 
         System.out.print(builder.toString());
     }
 
-    private void percentage(StringBuilder builder, float remainPercent) {
-        builder.append((int)remainPercent).append('%');
+    private void percentage(StringBuilder builder, float progressPercent) {
+        builder.append((int)progressPercent).append('%');
     }
 
-    private void bar(StringBuilder builder, float remainPercent) {
-        int stripesFilled = (int) (numStripes * remainPercent / 100);
+    private void bar(StringBuilder builder, float progressPercent) {
+        int stripesFilled = (int) (numStripes * progressPercent / 100);
         char notFilled = '-';
         char filled = '*';
         // 2 init + numStripes + 2 end + 4 percentage
@@ -93,11 +104,11 @@ public class ProgressBar {
         builder.append(']');
     }
 
-    private void eta(StringBuilder builder, long remain) {
+    private void eta(StringBuilder builder, long progress) {
         builder.append("ETA ");
-        if (remain > 0) {
-            long duration = (System.currentTimeMillis() - startTime);
-            formatTime(builder,duration * (total - remain) / (remain * 1000L));
+        if (progress > 0) {
+            long duration = (System.nanoTime() - startTime);
+            formatTime(builder,duration * (total - progress) / (progress * 1_000_000_000L));
         } else {
             builder.append('-');
         }

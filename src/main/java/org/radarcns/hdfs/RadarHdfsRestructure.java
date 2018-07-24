@@ -173,9 +173,8 @@ public class RadarHdfsRestructure {
         processedFileCount = new LongAdder();
         processedRecordsCount = new LongAdder();
 
-        ProgressBar progressBar = new ProgressBar(toProcessRecordsCount, 70);
+        ProgressBar progressBar = new ProgressBar(toProcessRecordsCount, 70, 100, TimeUnit.MILLISECONDS);
         progressBar.update(0);
-        AtomicLong lastUpdate = new AtomicLong(0L);
 
         ExecutorService executor = Executors.newWorkStealingPool(pathFactory.isTopicPartitioned() ? this.numThreads : 1);
 
@@ -185,7 +184,7 @@ public class RadarHdfsRestructure {
                 for (Path filePath : paths) {
                     // If JsonMappingException occurs, log the error and continue with other files
                     try {
-                        this.processFile(filePath, topic, cache, progressBar, lastUpdate);
+                        this.processFile(filePath, topic, cache, progressBar);
                     } catch (JsonMappingException exc) {
                         logger.error("Cannot map values", exc);
                     }
@@ -203,7 +202,7 @@ public class RadarHdfsRestructure {
     }
 
     private void processFile(Path filePath, String topicName, FileCacheStore cache,
-            ProgressBar progressBar, AtomicLong lastUpdate) throws IOException {
+            ProgressBar progressBar) throws IOException {
         logger.debug("Reading {}", filePath);
 
         // Read and parseFilename avro file
@@ -233,10 +232,7 @@ public class RadarHdfsRestructure {
             this.writeRecord(record, topicName, cache, singleOffset, 0);
 
             processedRecordsCount.increment();
-            long now = System.nanoTime();
-            if (now == lastUpdate.updateAndGet(l -> now > l + 100_000_000L ? now : l)) {
-                progressBar.update(processedRecordsCount.sum());
-            }
+            progressBar.update(processedRecordsCount.sum());
             timeRead = System.nanoTime();
         }
     }
