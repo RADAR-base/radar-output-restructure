@@ -32,6 +32,7 @@ import org.junit.rules.TemporaryFolder;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -44,6 +45,7 @@ import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -52,6 +54,7 @@ import java.util.Set;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -85,8 +88,8 @@ public class CsvAvroConverterTest {
 
         Iterator<Object> actualIterator = map.values().iterator();
         Iterator<Object> expectedIterator = Arrays.<Object>asList(
-                "a", new byte[] {(byte)255}, new byte[] {(byte)255}, 1000000000000000000L,
-                1.21322421E-15, 0.1213231f, 132101, null, 1, -1, null, "some", "Y", null, false).iterator();
+                "a", new byte[] {(byte)255}, new byte[] {(byte)255}, "1000000000000000000",
+                "1.21322421E-15", "0.1213231", "132101", "", "1", "-1", "", "some", "Y", "", "false").iterator();
 
         int i = 0;
         while (actualIterator.hasNext()) {
@@ -95,7 +98,7 @@ public class CsvAvroConverterTest {
             Object expected = expectedIterator.next();
 
             if (expected instanceof byte[]) {
-                assertArrayEquals("Array for argument " + keys.get(i) + " does not match", (byte[])expected, (byte[])actual);
+                assertEquals("Array for argument " + keys.get(i) + " does not match", Base64.getEncoder().withoutPadding().encodeToString((byte[])expected), actual);
             } else {
                 assertEquals("Value for argument " + keys.get(i) + " does not match", expected, actual);
             }
@@ -217,6 +220,15 @@ public class CsvAvroConverterTest {
             assertEquals("1,3", reader.readLine());
             assertEquals("a,a", reader.readLine());
             assertNull(reader.readLine());
+        }
+    }
+
+    @Test
+    public void parseCsvLine() throws IOException {
+        try (InputStream in = new ByteArrayInputStream("a,b,\"ba\"\"ca\",\"\"\"da\"\"\"".getBytes(UTF_8));
+                Reader reader = new InputStreamReader(in)) {
+            List<String> headers = CsvAvroConverter.parseCsvLine(reader);
+            assertEquals(Arrays.asList("a", "b", "ba\"ca", "\"da\""), headers);
         }
     }
 }
