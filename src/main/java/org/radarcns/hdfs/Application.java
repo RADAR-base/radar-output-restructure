@@ -83,6 +83,11 @@ public class Application implements FileStoreFactory {
 
         Timer.getInstance().setEnabled(commandLineArgs.enableTimer);
 
+        if (commandLineArgs.enableTimer) {
+            Runtime.getRuntime().addShutdownHook(new Thread(
+                    () -> System.out.println(Timer.getInstance()), "Timer"));
+        }
+
         RestructureSettings settings = new RestructureSettings.Builder(commandLineArgs.outputDirectory)
                 .compression(commandLineArgs.compression)
                 .cacheSize(commandLineArgs.cacheSize)
@@ -179,7 +184,6 @@ public class Application implements FileStoreFactory {
         logger.info("Processed {} files and {} records",
                 hdfsReader.getProcessedFileCount(), hdfsReader.getProcessedRecordsCount());
         logger.info("Time taken: {}", formatTime(Duration.between(timeStart, Instant.now())));
-        logger.info("{}", Timer.getInstance());
     }
 
     public static class Builder {
