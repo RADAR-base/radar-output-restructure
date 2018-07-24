@@ -18,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
@@ -165,6 +166,7 @@ public class Application implements FileStoreFactory {
         Instant timeStart = Instant.now();
         RadarHdfsRestructure hdfsReader = new RadarHdfsRestructure(this);
         try {
+            Files.createDirectories(settings.getTempDir());
             for (String input : inputPaths) {
                 logger.info("In:  {}", input);
                 logger.info("Out: {}", pathFactory.getRoot());
