@@ -122,7 +122,7 @@ public class BinFile extends PostponedWriter {
 
             storage.store(tempPath, path);
         } catch (IOException e) {
-            logger.error("Failed to write bins", e);
+            logger.error("Failed to write bins: {}", e);
         }
     }
 

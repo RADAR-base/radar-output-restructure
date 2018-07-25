@@ -120,7 +120,7 @@ public final class OffsetRangeFile extends PostponedWriter {
             out.close();
             storage.store(tmpPath, path);
         } catch (IOException e) {
-            logger.error("Failed to write offsets", e);
+            logger.error("Failed to write offsets: {}", e);
         }
     }
 }

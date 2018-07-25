@@ -38,8 +38,13 @@ public class TemporaryDirectory implements Closeable {
         try {
             // Ignore errors the first time
             Files.walk(path)
-                    .forEach(tryCatch(Files::deleteIfExists, (p, ex) -> {}));
+                    .forEach(tryCatch(Files::deleteIfExists, (p, ex) -> {
+                    }));
+        } catch (IOException ex) {
+            // ignore the first time
+        }
 
+        try {
             if (Files.exists(path)) {
                 try {
                     Thread.sleep(500L);
@@ -59,6 +64,10 @@ public class TemporaryDirectory implements Closeable {
     @Override
     public void close() {
         doClose();
-        Runtime.getRuntime().removeShutdownHook(shutdownHook);
+        try {
+            Runtime.getRuntime().removeShutdownHook(shutdownHook);
+        } catch (IllegalStateException ex) {
+            // already shutting down
+        }
     }
 }

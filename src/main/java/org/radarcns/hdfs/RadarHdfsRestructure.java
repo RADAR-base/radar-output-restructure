@@ -150,7 +150,7 @@ public class RadarHdfsRestructure {
 
         ExecutorService executor = Executors.newWorkStealingPool(pathFactory.isTopicPartitioned() ? this.numThreads : 1);
 
-        ProgressBar progressBar = new ProgressBar(topicPaths.size, 70, 100, TimeUnit.MILLISECONDS);
+        ProgressBar progressBar = new ProgressBar(topicPaths.size, 50, 100, TimeUnit.MILLISECONDS);
 
         // Actually process the files
         topicPaths.files.stream()
@@ -160,7 +160,8 @@ public class RadarHdfsRestructure {
                 .sorted(Comparator.comparingLong(TopicFileList::getSize).reversed())
                 .forEach(paths -> {
                     String size = NumberFormat.getNumberInstance().format(paths.size);
-                    logger.info("Processing {} records for topic {}", size, paths.files.get(0).topic);
+                    String topic = paths.files.get(0).topic;
+                    logger.info("Processing {} records for topic {}", size, topic);
                     executor.execute(() -> {
                         int batchSize = (int)(BATCH_SIZE * ThreadLocalRandom.current().nextDouble(0.75, 1.25));
                         int currentSize = 0;
