@@ -6,8 +6,10 @@ import java.io.OutputStream;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
+import static java.nio.file.StandardCopyOption.COPY_ATTRIBUTES;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 import static java.nio.file.StandardOpenOption.APPEND;
 import static java.nio.file.StandardOpenOption.CREATE;
@@ -35,15 +37,16 @@ public class LocalStorageDriver implements StorageDriver {
     @Override
     public void move(Path oldPath, Path newPath) throws IOException {
         try {
-            Files.move(oldPath, newPath, REPLACE_EXISTING, ATOMIC_MOVE);
+            Files.move(oldPath, newPath, REPLACE_EXISTING, COPY_ATTRIBUTES, ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException ex) {
-            Files.move(oldPath, newPath, REPLACE_EXISTING);
+            Files.move(oldPath, newPath, REPLACE_EXISTING, COPY_ATTRIBUTES);
         }
     }
 
     @Override
     public void store(Path oldPath, Path newPath) throws IOException {
         move(oldPath, newPath);
+        Files.setPosixFilePermissions(newPath, PosixFilePermissions.fromString("rw-r--r--"));
     }
 
     @Override
