@@ -8,7 +8,13 @@ import java.util.function.Function;
  * {@link #modify(Consumer)} calls, since that may cause a deadlock in some implementations.
  * @param <T> type of value.
  */
-public interface FunctionalValue<T> {
+public abstract class FunctionalValue<T> {
+    protected final T value;
+
+    protected FunctionalValue(T value) {
+        this.value = value;
+    }
+
     /**
      * Read a value and apply a function on it for a result. Calls to this method may not modify
      * the given value but are allowed to have other side-effects.
@@ -16,11 +22,29 @@ public interface FunctionalValue<T> {
      * @param <V> type of output.
      * @return value computed by given function.
      */
-    <V> V read(Function<T, ? extends V> function);
+    public abstract <V> V read(Function<T, ? extends V> function);
 
     /**
      * Modify a value in given consumer. Calls to this method are allowed to have side-effects.
      * @param consumer modifying consumer.
      */
-    void modify(Consumer<? super T> consumer);
+    public abstract void modify(Consumer<? super T> consumer);
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        ReadOnlyFunctionalValue<?> that = (ReadOnlyFunctionalValue<?>) o;
+        return read(v -> that.read(v::equals));
+    }
+
+    @Override
+    public int hashCode() {
+        return read(Object::hashCode);
+    }
+
 }

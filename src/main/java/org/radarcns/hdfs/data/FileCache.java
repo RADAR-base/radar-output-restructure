@@ -118,9 +118,10 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
      * @throws IOException if the record cannot be used.
      */
     public boolean writeRecord(GenericRecord record, Accountant.Transaction transaction) throws IOException {
+        Timer timer = Timer.getInstance();
         long timeStart = System.nanoTime();
         boolean result = this.recordConverter.writeRecord(record);
-        Timer.getInstance().add("write.convert", timeStart);
+        timer.add("write.convert", timeStart);
         lastUse = System.nanoTime();
         if (result) {
             ledger.add(transaction);

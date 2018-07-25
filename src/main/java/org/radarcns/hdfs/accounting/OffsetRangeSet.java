@@ -18,6 +18,7 @@ package org.radarcns.hdfs.accounting;
 
 import org.radarcns.hdfs.util.FunctionalValue;
 import org.radarcns.hdfs.util.LockedFunctionalValue;
+import org.radarcns.hdfs.util.ReadOnlyFunctionalValue;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -28,33 +29,30 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.function.Consumer;
-import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 /** Encompasses a range of offsets. */
 public class OffsetRangeSet {
-    private final ConcurrentMap<String, FunctionalValue<SortedSet<OffsetRange>>> ranges;
-    private static final SortedSet<OffsetRange> EMPTY_SET =Collections.emptySortedSet();
-    private static final FunctionalValue<SortedSet<OffsetRange>> EMPTY_VALUE = new FunctionalValue<SortedSet<OffsetRange>>() {
-        @Override
-        public <V> V read(Function<SortedSet<OffsetRange>, ? extends V> function) {
-            return function.apply(EMPTY_SET);
-        }
+    private static final FunctionalValue<SortedSet<OffsetRange>> EMPTY_VALUE =
+            new ReadOnlyFunctionalValue<>(Collections.emptySortedSet());
 
-        @Override
-        public void modify(Consumer<? super SortedSet<OffsetRange>> consumer) {
-            throw new UnsupportedOperationException();
-        }
-    };
+    private final Supplier<FunctionalValue<SortedSet<OffsetRange>>> factory;
+    private final ConcurrentMap<String, FunctionalValue<SortedSet<OffsetRange>>> ranges;
 
     public OffsetRangeSet() {
-        ranges = new ConcurrentHashMap<>();
+        this(() -> new LockedFunctionalValue<>(new TreeSet<>()));
+    }
+
+    public OffsetRangeSet(
+            Supplier<FunctionalValue<SortedSet<OffsetRange>>> factory) {
+        this.ranges = new ConcurrentHashMap<>();
+        this.factory = factory;
     }
 
     /** Add given offset range to seen offsets. */
     public void add(OffsetRange range) {
-        ranges.computeIfAbsent(key(range), k -> new LockedFunctionalValue<>(new TreeSet<>()))
+        ranges.computeIfAbsent(key(range), k -> factory.get())
                 .modify(topicRanges -> {
                     SortedSet<OffsetRange> tail = topicRanges.tailSet(range);
                     SortedSet<OffsetRange> head = topicRanges.headSet(range);

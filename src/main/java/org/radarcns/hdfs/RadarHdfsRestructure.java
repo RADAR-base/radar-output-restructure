@@ -30,17 +30,12 @@ import org.radarcns.hdfs.accounting.Bin;
 import org.radarcns.hdfs.accounting.OffsetRange;
 import org.radarcns.hdfs.accounting.OffsetRangeSet;
 import org.radarcns.hdfs.data.FileCacheStore;
-import org.radarcns.hdfs.data.StorageDriver;
 import org.radarcns.hdfs.util.ProgressBar;
 import org.radarcns.hdfs.util.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
-import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
@@ -50,7 +45,6 @@ import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -60,7 +54,6 @@ import static org.radarcns.hdfs.util.ProgressBar.formatTime;
 public class RadarHdfsRestructure {
     private static final Logger logger = LoggerFactory.getLogger(RadarHdfsRestructure.class);
 
-    private static final java.nio.file.Path SCHEMA_OUTPUT_FILE_NAME = Paths.get("schema.json");
     private static final SimpleDateFormat FILE_DATE_FORMAT = new SimpleDateFormat("yyyyMMdd_HH");
 
     static {
@@ -71,7 +64,6 @@ public class RadarHdfsRestructure {
     private final Configuration conf;
     private final FileStoreFactory fileStoreFactory;
     private final RecordPathFactory pathFactory;
-    private final StorageDriver storage;
 
     private LongAdder processedFileCount;
     private LongAdder processedRecordsCount;
@@ -82,7 +74,6 @@ public class RadarHdfsRestructure {
         this.numThreads = factory.getSettings().getNumThreads();
         this.fileStoreFactory = factory;
         this.pathFactory = factory.getPathFactory();
-        this.storage = factory.getStorageDriver();
     }
 
     public long getProcessedFileCount() {
@@ -173,10 +164,10 @@ public class RadarHdfsRestructure {
         processedFileCount = new LongAdder();
         processedRecordsCount = new LongAdder();
 
+        ExecutorService executor = Executors.newWorkStealingPool(pathFactory.isTopicPartitioned() ? this.numThreads : 1);
+
         ProgressBar progressBar = new ProgressBar(toProcessRecordsCount, 70, 100, TimeUnit.MILLISECONDS);
         progressBar.update(0);
-
-        ExecutorService executor = Executors.newWorkStealingPool(pathFactory.isTopicPartitioned() ? this.numThreads : 1);
 
         // Actually process the files
         topicPaths.forEach((topic, paths) -> executor.submit(() -> {
@@ -215,7 +206,11 @@ public class RadarHdfsRestructure {
             return;
         }
 
+        Timer timer = Timer.getInstance();
+
+        long timeAccount = System.nanoTime();
         OffsetRange offsets = OffsetRange.parseFilename(filePath.getName());
+        timer.add("accounting.create", timeAccount);
 
         long timeRead = System.nanoTime();
         DataFileReader<GenericRecord> dataFileReader = new DataFileReader<>(input,
@@ -225,9 +220,11 @@ public class RadarHdfsRestructure {
         int i = 0;
         while (dataFileReader.hasNext()) {
             record = dataFileReader.next(record);
-            Timer.getInstance().add("read", timeRead);
+            timer.add("read", timeRead);
 
+            timeAccount = System.nanoTime();
             OffsetRange singleOffset = offsets.createSingleOffset(i++);
+            timer.add("accounting.create", timeAccount);
             // Get the fields
             this.writeRecord(record, topicName, cache, singleOffset, 0);
 
@@ -241,28 +238,24 @@ public class RadarHdfsRestructure {
             OffsetRange offset, int suffix) throws IOException {
         RecordPathFactory.RecordOrganization metadata = pathFactory.getRecordOrganization(topicName, record, suffix);
 
+        Timer timer = Timer.getInstance();
+
+        long timeAccount = System.nanoTime();
         String timeBin = pathFactory.getTimeBin(metadata.getTime());
-        Bin bin = new Bin(topicName, metadata.getCategory(), timeBin);
+        Accountant.Transaction transaction = new Accountant.Transaction(offset,
+                new Bin(topicName, metadata.getCategory(), timeBin));
+        timer.add("accounting.create", timeAccount);
 
         // Write data
         long timeWrite = System.nanoTime();
         FileCacheStore.WriteResponse response = cache.writeRecord(
-                metadata.getPath(), record, new Accountant.Transaction(offset, bin));
-        Timer.getInstance().add("write", timeWrite);
+                topicName, metadata.getPath(), record, transaction);
+        timer.add("write", timeWrite);
 
         if (!response.isSuccessful()) {
             // Write was unsuccessful due to different number of columns,
             // try again with new file name
             writeRecord(record, topicName, cache, offset, ++suffix);
-        } else {
-            // Write was successful, finalize the write
-            java.nio.file.Path schemaPath = metadata.getPath().resolveSibling(SCHEMA_OUTPUT_FILE_NAME);
-            if (!storage.exists(schemaPath)) {
-                try (OutputStream out = storage.newOutputStream(schemaPath, false);
-                     Writer writer = new OutputStreamWriter(out)) {
-                    writer.write(record.getSchema().toString(true));
-                }
-            }
         }
     }
 }

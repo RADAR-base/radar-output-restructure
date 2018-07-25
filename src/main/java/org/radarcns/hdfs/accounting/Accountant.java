@@ -1,9 +1,10 @@
 package org.radarcns.hdfs.accounting;
 
-import com.google.common.primitives.UnsignedLong;
 import org.radarcns.hdfs.FileStoreFactory;
 import org.radarcns.hdfs.config.RestructureSettings;
 import org.radarcns.hdfs.data.StorageDriver;
+import org.radarcns.hdfs.util.DirectFunctionalValue;
+import org.radarcns.hdfs.util.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,6 +16,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.TreeSet;
 
 import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
 
@@ -39,14 +41,17 @@ public class Accountant implements Flushable, Closeable {
     }
 
     public void process(Ledger ledger) {
+        long timeProcess = System.nanoTime();
         binFile.putAll(ledger.bins);
         binFile.triggerWrite();
         offsetFile.addAll(ledger.offsets);
         offsetFile.triggerWrite();
+        Timer.getInstance().add("accounting.process", timeProcess);
     }
 
     @Override
     public void close() throws IOException {
+        long timeClose = System.nanoTime();
         IOException exception = null;
         try {
             binFile.close();
@@ -69,6 +74,7 @@ public class Accountant implements Flushable, Closeable {
         if (exception != null) {
             throw exception;
         }
+        Timer.getInstance().add("accounting.close", timeClose);
     }
 
     public OffsetRangeSet getOffsets() {
@@ -77,6 +83,7 @@ public class Accountant implements Flushable, Closeable {
 
     @Override
     public void flush() throws IOException {
+        long timeFlush = System.nanoTime();
         IOException exception = null;
         try {
             binFile.flush();
@@ -95,6 +102,7 @@ public class Accountant implements Flushable, Closeable {
         if (exception != null) {
             throw exception;
         }
+        Timer.getInstance().add("accounting.flush", timeFlush);
     }
 
     public BinFile getBins() {
@@ -106,13 +114,15 @@ public class Accountant implements Flushable, Closeable {
         private final Map<Bin, Long> bins;
 
         public Ledger() {
-            offsets = new OffsetRangeSet();
+            offsets = new OffsetRangeSet(() -> new DirectFunctionalValue<>(new TreeSet<>()));
             bins = new HashMap<>();
         }
 
         public void add(Transaction transaction) {
+            long timeAdd = System.nanoTime();
             offsets.add(transaction.offset);
             bins.compute(transaction.bin, (b, vOld) -> vOld == null ? 1L : vOld + 1L);
+            Timer.getInstance().add("accounting.add", timeAdd);
         }
     }
 

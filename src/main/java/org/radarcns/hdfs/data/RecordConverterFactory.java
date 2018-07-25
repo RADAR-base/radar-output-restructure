@@ -17,11 +17,9 @@
 package org.radarcns.hdfs.data;
 
 import org.apache.avro.generic.GenericRecord;
-import org.radarcns.hdfs.util.Timer;
 
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;

@@ -16,6 +16,7 @@
 
 package org.radarcns.hdfs.data;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.radarcns.hdfs.FileStoreFactory;
 import org.radarcns.hdfs.accounting.Accountant;
@@ -28,6 +29,9 @@ import org.slf4j.LoggerFactory;
 import java.io.Closeable;
 import java.io.Flushable;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -52,6 +56,7 @@ public class FileCacheStore implements Flushable, Closeable {
     private final FileStoreFactory factory;
     private final int maxCacheSize;
     private final Accountant accountant;
+    private final Map<java.nio.file.Path, java.nio.file.Path> schemasAdded;
 
     public FileCacheStore(FileStoreFactory factory, Accountant accountant) throws IOException {
         this.factory = factory;
@@ -61,6 +66,7 @@ public class FileCacheStore implements Flushable, Closeable {
         this.tmpDir = settings.getTempDir().resolve(UUID.randomUUID().toString());
         this.accountant = accountant;
         Files.createDirectories(this.tmpDir);
+        this.schemasAdded = new HashMap<>();
     }
 
     /**
@@ -72,7 +78,8 @@ public class FileCacheStore implements Flushable, Closeable {
      * @return Integer value according to one of the response codes.
      * @throws IOException when failing to open a file or writing to it.
      */
-    public WriteResponse writeRecord(Path path, GenericRecord record, Accountant.Transaction transaction) throws IOException {
+    public WriteResponse writeRecord(String topic, Path path, GenericRecord record,
+            Accountant.Transaction transaction) throws IOException {
         FileCache cache = caches.get(path);
         boolean hasCache = cache != null;
         if (!hasCache) {
@@ -85,6 +92,7 @@ public class FileCacheStore implements Flushable, Closeable {
                 long timeOpen = System.nanoTime();
                 cache = new FileCache(factory, path, record, tmpDir, accountant);
                 Timer.getInstance().add("write.open", timeOpen);
+                writeSchema(topic, path, record.getSchema());
             } catch (IOException ex) {
                 logger.error("Could not open cache for {}", path, ex);
                 return WriteResponse.NO_CACHE_AND_NO_WRITE;
@@ -107,6 +115,25 @@ public class FileCacheStore implements Flushable, Closeable {
             cache.close();
             return WriteResponse.NO_CACHE_AND_NO_WRITE;
         }
+    }
+
+    private void writeSchema(String topic, Path path, Schema schema) throws IOException {
+        long writeSchema = System.nanoTime();
+        // Write was successful, finalize the write
+        java.nio.file.Path schemaPath = path.resolveSibling("schema-" + topic + ".json");
+        // First check if we already checked this path, because otherwise the storage.exists call
+        // will take too much time.
+        if (schemasAdded.putIfAbsent(schemaPath, schemaPath) == null) {
+            StorageDriver storage = factory.getStorageDriver();
+
+            if (!storage.exists(schemaPath)) {
+                try (OutputStream out = storage.newOutputStream(schemaPath, false);
+                     Writer writer = new OutputStreamWriter(out)) {
+                    writer.write(schema.toString(true));
+                }
+            }
+        }
+        Timer.getInstance().add("write.schema", writeSchema);
     }
 
     /**
