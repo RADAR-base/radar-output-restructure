@@ -1,4 +1,4 @@
-package org.radarcns.hdfs.data;
+package org.radarcns.hdfs.util;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,14 +31,27 @@ public class TemporaryDirectory implements Closeable {
 
     private void doClose() {
         try {
+            // Ignore errors the first time
             Files.walk(path)
-                    .forEach(tryCatch(Files::deleteIfExists,
-                            (p, ex) -> logger.warn("Cannot delete temporary path {}: {}", p, ex)));
+                    .forEach(tryCatch(Files::deleteIfExists, (p, ex) -> {}));
+
+            if (Files.exists(path)) {
+                try {
+                    Thread.sleep(500L);
+                } catch (InterruptedException ex) {
+                    logger.debug("Waiting for temporary directory deletion interrupted");
+                    Thread.currentThread().interrupt();
+                }
+                Files.walk(path)
+                        .forEach(tryCatch(Files::deleteIfExists,
+                                (p, ex) -> logger.warn("Cannot delete temporary path {}: {}", p, ex)));
+            }
         } catch (IOException ex) {
             logger.warn("Cannot delete temporary directory {}: {}", path, ex);
         }
     }
 
+    @Override
     public void close() {
         doClose();
         Runtime.getRuntime().removeShutdownHook(shutdownHook);

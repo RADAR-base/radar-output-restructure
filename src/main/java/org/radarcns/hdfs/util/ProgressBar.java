@@ -80,6 +80,8 @@ public class ProgressBar {
         percentage(builder, progressPercent);
         builder.append(" - ");
         eta(builder, progress);
+        builder.append(" - ");
+        heapSize(builder);
 
         // overwrite any characters from the previous print
         int currentLineLength = builder.length();
@@ -95,6 +97,12 @@ public class ProgressBar {
 
             System.out.print(builder.toString());
         }
+    }
+
+    private void heapSize(StringBuilder builder) {
+        builder.append("Memory: ")
+                .append(Runtime.getRuntime().totalMemory() / 1_000_000)
+                .append(" MB");
     }
 
     private void percentage(StringBuilder builder, float progressPercent) {

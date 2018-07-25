@@ -21,6 +21,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.radarcns.hdfs.FileStoreFactory;
 import org.radarcns.hdfs.accounting.Accountant;
 import org.radarcns.hdfs.config.RestructureSettings;
+import org.radarcns.hdfs.util.TemporaryDirectory;
 import org.radarcns.hdfs.util.ThrowingConsumer;
 import org.radarcns.hdfs.util.Timer;
 import org.slf4j.Logger;

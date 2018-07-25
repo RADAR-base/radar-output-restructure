@@ -8,6 +8,7 @@ import java.io.Flushable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -78,16 +79,15 @@ public abstract class PostponedWriter implements Closeable, Flushable {
 
     private void doFlush(boolean shutdown) throws IOException {
         Future<?> localFuture = executor.submit(this::startWrite);
-        Future<?> oldFuture = writeFuture.getAndUpdate(f -> localFuture);
-        if (oldFuture != null) {
-            oldFuture.cancel(false);
-        }
+        writeFuture.set(localFuture);
         if (shutdown) {
             executor.shutdown();
         }
 
         try {
             localFuture.get(30, TimeUnit.SECONDS);
+        } catch (CancellationException ex) {
+            logger.debug("File flush for {} was cancelled, another thread executed it", name);
         } catch (ExecutionException ex) {
             logger.error("Failed to write data for {}", name, ex.getCause());
             throw new IOException("Failed to write data", ex.getCause());

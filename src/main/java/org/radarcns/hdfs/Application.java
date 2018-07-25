@@ -168,6 +168,9 @@ public class Application implements FileStoreFactory {
     }
 
     public void start() {
+        System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism",
+                String.valueOf(settings.getNumThreads() - 1));
+
         Instant timeStart = Instant.now();
         RadarHdfsRestructure hdfsReader = new RadarHdfsRestructure(this);
         try {

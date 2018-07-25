@@ -37,9 +37,9 @@ public class LocalStorageDriver implements StorageDriver {
     @Override
     public void move(Path oldPath, Path newPath) throws IOException {
         try {
-            Files.move(oldPath, newPath, REPLACE_EXISTING, COPY_ATTRIBUTES, ATOMIC_MOVE);
+            Files.move(oldPath, newPath, REPLACE_EXISTING, ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException ex) {
-            Files.move(oldPath, newPath, REPLACE_EXISTING, COPY_ATTRIBUTES);
+            Files.move(oldPath, newPath, REPLACE_EXISTING);
         }
     }
 

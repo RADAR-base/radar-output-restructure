@@ -3,7 +3,7 @@ package org.radarcns.hdfs.accounting;
 import org.radarcns.hdfs.FileStoreFactory;
 import org.radarcns.hdfs.config.RestructureSettings;
 import org.radarcns.hdfs.data.StorageDriver;
-import org.radarcns.hdfs.data.TemporaryDirectory;
+import org.radarcns.hdfs.util.TemporaryDirectory;
 import org.radarcns.hdfs.util.DirectFunctionalValue;
 import org.radarcns.hdfs.util.Timer;
 import org.slf4j.Logger;

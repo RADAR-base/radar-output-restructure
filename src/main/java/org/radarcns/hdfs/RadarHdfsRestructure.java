@@ -39,6 +39,7 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
@@ -49,12 +50,15 @@ import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.radarcns.hdfs.util.Partitioners.unorderedBatches;
 import static org.radarcns.hdfs.util.ProgressBar.formatTime;
 
 public class RadarHdfsRestructure {
     private static final Logger logger = LoggerFactory.getLogger(RadarHdfsRestructure.class);
 
     private static final SimpleDateFormat FILE_DATE_FORMAT = new SimpleDateFormat("yyyyMMdd_HH");
+    /** Number of offsets to process in a single task. */
+    private static final int PARTITION_SIZE = 500_000;
 
     static {
         FILE_DATE_FORMAT.setTimeZone(TimeZone.getTimeZone("UTC"));
@@ -94,7 +98,7 @@ public class RadarHdfsRestructure {
 
             Instant timeStart = Instant.now();
             // Get filenames to process
-            Map<String, List<Path>> topicPaths = getTopicPaths(fs, path, accountant.getOffsets());
+            List<TopicFile> topicPaths = getTopicPaths(fs, path, accountant.getOffsets());
             logger.info("Time retrieving file list: {}",
                     formatTime(Duration.between(timeStart, Instant.now())));
 
@@ -105,25 +109,15 @@ public class RadarHdfsRestructure {
         }
     }
 
-    private Map<String, List<Path>> getTopicPaths(FileSystem fs, Path path, OffsetRangeSet seenFiles) {
-        String oldParallelism = System.getProperty("java.util.concurrent.ForkJoinPool.common.parallelism");
-        System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism", String.valueOf(numThreads - 1));
-
-        Map<String, List<Path>> result = walk(fs, path)
+    private List<TopicFile> getTopicPaths(FileSystem fs, Path path, OffsetRangeSet seenFiles) {
+        return walk(fs, path)
                 .filter(f -> {
                     String name = f.getName();
                     return name.endsWith(".avro")
                             && !seenFiles.contains(OffsetRange.parseFilename(name));
                 })
-                .collect(Collectors.groupingByConcurrent(f -> f.getParent().getParent().getName()));
-
-        if (oldParallelism == null) {
-            System.clearProperty("java.util.concurrent.ForkJoinPool.common.parallelism");
-        } else {
-            System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism", oldParallelism);
-        }
-
-        return result;
+                .map(f -> new TopicFile(f.getParent().getParent().getName(), f))
+                .collect(Collectors.toList());
     }
 
     private Stream<Path> walk(FileSystem fs, Path path) {
@@ -147,16 +141,12 @@ public class RadarHdfsRestructure {
                 });
     }
 
-    private void processPaths(Map<String, List<Path>> topicPaths, Accountant accountant) throws InterruptedException {
-        long toProcessRecordsCount = topicPaths.values().parallelStream()
-                .flatMap(List::stream)
-                .map(p -> OffsetRange.parseFilename(p.getName()))
-                .mapToInt(r -> (int)(r.getOffsetTo() - r.getOffsetFrom()) + 1)
+    private void processPaths(List<TopicFile> topicPaths, Accountant accountant) throws InterruptedException {
+        long toProcessRecordsCount = topicPaths.stream()
+                .mapToInt(TopicFile::size)
                 .sum();
 
-        long toProcessFileCount = topicPaths.values().parallelStream()
-                .mapToInt(List::size)
-                .sum();
+        long toProcessFileCount = topicPaths.size();
 
         logger.info("Converting {} files with {} records",
                 toProcessFileCount, toProcessRecordsCount);
@@ -164,52 +154,63 @@ public class RadarHdfsRestructure {
         processedFileCount = new LongAdder();
         processedRecordsCount = new LongAdder();
 
-        ExecutorService executor = Executors.newWorkStealingPool(pathFactory.isTopicPartitioned() ? this.numThreads : 1);
+        ExecutorService executor = Executors.newFixedThreadPool(pathFactory.isTopicPartitioned() ? this.numThreads : 1);
 
         ProgressBar progressBar = new ProgressBar(toProcessRecordsCount, 70, 100, TimeUnit.MILLISECONDS);
-        progressBar.update(0);
 
         // Actually process the files
-        topicPaths.forEach((topic, paths) -> executor.submit(() -> {
-            try (FileCacheStore cache = fileStoreFactory.newFileCacheStore(accountant)) {
-                for (Path filePath : paths) {
-                    // If JsonMappingException occurs, log the error and continue with other files
-                    try {
-                        this.processFile(filePath, topic, cache, progressBar);
-                    } catch (JsonMappingException exc) {
-                        logger.error("Cannot map values", exc);
-                    }
-                    processedFileCount.increment();
-                }
-            } catch (IOException ex) {
-                logger.error("Failed to process file", ex);
-            }
-        }));
+        partitionPaths(topicPaths).entrySet().stream()
+                // sort in ascending order of number of partitions
+                // to ensure that largest number of partitions go first
+                .sorted(Comparator.comparing(e -> -e.getValue().size()))
+                .forEach(e -> {
+                    logger.info("Processing {} partitions for topic {}", e.getValue().size(), e.getKey());
+                    executor.execute(() -> e.getValue().forEach(paths -> {
+                            try (FileCacheStore cache = fileStoreFactory.newFileCacheStore(accountant)) {
+                                for (TopicFile file : paths) {
+                                    // If JsonMappingException occurs, log the error and continue with other files
+                                    try {
+                                        this.processFile(file, cache, progressBar);
+                                    } catch (JsonMappingException exc) {
+                                        logger.error("Cannot map values", exc);
+                                    }
+                                    processedFileCount.increment();
+                                }
+                            } catch (IOException ex) {
+                                logger.error("Failed to process file", ex);
+                            }
+                        }));
+                });
+
+        progressBar.update(0);
 
         executor.shutdown();
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
         progressBar.update(toProcessRecordsCount);
     }
 
-    private void processFile(Path filePath, String topicName, FileCacheStore cache,
+    /** Partition the paths into sets of 10,000 records. */
+    private Map<String, List<List<TopicFile>>> partitionPaths(List<TopicFile> allPaths) {
+        return allPaths.stream()
+                .collect(Collectors.groupingBy(TopicFile::getTopic,
+                        unorderedBatches(RadarHdfsRestructure.PARTITION_SIZE, TopicFile::size, Collectors.toList())));
+    }
+
+    private void processFile(TopicFile file, FileCacheStore cache,
             ProgressBar progressBar) throws IOException {
-        logger.debug("Reading {}", filePath);
+        logger.debug("Reading {}", file.path);
 
         // Read and parseFilename avro file
-        FsInput input = new FsInput(filePath, conf);
+        FsInput input = new FsInput(file.path, conf);
 
         // processing zero-length files may trigger a stall. See:
         // https://github.com/RADAR-CNS/Restructure-HDFS-topic/issues/3
         if (input.length() == 0) {
-            logger.warn("File {} has zero length, skipping.", filePath);
+            logger.warn("File {} has zero length, skipping.", file.path);
             return;
         }
 
         Timer timer = Timer.getInstance();
-
-        long timeAccount = System.nanoTime();
-        OffsetRange offsets = OffsetRange.parseFilename(filePath.getName());
-        timer.add("accounting.create", timeAccount);
 
         long timeRead = System.nanoTime();
         DataFileReader<GenericRecord> dataFileReader = new DataFileReader<>(input,
@@ -221,11 +222,11 @@ public class RadarHdfsRestructure {
             record = dataFileReader.next(record);
             timer.add("read", timeRead);
 
-            timeAccount = System.nanoTime();
-            OffsetRange singleOffset = offsets.createSingleOffset(i++);
+            long timeAccount = System.nanoTime();
+            OffsetRange singleOffset = file.range.createSingleOffset(i++);
             timer.add("accounting.create", timeAccount);
             // Get the fields
-            this.writeRecord(record, topicName, cache, singleOffset, 0);
+            this.writeRecord(record, file.topic, cache, singleOffset, 0);
 
             processedRecordsCount.increment();
             progressBar.update(processedRecordsCount.sum());
@@ -255,6 +256,26 @@ public class RadarHdfsRestructure {
             // Write was unsuccessful due to different number of columns,
             // try again with new file name
             writeRecord(record, topicName, cache, offset, ++suffix);
+        }
+    }
+
+    private static class TopicFile {
+        private final String topic;
+        private final Path path;
+        private final OffsetRange range;
+
+        private TopicFile(String topic, Path path) {
+            this.topic = topic;
+            this.path = path;
+            this.range = OffsetRange.parseFilename(path.getName());
+        }
+
+        public String getTopic() {
+            return topic;
+        }
+
+        public int size() {
+            return 1 + (int) (range.getOffsetTo() - range.getOffsetFrom());
         }
     }
 }
