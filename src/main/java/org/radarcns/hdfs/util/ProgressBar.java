@@ -32,6 +32,7 @@ public class ProgressBar {
     private final AtomicBoolean isDone;
     private final long updateIntervalNanos;
     private final AtomicLong lastUpdate;
+    private int previousLineLength;
 
     public ProgressBar(long total, int numStripes, long updateInterval, TimeUnit updateIntervalUnit) {
         this.updateIntervalNanos = updateIntervalUnit.toNanos(updateInterval);
@@ -46,11 +47,13 @@ public class ProgressBar {
         this.startTime = System.nanoTime();
         this.lastUpdate = new AtomicLong(0L);
         this.isDone = new AtomicBoolean(false);
+        this.previousLineLength = 0;
     }
 
     public synchronized void update(long progress) {
         long now = System.nanoTime();
-        if (updateIntervalNanos <= 0 || lastUpdate.updateAndGet(l -> now > l + updateIntervalNanos ? now : l) != now) {
+        if (updateIntervalNanos <= 0
+                || lastUpdate.updateAndGet(l -> now > l + updateIntervalNanos ? now : l) != now) {
             return;
         }
 
@@ -78,11 +81,20 @@ public class ProgressBar {
         builder.append(" - ");
         eta(builder, progress);
 
-        if (progress >= total) {
-            builder.append('\n');
-        }
+        // overwrite any characters from the previous print
+        int currentLineLength = builder.length();
+        synchronized (this) {
+            while (builder.length() < previousLineLength) {
+                builder.append(' ');
+            }
+            previousLineLength = currentLineLength;
 
-        System.out.print(builder.toString());
+            if (progress >= total) {
+                builder.append('\n');
+            }
+
+            System.out.print(builder.toString());
+        }
     }
 
     private void percentage(StringBuilder builder, float progressPercent) {
