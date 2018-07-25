@@ -181,7 +181,6 @@ public class RadarHdfsRestructure {
                     }
                     processedFileCount.increment();
                 }
-                accountant.flush();
             } catch (IOException ex) {
                 logger.error("Failed to process file", ex);
             }

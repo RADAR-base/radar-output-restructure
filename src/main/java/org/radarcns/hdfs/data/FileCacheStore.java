@@ -149,6 +149,7 @@ public class FileCacheStore implements Flushable, Closeable {
                 caches.remove(rmCache.getPath());
                 rmCache.close();
             }
+            accountant.flush();
         }
     }
 
@@ -162,6 +163,7 @@ public class FileCacheStore implements Flushable, Closeable {
         try {
             allCaches(FileCache::close);
             tmpDir.close();
+            accountant.flush();
         } finally {
             caches.clear();
         }
