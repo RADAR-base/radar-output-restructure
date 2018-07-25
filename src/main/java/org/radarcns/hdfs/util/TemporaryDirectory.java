@@ -19,10 +19,15 @@ public class TemporaryDirectory implements Closeable {
 
     public TemporaryDirectory(Path root, String prefix) throws IOException {
         Files.createDirectories(root);
-        path = Files.createTempDirectory(root, prefix);
+        path  = Files.createTempDirectory(root, prefix);
         shutdownHook = new Thread(this::doClose,
                 "remove-" + path.toString().replaceAll("/", "-"));
-        Runtime.getRuntime().addShutdownHook(shutdownHook);
+        try {
+            Runtime.getRuntime().addShutdownHook(shutdownHook);
+        } catch (IllegalStateException ex) {
+            close();
+            throw ex;
+        }
     }
 
     public Path getPath() {

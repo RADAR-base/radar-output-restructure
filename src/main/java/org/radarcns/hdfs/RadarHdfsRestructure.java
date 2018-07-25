@@ -36,21 +36,21 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.radarcns.hdfs.util.Partitioners.unorderedBatches;
 import static org.radarcns.hdfs.util.ProgressBar.formatTime;
 
 public class RadarHdfsRestructure {
@@ -58,7 +58,7 @@ public class RadarHdfsRestructure {
 
     private static final SimpleDateFormat FILE_DATE_FORMAT = new SimpleDateFormat("yyyyMMdd_HH");
     /** Number of offsets to process in a single task. */
-    private static final int PARTITION_SIZE = 500_000;
+    private static final int BATCH_SIZE = 500_000;
 
     static {
         FILE_DATE_FORMAT.setTimeZone(TimeZone.getTimeZone("UTC"));
@@ -98,7 +98,7 @@ public class RadarHdfsRestructure {
 
             Instant timeStart = Instant.now();
             // Get filenames to process
-            List<TopicFile> topicPaths = getTopicPaths(fs, path, accountant.getOffsets());
+            TopicFileList topicPaths = getTopicPaths(fs, path, accountant.getOffsets());
             logger.info("Time retrieving file list: {}",
                     formatTime(Duration.between(timeStart, Instant.now())));
 
@@ -109,15 +109,15 @@ public class RadarHdfsRestructure {
         }
     }
 
-    private List<TopicFile> getTopicPaths(FileSystem fs, Path path, OffsetRangeSet seenFiles) {
-        return walk(fs, path)
+    private TopicFileList getTopicPaths(FileSystem fs, Path path, OffsetRangeSet seenFiles) {
+        return new TopicFileList(walk(fs, path)
                 .filter(f -> {
                     String name = f.getName();
                     return name.endsWith(".avro")
                             && !seenFiles.contains(OffsetRange.parseFilename(name));
                 })
                 .map(f -> new TopicFile(f.getParent().getParent().getName(), f))
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()));
     }
 
     private Stream<Path> walk(FileSystem fs, Path path) {
@@ -141,59 +141,57 @@ public class RadarHdfsRestructure {
                 });
     }
 
-    private void processPaths(List<TopicFile> topicPaths, Accountant accountant) throws InterruptedException {
-        long toProcessRecordsCount = topicPaths.stream()
-                .mapToInt(TopicFile::size)
-                .sum();
-
-        long toProcessFileCount = topicPaths.size();
-
+    private void processPaths(TopicFileList topicPaths, Accountant accountant) throws InterruptedException {
         logger.info("Converting {} files with {} records",
-                toProcessFileCount, toProcessRecordsCount);
+                topicPaths.files.size(), NumberFormat.getNumberInstance().format(topicPaths.size));
 
         processedFileCount = new LongAdder();
         processedRecordsCount = new LongAdder();
 
-        ExecutorService executor = Executors.newFixedThreadPool(pathFactory.isTopicPartitioned() ? this.numThreads : 1);
+        ExecutorService executor = Executors.newWorkStealingPool(pathFactory.isTopicPartitioned() ? this.numThreads : 1);
 
-        ProgressBar progressBar = new ProgressBar(toProcessRecordsCount, 70, 100, TimeUnit.MILLISECONDS);
+        ProgressBar progressBar = new ProgressBar(topicPaths.size, 70, 100, TimeUnit.MILLISECONDS);
 
         // Actually process the files
-        partitionPaths(topicPaths).entrySet().stream()
-                // sort in ascending order of number of partitions
-                // to ensure that largest number of partitions go first
-                .sorted(Comparator.comparing(e -> -e.getValue().size()))
-                .forEach(e -> {
-                    logger.info("Processing {} partitions for topic {}", e.getValue().size(), e.getKey());
-                    executor.execute(() -> e.getValue().forEach(paths -> {
-                            try (FileCacheStore cache = fileStoreFactory.newFileCacheStore(accountant)) {
-                                for (TopicFile file : paths) {
-                                    // If JsonMappingException occurs, log the error and continue with other files
-                                    try {
-                                        this.processFile(file, cache, progressBar);
-                                    } catch (JsonMappingException exc) {
-                                        logger.error("Cannot map values", exc);
-                                    }
-                                    processedFileCount.increment();
+        topicPaths.files.stream()
+                .collect(Collectors.groupingBy(TopicFile::getTopic)).values().stream()
+                .map(TopicFileList::new)
+                // ensure that largest values go first on the executor queue
+                .sorted(Comparator.comparingLong(TopicFileList::getSize).reversed())
+                .forEach(paths -> {
+                    String size = NumberFormat.getNumberInstance().format(paths.size);
+                    logger.info("Processing {} records for topic {}", size, paths.files.get(0).topic);
+                    executor.execute(() -> {
+                        int batchSize = (int)(BATCH_SIZE * ThreadLocalRandom.current().nextDouble(0.75, 1.25));
+                        int currentSize = 0;
+                        try (FileCacheStore cache = fileStoreFactory.newFileCacheStore(accountant)) {
+                            for (TopicFile file : paths.files) {
+                                try {
+                                    this.processFile(file, cache, progressBar);
+                                } catch (JsonMappingException exc) {
+                                    logger.error("Cannot map values", exc);
                                 }
-                            } catch (IOException ex) {
-                                logger.error("Failed to process file", ex);
+                                processedFileCount.increment();
+
+                                currentSize += file.size();
+                                if (currentSize >= batchSize) {
+                                    currentSize = 0;
+                                    cache.flush();
+                                }
                             }
-                        }));
+                        } catch (IOException ex) {
+                            logger.error("Failed to process file", ex);
+                        } catch (IllegalStateException ex) {
+                            logger.warn("Shutting down");
+                        }
+                    });
                 });
 
         progressBar.update(0);
 
         executor.shutdown();
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
-        progressBar.update(toProcessRecordsCount);
-    }
-
-    /** Partition the paths into sets of 10,000 records. */
-    private Map<String, List<List<TopicFile>>> partitionPaths(List<TopicFile> allPaths) {
-        return allPaths.stream()
-                .collect(Collectors.groupingBy(TopicFile::getTopic,
-                        unorderedBatches(RadarHdfsRestructure.PARTITION_SIZE, TopicFile::size, Collectors.toList())));
+        progressBar.update(topicPaths.size);
     }
 
     private void processFile(TopicFile file, FileCacheStore cache,
@@ -256,6 +254,22 @@ public class RadarHdfsRestructure {
             // Write was unsuccessful due to different number of columns,
             // try again with new file name
             writeRecord(record, topicName, cache, offset, ++suffix);
+        }
+    }
+
+    private static class TopicFileList {
+        private final List<TopicFile> files;
+        private final long size;
+
+        public TopicFileList(List<TopicFile> files) {
+            this.files = files;
+            this.size = files.stream()
+                    .mapToInt(TopicFile::size)
+                    .sum();
+        }
+
+        public long getSize() {
+            return size;
         }
     }
 

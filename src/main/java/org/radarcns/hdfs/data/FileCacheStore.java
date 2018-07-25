@@ -156,18 +156,18 @@ public class FileCacheStore implements Flushable, Closeable {
 
     @Override
     public void flush() throws IOException {
-        allCaches(FileCache::flush);
-    }
-
-    @Override
-    public void close() throws IOException {
         try {
             allCaches(FileCache::close);
-            tmpDir.close();
             accountant.flush();
         } finally {
             caches.clear();
         }
+    }
+
+    @Override
+    public void close() throws IOException {
+        flush();
+        tmpDir.close();
     }
 
     private void allCaches(ThrowingConsumer<FileCache> cacheHandler) throws IOException {
