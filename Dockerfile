@@ -35,10 +35,10 @@ MAINTAINER Joris Borgdorff <joris@thehyve.nl>
 
 LABEL description="RADAR-base HDFS data restructuring"
 
+ENV JAVA_OPTS -Djava.library.path=${HADOOP_HOME}/lib/native
+
 COPY --from=builder /code/build/third-party/* /usr/lib/
 COPY --from=builder /code/build/scripts/* /usr/bin/
 COPY --from=builder /code/build/libs/* /usr/lib/
-
-ENV JAVA_OPTS -Djava.library.path=${HADOOP_HOME}/lib/native
 
 ENTRYPOINT ["radar-hdfs-restructure"]

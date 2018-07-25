@@ -21,15 +21,16 @@ import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.junit.Test;
-import org.radarcns.hdfs.RestructureAvroRecords;
 
-import java.util.Date;
+import java.time.Instant;
 
 import static org.junit.Assert.assertEquals;
 
-public class RestructureAvroRecordsTest {
+public class RadarHdfsRestructureTest {
     @Test
-    public void createHourTimestamp() throws Exception {
+    public void createHourTimestamp() {
+        ObservationKeyPathFactory factory = new ObservationKeyPathFactory();
+
         long currentTime = 1493711175;  // Tue May  2 07:46:15 UTC 2017
         long startTime = (currentTime - 3600) * 1000L;
 
@@ -45,18 +46,18 @@ public class RestructureAvroRecordsTest {
         GenericRecord valueField1 = new GenericRecordBuilder(valueSchema1)
                 .set("time", (double)currentTime).build();
 
-        Date date = RestructureAvroRecords.getDate(keyField, valueField1);
-        String result = RestructureAvroRecords.createHourTimestamp(date);
+        Instant date = RecordPathFactory.getDate(keyField, valueField1);
+        String result = factory.getTimeBin(date);
 
-        assertEquals("20170502_07", result);
+        assertEquals("20170502_0700", result);
 
         Schema valueSchema2 = SchemaBuilder.record("value").fields()
                 .name("a").type("double").noDefault()
                 .endRecord();
         GenericRecord valueField2 = new GenericRecordBuilder(valueSchema2)
                 .set("a", 0.1).build();
-        date = RestructureAvroRecords.getDate(keyField, valueField2);
-        result = RestructureAvroRecords.createHourTimestamp(date);
-        assertEquals("20170502_06", result);
+        date = RecordPathFactory.getDate(keyField, valueField2);
+        result = factory.getTimeBin(date);
+        assertEquals("20170502_0600", result);
     }
 }

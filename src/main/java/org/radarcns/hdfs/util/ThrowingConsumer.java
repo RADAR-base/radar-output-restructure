@@ -4,10 +4,12 @@ import java.io.IOException;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
+/** Consumer that throws IOException. */
 @FunctionalInterface
 public interface ThrowingConsumer<T> {
     void accept(T t) throws IOException;
 
+    /** Regularizes throwing consumer by catching the exception. */
     static <T> Consumer<T> tryCatch(ThrowingConsumer<T> consumer, BiConsumer<T, IOException> catchClause) {
         return t -> {
             try {
@@ -16,5 +18,12 @@ public interface ThrowingConsumer<T> {
                 catchClause.accept(t, ex);
             }
         };
+    }
+
+    /** Regularizes throwing consumer by rethrowing IOException as IllegalStateException. */
+    static <T> Consumer<T> tryCatch(ThrowingConsumer<T> consumer, String illegalStateException) {
+        return tryCatch(consumer, (t, ex) -> {
+            throw new IllegalStateException(illegalStateException, ex);
+        });
     }
 }

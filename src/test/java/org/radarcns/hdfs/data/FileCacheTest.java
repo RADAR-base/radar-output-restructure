@@ -24,8 +24,11 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.radarcns.hdfs.Application;
+import org.radarcns.hdfs.accounting.Accountant;
+import org.radarcns.hdfs.accounting.Bin;
+import org.radarcns.hdfs.accounting.OffsetRange;
+import org.radarcns.hdfs.config.RestructureSettings;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -34,8 +37,6 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.zip.GZIPInputStream;
 
 import static org.junit.Assert.assertEquals;
@@ -44,39 +45,50 @@ import static org.junit.Assert.assertNull;
 /**
  * Created by joris on 03/07/2017.
  */
-@RunWith(Parameterized.class)
 public class FileCacheTest {
-    @Parameterized.Parameters
-    public static Collection<Boolean> useTmpDir() {
-        return Arrays.asList(Boolean.TRUE, Boolean.FALSE);
-    }
 
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
     private Path path;
-    private RecordConverterFactory csvFactory;
     private Record exampleRecord;
     private Path tmpDir;
-
-    @Parameterized.Parameter
-    public Boolean useTmpDir;
+    private Bin bin;
+    private OffsetRange offsetRange;
+    private Application factory;
+    private Accountant accountant;
 
     @Before
     public void setUp() throws IOException {
         this.path = folder.newFile("f").toPath();
-        this.tmpDir = useTmpDir ? folder.newFolder().toPath() : null;
+        this.tmpDir = folder.newFolder().toPath();
 
-        this.csvFactory = CsvAvroConverter.getFactory();
         Schema schema = SchemaBuilder.record("simple").fields()
                 .name("a").type("string").noDefault()
                 .endRecord();
         this.exampleRecord = new GenericRecordBuilder(schema).set("a", "something").build();
+
+        setUp(settingsBuilder().build());
+
+        this.bin = new Bin("t", "c", "00");
+        this.offsetRange = new OffsetRange("t", 0, 0, 10);
+    }
+
+    private RestructureSettings.Builder settingsBuilder() {
+        return new RestructureSettings.Builder(folder.getRoot().toString());
+    }
+
+    private void setUp(RestructureSettings settings) throws IOException {
+        this.factory = new Application.Builder(settings).build();
+        this.accountant = new Accountant(factory);
     }
 
     @Test
     public void testGzip() throws IOException {
-        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, true, tmpDir)) {
-            cache.writeRecord(exampleRecord);
+        setUp(settingsBuilder().compression("gzip").build());
+
+        try (FileCache cache = new FileCache(factory, path, exampleRecord, tmpDir, accountant)) {
+            cache.writeRecord(exampleRecord,
+                    new Accountant.Transaction(offsetRange.createSingleOffset(0), bin));
         }
 
         System.out.println("Gzip: " + Files.size(path));
@@ -93,12 +105,16 @@ public class FileCacheTest {
 
     @Test
     public void testGzipAppend() throws IOException {
-        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, true, tmpDir)) {
-            cache.writeRecord(exampleRecord);
+        setUp(settingsBuilder().compression("gzip").build());
+
+        try (FileCache cache = new FileCache(factory, path, exampleRecord, tmpDir, accountant)) {
+            cache.writeRecord(exampleRecord,
+                    new Accountant.Transaction(offsetRange.createSingleOffset(0), bin));
         }
 
-        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, true, tmpDir)) {
-            cache.writeRecord(exampleRecord);
+        try (FileCache cache = new FileCache(factory, path, exampleRecord, tmpDir, accountant)) {
+            cache.writeRecord(exampleRecord,
+                    new Accountant.Transaction(offsetRange.createSingleOffset(0), bin));
         }
 
         System.out.println("Gzip appended: " + Files.size(path));
@@ -117,8 +133,9 @@ public class FileCacheTest {
 
     @Test
     public void testPlain() throws IOException {
-        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, false, tmpDir)) {
-            cache.writeRecord(exampleRecord);
+        try (FileCache cache = new FileCache(factory, path, exampleRecord, tmpDir, accountant)) {
+            cache.writeRecord(exampleRecord,
+                    new Accountant.Transaction(offsetRange.createSingleOffset(0), bin));
         }
 
         System.out.println("Plain: " + Files.size(path));
@@ -133,12 +150,14 @@ public class FileCacheTest {
     @Test
     public void testPlainAppend() throws IOException {
 
-        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, false, tmpDir)) {
-            cache.writeRecord(exampleRecord);
+        try (FileCache cache = new FileCache(factory, path, exampleRecord, tmpDir, accountant)) {
+            cache.writeRecord(exampleRecord,
+                    new Accountant.Transaction(offsetRange.createSingleOffset(0), bin));
         }
 
-        try (FileCache cache = new FileCache(csvFactory, path, exampleRecord, false, tmpDir)) {
-            cache.writeRecord(exampleRecord);
+        try (FileCache cache = new FileCache(factory, path, exampleRecord, tmpDir, accountant)) {
+            cache.writeRecord(exampleRecord,
+                    new Accountant.Transaction(offsetRange.createSingleOffset(1), bin));
         }
 
         System.out.println("Plain appended: " + Files.size(path));
@@ -156,21 +175,21 @@ public class FileCacheTest {
         Path file3 = folder.newFile("g").toPath();
         Path tmpDir = folder.newFolder().toPath();
 
-        try (FileCache cache1 = new FileCache(csvFactory, path, exampleRecord, false, tmpDir);
-             FileCache cache2 = new FileCache(csvFactory, path, exampleRecord, false, tmpDir);
-             FileCache cache3 = new FileCache(csvFactory, file3, exampleRecord, false, tmpDir)) {
+        try (FileCache cache1 = new FileCache(factory, path, exampleRecord, tmpDir, accountant);
+             FileCache cache2 = new FileCache(factory, path, exampleRecord, tmpDir, accountant);
+             FileCache cache3 = new FileCache(factory, file3, exampleRecord, tmpDir, accountant)) {
             assertEquals(0, cache1.compareTo(cache2));
             // filenames are not equal
             assertEquals(-1, cache1.compareTo(cache3));
-            cache1.writeRecord(exampleRecord);
+            cache1.writeRecord(exampleRecord, new Accountant.Transaction(offsetRange.createSingleOffset(0), bin));
             // last used
             assertEquals(1, cache1.compareTo(cache2));
             // last used takes precedence over filename
             assertEquals(1, cache1.compareTo(cache3));
 
             // last used reversal
-            cache2.writeRecord(exampleRecord);
-            cache3.writeRecord(exampleRecord);
+            cache2.writeRecord(exampleRecord, new Accountant.Transaction(offsetRange.createSingleOffset(1), bin));
+            cache3.writeRecord(exampleRecord, new Accountant.Transaction(offsetRange.createSingleOffset(2), bin));
             assertEquals(-1, cache1.compareTo(cache2));
             assertEquals(-1, cache1.compareTo(cache3));
         }

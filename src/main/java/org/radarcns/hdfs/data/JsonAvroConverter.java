@@ -28,9 +28,12 @@ import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
+import java.io.Reader;
 import java.io.Writer;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,7 +45,22 @@ public final class JsonAvroConverter implements RecordConverter {
 
     public static RecordConverterFactory getFactory() {
         JsonFactory factory = new JsonFactory();
-        return (writer, record, writeHeader, reader) -> new JsonAvroConverter(factory, writer);
+        return new RecordConverterFactory() {
+            @Override
+            public RecordConverter converterFor(Writer writer, GenericRecord record, boolean writeHeader, Reader reader) throws IOException {
+                return new JsonAvroConverter(factory, writer);
+            }
+
+            @Override
+            public String getExtension() {
+                return ".json";
+            }
+
+            @Override
+            public Collection<String> getFormats() {
+                return Collections.singleton("json");
+            }
+        };
     }
 
     private final ObjectWriter jsonWriter;

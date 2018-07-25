@@ -16,6 +16,11 @@
 
 package org.radarcns.hdfs.util;
 
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+
 /**
  * Progress bar.
  * Based on https://stackoverflow.com/a/43381186/574082.
@@ -23,9 +28,14 @@ package org.radarcns.hdfs.util;
 public class ProgressBar {
     private final long total;
     private final int numStripes;
-    private int previousPercentage;
+    private final long startTime;
+    private final AtomicBoolean isDone;
+    private final long updateIntervalNanos;
+    private final AtomicLong lastUpdate;
+    private int previousLineLength;
 
-    public ProgressBar(long total, int numStripes) {
+    public ProgressBar(long total, int numStripes, long updateInterval, TimeUnit updateIntervalUnit) {
+        this.updateIntervalNanos = updateIntervalUnit.toNanos(updateInterval);
         if (total < 0) {
             throw new IllegalArgumentException("Total of progress bar must be positive");
         }
@@ -34,29 +44,78 @@ public class ProgressBar {
         }
         this.total = total;
         this.numStripes = numStripes;
-        this.previousPercentage = -1;
+        this.startTime = System.nanoTime();
+        this.lastUpdate = new AtomicLong(0L);
+        this.isDone = new AtomicBoolean(false);
+        this.previousLineLength = 0;
     }
 
-    public void update(long remain) {
-        if (remain > total || remain < 0) {
-            throw new IllegalArgumentException(
-                    "Update value " + remain + " out of range [0, " + total + "].");
-        }
-        int remainPercent;
-        if (total > 0) {
-            remainPercent = Math.min((int) ((100 * remain) / total), 100);
-        } else {
-            remainPercent = 100;
-        }
-        if (remainPercent == previousPercentage) {
+    public synchronized void update(long progress) {
+        long now = System.nanoTime();
+        if (updateIntervalNanos <= 0
+                || lastUpdate.updateAndGet(l -> now > l + updateIntervalNanos ? now : l) != now) {
             return;
         }
-        previousPercentage = remainPercent;
-        int stripesFilled = numStripes * remainPercent / 100;
+
+        if (progress > total || progress < 0) {
+            throw new IllegalArgumentException(
+                    "Update value " + progress + " out of range [0, " + total + "].");
+        }
+
+        if (progress == total && !isDone.compareAndSet(false, true)) {
+            return;
+        }
+
+        StringBuilder builder = new StringBuilder(numStripes + 25);
+
+        float progressPercent;
+        if (total > 0) {
+            progressPercent = Math.min(((100f * progress) / total), 100f);
+        } else {
+            progressPercent = 100f;
+        }
+
+        bar(builder, progressPercent);
+        builder.append(' ');
+        percentage(builder, progressPercent);
+        builder.append(" - ");
+        eta(builder, progress);
+        builder.append(" - ");
+        heapSize(builder);
+
+        // overwrite any characters from the previous print
+        int currentLineLength = builder.length();
+        synchronized (this) {
+            while (builder.length() < previousLineLength) {
+                builder.append(' ');
+            }
+            previousLineLength = currentLineLength;
+
+            if (progress >= total) {
+                builder.append('\n');
+            }
+
+            System.out.print(builder.toString());
+        }
+    }
+
+    private void heapSize(StringBuilder builder) {
+        builder.append("Memory: ")
+                .append(Runtime.getRuntime().totalMemory() / 1_000_000)
+                .append("/")
+                .append(Runtime.getRuntime().maxMemory() / 1_000_000)
+                .append(" MB");
+    }
+
+    private void percentage(StringBuilder builder, float progressPercent) {
+        builder.append((int)progressPercent).append('%');
+    }
+
+    private void bar(StringBuilder builder, float progressPercent) {
+        int stripesFilled = (int) (numStripes * progressPercent / 100);
         char notFilled = '-';
         char filled = '*';
         // 2 init + numStripes + 2 end + 4 percentage
-        StringBuilder builder = new StringBuilder(numStripes + 8);
         builder.append("\r[");
         for (int i = 0; i < stripesFilled; i++) {
             builder.append(filled);
@@ -64,15 +123,46 @@ public class ProgressBar {
         for (int i = stripesFilled; i < numStripes; i++) {
             builder.append(notFilled);
         }
-        builder.append("] ").append(remainPercent).append('%');
-        if (remain < total) {
-            System.out.print(builder.toString());
+        builder.append(']');
+    }
+
+    private void eta(StringBuilder builder, long progress) {
+        builder.append("ETA ");
+        if (progress > 0) {
+            long duration = (System.nanoTime() - startTime);
+            formatTime(builder,duration * (total - progress) / (progress * 1_000_000_000L));
         } else {
-            System.out.println(builder.toString());
+            builder.append('-');
         }
     }
 
-    public boolean isDone() {
-        return previousPercentage == 100;
+    public static StringBuilder formatTime(StringBuilder builder, long seconds) {
+        long minutes = (seconds / 60) % 60;
+        long sec = seconds % 60;
+        builder.append(seconds / 3600).append(':');
+        if (minutes < 10) {
+            builder.append('0');
+        }
+        builder.append(minutes).append(':');
+        if (sec < 10) {
+            builder.append('0');
+        }
+        builder.append(sec);
+        return builder;
+    }
+
+    public static String formatTime(Duration duration) {
+        long millis = duration.toMillis();
+        StringBuilder builder = new StringBuilder(16);
+        formatTime(builder, millis / 1000)
+                .append('.');
+        long millisLast = (int)(millis % 1000L);
+        if (millisLast < 100) {
+            builder.append('0');
+        }
+        if (millisLast < 10) {
+            builder.append('0');
+        }
+        return builder.append(millisLast).toString();
     }
 }

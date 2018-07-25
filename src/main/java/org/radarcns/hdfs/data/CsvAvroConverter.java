@@ -16,27 +16,25 @@
 
 package org.radarcns.hdfs.data;
 
-import com.fasterxml.jackson.databind.MappingIterator;
-import com.fasterxml.jackson.databind.ObjectReader;
-import com.fasterxml.jackson.databind.ObjectWriter;
-import com.fasterxml.jackson.dataformat.csv.CsvFactory;
-import com.fasterxml.jackson.dataformat.csv.CsvGenerator;
-import com.fasterxml.jackson.dataformat.csv.CsvMapper;
-import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.ByteBuffer;
-import java.util.Iterator;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * Converts deep hierarchical Avro records into flat CSV format. It uses a simple dot syntax in the
@@ -44,57 +42,99 @@ import java.util.Map;
  * records need to have exactly the same hierarchy (or at least a subset of it.)
  */
 public class CsvAvroConverter implements RecordConverter {
+    private static final Pattern TAB_PATTERN = Pattern.compile("\t");
+    private static final Pattern LINE_ENDING_PATTERN = Pattern.compile("[\n\r]+");
+    private static final Pattern NON_PRINTING_PATTERN = Pattern.compile("\\p{C}");
+    private static final Pattern QUOTE_OR_COMMA_PATTERN = Pattern.compile("[\",]");
+    private static final Pattern QUOTE_PATTERN = Pattern.compile("\"");
+    private static final Base64.Encoder BASE64_ENCODER = Base64.getEncoder().withoutPadding();
+    private final List<String> headers;
+    private final List<String> values;
+    private final Writer writer;
 
     public static RecordConverterFactory getFactory() {
-        CsvFactory factory = new CsvFactory();
         return new RecordConverterFactory() {
             @Override
-            public RecordConverter converterFor(Writer writer, GenericRecord record, boolean writeHeader, Reader reader) throws IOException {
-                return new CsvAvroConverter(factory, writer, record, writeHeader, reader);
+            public CsvAvroConverter converterFor(Writer writer, GenericRecord record,
+                    boolean writeHeader, Reader reader) throws IOException {
+                return new CsvAvroConverter(writer, record,
+                        writeHeader, reader);
             }
 
             @Override
             public boolean hasHeader() {
                 return true;
             }
+
+            @Override
+            public String getExtension() {
+                return ".csv";
+            }
+
+            @Override
+            public Collection<String> getFormats() {
+                return Collections.singleton("csv");
+            }
         };
     }
 
-    private final ObjectWriter csvWriter;
-    private final Map<String, Object> map;
-    private final CsvGenerator generator;
-    private CsvSchema schema;
-
-    public CsvAvroConverter(CsvFactory factory, Writer writer, GenericRecord record, boolean writeHeader, Reader reader)
-            throws IOException {
-        map = new LinkedHashMap<>();
-
-        CsvMapper mapper = new CsvMapper(factory);
-        Map<String, Object> value;
-
-        schema = CsvSchema.emptySchema().withHeader();
-        if (!writeHeader) {
-            // If file already exists read the schema from the CSV file
-            ObjectReader objectReader = mapper.readerFor(Map.class).with(schema);
-            MappingIterator<Map<String,Object>> iterator = objectReader.readValues(reader);
-            value = iterator.next();
-        } else {
-            value = convertRecord(record);
-        }
-
-        CsvSchema.Builder builder = new CsvSchema.Builder();
-        for (String key : value.keySet()) {
-            builder.addColumn(key);
-        }
-        schema = builder.build();
+    public CsvAvroConverter(Writer writer, GenericRecord record, boolean writeHeader,
+            Reader reader) throws IOException {
+        this.writer = writer;
 
         if (writeHeader) {
-            schema = schema.withHeader();
+            headers = createHeaders(record);
+            writeLine(headers);
+        } else {
+            // If file already exists read the schema from the CSV file
+            try (BufferedReader bufReader = new BufferedReader(reader, 200)) {
+                headers = parseCsvLine(bufReader);
+            }
         }
 
-        generator = factory.createGenerator(writer);
-        csvWriter = mapper.writer(schema);
+        values = new ArrayList<>(headers.size());
+    }
 
+    static List<String> parseCsvLine(Reader reader) throws IOException {
+        List<String> headers = new ArrayList<>();
+        StringBuilder builder = new StringBuilder(20);
+        int ch = reader.read();
+        boolean inString = false;
+        boolean hadQuote = false;
+
+        while (ch != '\n' && ch != '\r' && ch != -1) {
+            switch (ch) {
+                case '"':
+                    if (inString) {
+                        inString = false;
+                        hadQuote = true;
+                    } else if (hadQuote) {
+                        inString = true;
+                        hadQuote = false;
+                        builder.append('"');
+                    } else {
+                        inString = true;
+                    }
+                    break;
+                case ',':
+                    if (inString) {
+                        builder.append(',');
+                    } else {
+                        if (hadQuote) {
+                            hadQuote = false;
+                        }
+                        headers.add(builder.toString());
+                        builder = new StringBuilder(20);
+                    }
+                    break;
+                default:
+                    builder.append((char)ch);
+                    break;
+            }
+            ch = reader.read();
+        }
+        headers.add(builder.toString());
+        return headers;
     }
 
     /**
@@ -105,45 +145,70 @@ public class CsvAvroConverter implements RecordConverter {
      */
     @Override
     public boolean writeRecord(GenericRecord record) throws IOException {
-        Map<String, Object> localMap = convertRecord(record);
-
-        if(localMap.size() > schema.size()) {
-            // Cannot write to same file so return false
-            return false;
-        } else {
-            Iterator<String> localColumnIterator = localMap.keySet().iterator();
-            for(int i = 0; i < schema.size(); i++) {
-                if (!schema.columnName(i).equals(localColumnIterator.next())) {
-                    /* The order or name of columns is different and
-                    thus cannot write to this csv file. return false.
-                     */
-                    return false;
-                }
+        try {
+            List<String> retValues = convertRecordValues(record);
+            if (retValues.size() < headers.size()) {
+                return false;
             }
-        }
 
-        csvWriter.writeValue(generator, localMap);
-        localMap.clear();
-        return true;
+            writeLine(retValues);
+            return true;
+        } catch (IllegalArgumentException | IndexOutOfBoundsException ex) {
+            return false;
+        }
     }
 
+    private void writeLine(List<?> objects) throws IOException {
+        for (int i = 0; i < objects.size(); i++) {
+            if (i > 0) {
+                writer.append(',');
+            }
+            writer.append(objects.get(i).toString());
+        }
+        writer.append('\n');
+    }
+
+
     public Map<String, Object> convertRecord(GenericRecord record) {
-        map.clear();
+        values.clear();
         Schema schema = record.getSchema();
         for (Field field : schema.getFields()) {
-            convertAvro(record.get(field.pos()), field.schema(), field.name());
+            convertAvro(values, record.get(field.pos()), field.schema(), field.name());
         }
+        Map<String, Object> map = new LinkedHashMap<>();
+        for (int i = 0; i < headers.size(); i++) {
+            map.put(headers.get(i), values.get(i));
+        }
+        values.clear();
         return map;
     }
 
-    private void convertAvro(Object data, Schema schema, String prefix) {
+    public List<String> convertRecordValues(GenericRecord record) {
+        values.clear();
+        Schema schema = record.getSchema();
+        for (Field field : schema.getFields()) {
+            convertAvro(values, record.get(field.pos()), field.schema(), field.name());
+        }
+        return values;
+    }
+
+    static List<String> createHeaders(GenericRecord record) {
+        List<String> headers = new ArrayList<>();
+        Schema schema = record.getSchema();
+        for (Field field : schema.getFields()) {
+            createHeader(headers, record.get(field.pos()), field.schema(), field.name());
+        }
+        return headers;
+    }
+
+    private void convertAvro(List<String> values, Object data, Schema schema, String prefix) {
         switch (schema.getType()) {
             case RECORD: {
                 GenericRecord record = (GenericRecord) data;
                 Schema subSchema = record.getSchema();
                 for (Field field : subSchema.getFields()) {
                     Object subData = record.get(field.pos());
-                    convertAvro(subData, field.schema(), prefix + '.' + field.name());
+                    convertAvro(values, subData, field.schema(), prefix + '.' + field.name());
                 }
                 break;
             }
@@ -151,56 +216,129 @@ public class CsvAvroConverter implements RecordConverter {
                 Schema valueType = schema.getValueType();
                 for (Map.Entry<?, ?> entry : ((Map<?, ?>)data).entrySet()) {
                     String name = prefix + '.' + entry.getKey();
-                    convertAvro(entry.getValue(), valueType, name);
+                    convertAvro(values, entry.getValue(), valueType, name);
                 }
                 break;
             }
             case ARRAY: {
-                List<?> origList = (List<?>)data;
                 Schema itemType = schema.getElementType();
                 int i = 0;
-                for (Object orig : origList) {
-                    convertAvro(orig, itemType, prefix + '.' + i);
+                for (Object orig : (List<?>)data) {
+                    convertAvro(values, orig, itemType, prefix + '.' + i);
                     i++;
                 }
                 break;
             }
             case UNION: {
                 int type = new GenericData().resolveUnion(schema, data);
-                convertAvro(data, schema.getTypes().get(type), prefix);
+                convertAvro(values, data, schema.getTypes().get(type), prefix);
                 break;
             }
             case BYTES:
-                map.put(prefix, ((ByteBuffer)data).array());
+                checkHeader(prefix, values.size());
+                values.add(BASE64_ENCODER.encodeToString(((ByteBuffer) data).array()));
                 break;
             case FIXED:
-                map.put(prefix, ((GenericFixed)data).bytes());
+                checkHeader(prefix, values.size());
+                values.add(BASE64_ENCODER.encodeToString(((GenericFixed)data).bytes()));
+                break;
+            case STRING:
+                checkHeader(prefix, values.size());
+                values.add(cleanCsvString(data.toString()));
                 break;
             case ENUM:
-            case STRING:
-                map.put(prefix, data.toString());
-                break;
             case INT:
             case LONG:
             case DOUBLE:
             case FLOAT:
             case BOOLEAN:
+                checkHeader(prefix, values.size());
+                values.add(data.toString());
+                break;
             case NULL:
-                map.put(prefix, data);
+                checkHeader(prefix, values.size());
+                values.add("");
                 break;
             default:
                 throw new IllegalArgumentException("Cannot parse field type " + schema.getType());
         }
     }
 
+    private void checkHeader(String prefix, int size) {
+        if (!prefix.equals(headers.get(size))) {
+            throw new IllegalArgumentException("Header " + prefix + " does not match "
+                    + headers.get(size));
+        }
+    }
+
+    static String cleanCsvString(String orig) {
+        String cleaned = LINE_ENDING_PATTERN.matcher(orig).replaceAll("\\n");
+        cleaned = TAB_PATTERN.matcher(cleaned).replaceAll("    ");
+        cleaned = NON_PRINTING_PATTERN.matcher(cleaned).replaceAll("?");
+        if (QUOTE_OR_COMMA_PATTERN.matcher(cleaned).find()) {
+            return '"' + QUOTE_PATTERN.matcher(cleaned).replaceAll("\"\"") + '"';
+        } else {
+            return cleaned;
+        }
+    }
+
+    private static void createHeader(List<String> headers, Object data, Schema schema, String prefix) {
+        switch (schema.getType()) {
+            case RECORD: {
+                GenericRecord record = (GenericRecord) data;
+                Schema subSchema = record.getSchema();
+                for (Field field : subSchema.getFields()) {
+                    Object subData = record.get(field.pos());
+                    createHeader(headers, subData, field.schema(), prefix + '.' + field.name());
+                }
+                break;
+            }
+            case MAP: {
+                Schema valueType = schema.getValueType();
+                for (Map.Entry<?, ?> entry : ((Map<?, ?>)data).entrySet()) {
+                    String name = prefix + '.' + entry.getKey();
+                    createHeader(headers, entry.getValue(), valueType, name);
+                }
+                break;
+            }
+            case ARRAY: {
+                Schema itemType = schema.getElementType();
+                int i = 0;
+                for (Object orig : (List<?>)data) {
+                    createHeader(headers, orig, itemType, prefix + '.' + i);
+                    i++;
+                }
+                break;
+            }
+            case UNION: {
+                int type = new GenericData().resolveUnion(schema, data);
+                createHeader(headers, data, schema.getTypes().get(type), prefix);
+                break;
+            }
+            case BYTES:
+            case FIXED:
+            case ENUM:
+            case STRING:
+            case INT:
+            case LONG:
+            case DOUBLE:
+            case FLOAT:
+            case BOOLEAN:
+            case NULL:
+                headers.add(prefix);
+                break;
+            default:
+                throw new IllegalArgumentException("Cannot parse field type " + schema.getType());
+        }
+    }
 
     @Override
     public void close() throws IOException {
-        generator.close();
+        writer.close();
     }
 
     @Override
     public void flush() throws IOException {
-        generator.flush();
+        writer.flush();
     }
 }
