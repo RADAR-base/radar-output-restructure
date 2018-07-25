@@ -36,11 +36,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
+import static org.radarcns.hdfs.data.FileCacheStore.WriteResponse.CACHE_AND_NO_WRITE;
+import static org.radarcns.hdfs.data.FileCacheStore.WriteResponse.CACHE_AND_WRITE;
+import static org.radarcns.hdfs.data.FileCacheStore.WriteResponse.NO_CACHE_AND_NO_WRITE;
+import static org.radarcns.hdfs.data.FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE;
 import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
 
 /**
@@ -50,7 +52,7 @@ import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
 public class FileCacheStore implements Flushable, Closeable {
     private static final Logger logger = LoggerFactory.getLogger(FileCacheStore.class);
 
-    private final Path tmpDir;
+    private final TemporaryDirectory tmpDir;
 
     private final Map<Path, FileCache> caches;
     private final FileStoreFactory factory;
@@ -63,9 +65,8 @@ public class FileCacheStore implements Flushable, Closeable {
         RestructureSettings settings = factory.getSettings();
         this.maxCacheSize = settings.getCacheSize();
         this.caches = new HashMap<>(maxCacheSize * 4 / 3 + 1);
-        this.tmpDir = settings.getTempDir().resolve(UUID.randomUUID().toString());
+        this.tmpDir = new TemporaryDirectory(settings.getTempDir(), "file-cache-");
         this.accountant = accountant;
-        Files.createDirectories(this.tmpDir);
         this.schemasAdded = new HashMap<>();
     }
 
@@ -90,30 +91,30 @@ public class FileCacheStore implements Flushable, Closeable {
 
             try {
                 long timeOpen = System.nanoTime();
-                cache = new FileCache(factory, path, record, tmpDir, accountant);
+                cache = new FileCache(factory, path, record, tmpDir.getPath(), accountant);
                 Timer.getInstance().add("write.open", timeOpen);
                 writeSchema(topic, path, record.getSchema());
             } catch (IOException ex) {
                 logger.error("Could not open cache for {}", path, ex);
-                return WriteResponse.NO_CACHE_AND_NO_WRITE;
+                return NO_CACHE_AND_NO_WRITE;
             }
             caches.put(path, cache);
         }
 
         try {
             if (cache.writeRecord(record, transaction)) {
-                return hasCache ? WriteResponse.CACHE_AND_WRITE : WriteResponse.NO_CACHE_AND_WRITE;
+                return hasCache ? CACHE_AND_WRITE : NO_CACHE_AND_WRITE;
             } else {
                 // The file path was not in cache but the file exists and this write is
                 // unsuccessful because of different number of columns
-                return hasCache ? WriteResponse.CACHE_AND_NO_WRITE : WriteResponse.NO_CACHE_AND_NO_WRITE;
+                return hasCache ? CACHE_AND_NO_WRITE : NO_CACHE_AND_NO_WRITE;
             }
         } catch (IOException ex) {
             logger.error("Failed to write record. Closing cache {}.", cache.getPath(), ex);
             cache.markError();
             caches.remove(cache.getPath());
             cache.close();
-            return WriteResponse.NO_CACHE_AND_NO_WRITE;
+            return NO_CACHE_AND_NO_WRITE;
         }
     }
 
@@ -160,12 +161,7 @@ public class FileCacheStore implements Flushable, Closeable {
     public void close() throws IOException {
         try {
             allCaches(FileCache::close);
-            if (tmpDir != null) {
-                Files.walk(tmpDir)
-                        .sorted(Comparator.reverseOrder())
-                        .forEach(tryCatch(Files::delete, (p, ex) -> logger.warn(
-                                "Failed to remove temporary file {}: {}", p, ex)));
-            }
+            tmpDir.close();
         } finally {
             caches.clear();
         }
