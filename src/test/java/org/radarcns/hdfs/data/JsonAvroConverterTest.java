@@ -86,7 +86,7 @@ public class JsonAvroConverterTest {
         try (BufferedWriter writer = Files.newBufferedWriter(path)) {
             writeTestNumbers(writer);
         }
-        JsonAvroConverter.getFactory().sortUnique(path);
-        assertEquals(Arrays.asList("1,2", "1,3", "3,4", "a,a", "a,b"), Files.readAllLines(path));
+        JsonAvroConverter.getFactory().sortUnique(path, path, new IdentityCompression());
+        assertEquals(Arrays.asList("a,b", "1,2", "3,4", "1,3", "a,a"), Files.readAllLines(path));
     }
 }

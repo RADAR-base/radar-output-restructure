@@ -29,11 +29,13 @@ COPY ./src /code/src
 
 RUN ./gradlew jar
 
-FROM openjdk:8-jre-alpine
+FROM smizy/hadoop-base:3.0.3-alpine
 
 MAINTAINER Joris Borgdorff <joris@thehyve.nl>
 
 LABEL description="RADAR-base HDFS data restructuring"
+
+ENV JAVA_OPTS -Djava.library.path=${HADOOP_HOME}/lib/native
 
 COPY --from=builder /code/build/third-party/* /usr/lib/
 COPY --from=builder /code/build/scripts/* /usr/bin/

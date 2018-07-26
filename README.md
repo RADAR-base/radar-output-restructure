@@ -8,7 +8,7 @@ Data streamed to HDFS using the [RADAR HDFS sink connector](https://github.com/R
 
 This package is available as docker image [`radarbase/radar-hdfs-restructure`](https://hub.docker.com/r/radarbase/radar-hdfs-restructure). The entrypoint of the image is the current application. So in all of the commands listed in usage, replace `radar-hdfs-restructure` with for example:
 ```shell
-docker run --rm -t --network hadoop -v "$PWD/output:/output" radarbase/radar-hdfs-restructure:0.4.0 -u hdfs://hdfs -o /output /myTopic
+docker run --rm -t --network hadoop -v "$PWD/output:/output" radarbase/radar-hdfs-restructure:0.5.0 -u hdfs://hdfs -o /output /myTopic
 ```
 if your docker cluster is running in the `hadoop` network and your output directory should be `./output`.
 
@@ -24,7 +24,7 @@ This package requires at least Java JDK 8. Build the distribution with
 and install the package into `/usr/local` with for example
 ```shell
 sudo mkdir -p /usr/local
-sudo tar -xzf build/distributions/radar-hdfs-restructure-0.4.0.tar.gz -C /usr/local --strip-components=1
+sudo tar -xzf build/distributions/radar-hdfs-restructure-0.5.0.tar.gz -C /usr/local --strip-components=1
 ```
 
 Now the `radar-hdfs-restructure` command should be available.
@@ -59,4 +59,16 @@ radar-hdfs-restructure --compression gzip  --hdfs-uri <webhdfs_url> --output-dir
 
 By default, files records are not deduplicated after writing. To enable this behaviour, specify the option `--deduplicate` or `-d`. This set to false by default because of an issue with Biovotion data. Please see - [issue #16](https://github.com/RADAR-base/Restructure-HDFS-topic/issues/16) before enabling it.
 
-Finally, while processing, files are staged to a temporary directory and moved to the output directory afterwards. This has the advantage of less chance of data corruption, but it may result in slower performance. Disable staging using the `--no-stage` option.
+## Extending the connector
+
+To implement alternative storage paths, storage drivers or storage formats, put your custom JAR in
+`$APP_DIR/lib/radar-hdfs-plugins`. To load them, use the following options:
+
+| Option                  | Class                                       | Behaviour                                  | Default                   |
+| ----------------------- | ------------------------------------------- | ------------------------------------------ | ------------------------- |
+| `--path-factory`        | `org.radarcns.hdfs.RecordPathFactory`       | Factory to create output path names with.  | ObservationKeyPathFactory |
+| `--storage-driver`      | `org.radarcns.hdfs.data.StorageDriver`      | Storage driver to use for storing data.    | LocalStorageDriver        |
+| `--format-factory`      | `org.radarcns.hdfs.data.FormatFactory`      | Factory for output formats.                | FormatFactory             |
+| `--compression-factory` | `org.radarcns.hdfs.data.CompressionFactory` | Factory class to use for data compression. | CompressionFactory        |
+
+To pass arguments to self-assigned plugins, use `-p arg1=value1 -p arg2=value2` command-line flags and read those arguments in the `Plugin#init(Map<String, String>)` method.

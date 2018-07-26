@@ -16,21 +16,34 @@
 
 package org.radarcns.hdfs.data;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.radarcns.hdfs.FileStoreFactory;
+import org.radarcns.hdfs.accounting.Accountant;
+import org.radarcns.hdfs.config.RestructureSettings;
+import org.radarcns.hdfs.util.TemporaryDirectory;
+import org.radarcns.hdfs.util.ThrowingConsumer;
+import org.radarcns.hdfs.util.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.Flushable;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.radarcns.hdfs.data.FileCacheStore.WriteResponse.CACHE_AND_NO_WRITE;
+import static org.radarcns.hdfs.data.FileCacheStore.WriteResponse.CACHE_AND_WRITE;
+import static org.radarcns.hdfs.data.FileCacheStore.WriteResponse.NO_CACHE_AND_NO_WRITE;
+import static org.radarcns.hdfs.data.FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE;
 import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
 
 /**
@@ -40,21 +53,22 @@ import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
 public class FileCacheStore implements Flushable, Closeable {
     private static final Logger logger = LoggerFactory.getLogger(FileCacheStore.class);
 
-    private final boolean gzip;
-    private final boolean deduplicate;
-    private final Path tmpDir;
+    private final TemporaryDirectory tmpDir;
 
-    private RecordConverterFactory converterFactory;
-    private final int maxFiles;
     private final Map<Path, FileCache> caches;
+    private final FileStoreFactory factory;
+    private final int maxCacheSize;
+    private final Accountant accountant;
+    private final Map<java.nio.file.Path, java.nio.file.Path> schemasAdded;
 
-    public FileCacheStore(RecordConverterFactory converterFactory, int maxFiles, boolean gzip, boolean deduplicate, boolean stage) throws IOException {
-        this.converterFactory = converterFactory;
-        this.maxFiles = maxFiles;
-        this.caches = new HashMap<>(maxFiles * 4 / 3 + 1);
-        this.gzip = gzip;
-        this.deduplicate = deduplicate;
-        this.tmpDir = stage ? Files.createTempDirectory("restructurehdfs") : null;
+    public FileCacheStore(FileStoreFactory factory, Accountant accountant) throws IOException {
+        this.factory = factory;
+        RestructureSettings settings = factory.getSettings();
+        this.maxCacheSize = settings.getCacheSize();
+        this.caches = new HashMap<>(maxCacheSize * 4 / 3 + 1);
+        this.tmpDir = new TemporaryDirectory(settings.getTempDir(), "file-cache-");
+        this.accountant = accountant;
+        this.schemasAdded = new HashMap<>();
     }
 
     /**
@@ -66,77 +80,102 @@ public class FileCacheStore implements Flushable, Closeable {
      * @return Integer value according to one of the response codes.
      * @throws IOException when failing to open a file or writing to it.
      */
-    public WriteResponse writeRecord(Path path, GenericRecord record) throws IOException {
+    public WriteResponse writeRecord(Path path, GenericRecord record,
+            Accountant.Transaction transaction) throws IOException {
         FileCache cache = caches.get(path);
-        if (cache != null) {
-            if(cache.writeRecord(record)){
-                return WriteResponse.CACHE_AND_WRITE;
-            } else {
-                // This is the case when cache is used but write is unsuccessful
-                // because of different number columns in same topic
-                return WriteResponse.CACHE_AND_NO_WRITE;
-            }
-        } else {
+        boolean hasCache = cache != null;
+        if (!hasCache) {
             ensureCapacity();
 
             Path dir = path.getParent();
             Files.createDirectories(dir);
 
-            cache = new FileCache(converterFactory, path, record, gzip, tmpDir);
+            try {
+                long timeOpen = System.nanoTime();
+                cache = new FileCache(factory, path, record, tmpDir.getPath(), accountant);
+                Timer.getInstance().add("write.open", timeOpen);
+                writeSchema(transaction.getTopicPartition().topic, path, record.getSchema());
+            } catch (IOException ex) {
+                logger.error("Could not open cache for {}", path, ex);
+                return NO_CACHE_AND_NO_WRITE;
+            }
             caches.put(path, cache);
-            if (cache.writeRecord(record)) {
-                return WriteResponse.NO_CACHE_AND_WRITE;
+        }
+
+        try {
+            if (cache.writeRecord(record, transaction)) {
+                return hasCache ? CACHE_AND_WRITE : NO_CACHE_AND_WRITE;
             } else {
                 // The file path was not in cache but the file exists and this write is
                 // unsuccessful because of different number of columns
-                return WriteResponse.NO_CACHE_AND_NO_WRITE;
+                return hasCache ? CACHE_AND_NO_WRITE : NO_CACHE_AND_NO_WRITE;
             }
-
+        } catch (IOException ex) {
+            logger.error("Failed to write record. Closing cache {}.", cache.getPath(), ex);
+            cache.markError();
+            caches.remove(cache.getPath());
+            cache.close();
+            return NO_CACHE_AND_NO_WRITE;
         }
+    }
+
+    private void writeSchema(String topic, Path path, Schema schema) throws IOException {
+        long writeSchema = System.nanoTime();
+        // Write was successful, finalize the write
+        java.nio.file.Path schemaPath = path.resolveSibling("schema-" + topic + ".json");
+        // First check if we already checked this path, because otherwise the storage.exists call
+        // will take too much time.
+        if (schemasAdded.putIfAbsent(schemaPath, schemaPath) == null) {
+            StorageDriver storage = factory.getStorageDriver();
+
+            if (!storage.exists(schemaPath)) {
+                try (OutputStream out = storage.newOutputStream(schemaPath, false);
+                     Writer writer = new OutputStreamWriter(out)) {
+                    writer.write(schema.toString(true));
+                }
+            }
+        }
+        Timer.getInstance().add("write.schema", writeSchema);
     }
 
     /**
      * Ensure that a new filecache can be added. Evict files used longest ago from cache if needed.
      */
     private void ensureCapacity() throws IOException {
-        if (caches.size() == maxFiles) {
+        if (caches.size() == maxCacheSize) {
             ArrayList<FileCache> cacheList = new ArrayList<>(caches.values());
             Collections.sort(cacheList);
             for (int i = 0; i < cacheList.size() / 2; i++) {
                 FileCache rmCache = cacheList.get(i);
                 caches.remove(rmCache.getPath());
                 rmCache.close();
-                if (deduplicate) {
-                    converterFactory.sortUnique(rmCache.getPath());
-                }
             }
+            accountant.flush();
         }
     }
 
     @Override
     public void flush() throws IOException {
-        for (FileCache cache : caches.values()) {
-            cache.flush();
+        try {
+            allCaches(FileCache::close);
+            accountant.flush();
+        } finally {
+            caches.clear();
         }
     }
 
     @Override
     public void close() throws IOException {
+        flush();
+        tmpDir.close();
+    }
+
+    private void allCaches(ThrowingConsumer<FileCache> cacheHandler) throws IOException {
         try {
-            for (FileCache cache : caches.values()) {
-                cache.close();
-                if (deduplicate) {
-                    converterFactory.sortUnique(cache.getPath());
-                }
-            }
-            if (tmpDir != null) {
-                Files.walk(tmpDir)
-                        .sorted(Comparator.reverseOrder())
-                        .forEach(tryCatch(Files::delete, (p, ex) -> logger.warn(
-                                "Failed to remove temporary file {}: {}", p, ex)));
-            }
-        } finally {
-            caches.clear();
+            caches.values().parallelStream()
+                    .forEach(tryCatch(cacheHandler, "Failed to update caches."));
+        } catch (IllegalStateException ex) {
+            throw (IOException) ex.getCause();
         }
     }
 

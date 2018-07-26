@@ -14,19 +14,13 @@
  * limitations under the License.
  */
 
-package org.radarcns.hdfs;
-
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-
-import javax.annotation.Nonnull;
+package org.radarcns.hdfs.accounting;
 
 /** POJO class for storing offsets. */
-public class OffsetRange implements Comparable<OffsetRange> {
-    private final String topic;
-    private final int partition;
-    private long offsetFrom;
-    private long offsetTo;
+public class OffsetRange {
+    private final TopicPartition topicPartition;
+    private final long offsetFrom;
+    private final long offsetTo;
 
     public static OffsetRange parseFilename(String filename) throws NumberFormatException, IndexOutOfBoundsException {
         String[] fileNameParts = filename.split("[+.]");
@@ -39,51 +33,50 @@ public class OffsetRange implements Comparable<OffsetRange> {
     }
 
     /** Full constructor. */
-    @JsonCreator
-    public OffsetRange(
-            @JsonProperty("topic") String topic,
-            @JsonProperty("partition") int partition,
-            @JsonProperty("offsetFrom") long offsetFrom,
-            @JsonProperty("offsetTo") long offsetTo) {
-        this.topic = topic;
-        this.partition = partition;
+    public OffsetRange(String topic, int partition, long offsetFrom, long offsetTo) {
+        this(new TopicPartition(topic, partition), offsetFrom, offsetTo);
+    }
+
+    public OffsetRange(TopicPartition topicPartition, long offsetFrom, long offsetTo) {
+        this.topicPartition = topicPartition;
         this.offsetFrom = offsetFrom;
         this.offsetTo = offsetTo;
     }
 
     public String getTopic() {
-        return topic;
+        return topicPartition.topic;
     }
 
     public int getPartition() {
-        return partition;
+        return topicPartition.partition;
     }
 
     public long getOffsetFrom() {
         return offsetFrom;
     }
 
-    public void setOffsetFrom(long offsetFrom) {
-        this.offsetFrom = offsetFrom;
-    }
-
     public long getOffsetTo() {
         return offsetTo;
     }
 
-    public void setOffsetTo(long offsetTo) {
-        this.offsetTo = offsetTo;
+    public OffsetRange createSingleOffset(int index) {
+        if (index < 0 || index > offsetTo - offsetFrom) {
+            throw new IndexOutOfBoundsException("Index " + index + " does not reference offsets "
+                    + offsetFrom + " to " + offsetTo);
+        }
+
+        long singleOffset = offsetFrom + index;
+        return new OffsetRange(topicPartition, singleOffset, singleOffset);
     }
 
     @Override
     public String toString() {
-        return topic + '+' + partition + '+' + offsetFrom + '+' + offsetTo;
+        return topicPartition.topic + '+' + topicPartition.partition + '+' + offsetFrom + '+' + offsetTo;
     }
 
     @Override
     public int hashCode() {
-        int result = topic.hashCode();
-        result = 31 * result + partition;
+        int result = topicPartition.hashCode();
         result = 31 * result + (int) (offsetFrom ^ (offsetFrom >>> 32));
         result = 31 * result + (int) (offsetTo ^ (offsetTo >>> 32));
         return result;
@@ -95,26 +88,13 @@ public class OffsetRange implements Comparable<OffsetRange> {
             return false;
         }
         OffsetRange other = (OffsetRange) o;
-        return topic.equals(other.topic)
-                && partition == other.partition
+        return topicPartition.equals(other.topicPartition)
                 && offsetFrom == other.offsetFrom
                 && offsetTo == other.offsetTo;
     }
 
-    @Override
-    public int compareTo(@Nonnull OffsetRange o) {
-        int ret = Long.compare(offsetFrom, o.offsetFrom);
-        if (ret != 0) {
-            return ret;
-        }
-        ret = Long.compare(offsetTo, o.offsetTo);
-        if (ret != 0) {
-            return ret;
-        }
-        ret = topic.compareTo(o.topic);
-        if (ret != 0) {
-            return ret;
-        }
-        return Integer.compare(partition, o.partition);
+    public TopicPartition getTopicPartition() {
+        return topicPartition;
     }
+
 }
