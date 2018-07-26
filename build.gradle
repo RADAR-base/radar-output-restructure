@@ -46,36 +46,6 @@ dependencies {
     testImplementation group: 'junit', name: 'junit', version: '4.12'
 }
 
-def pomConfig = {
-    licenses {
-        license {
-            name = 'The Apache Software License, Version 2.0'
-            url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-            distribution = 'repo'
-        }
-    }
-    developers {
-        developer {
-            id = 'blootsvoets'
-            name = 'Joris Borgdorff'
-            email = 'joris@thehyve.nl'
-            organization = 'The Hyve'
-        }
-
-    }
-    issueManagement {
-        system = 'GitHub'
-        url = issueUrl
-    }
-    organization {
-        name = 'RADAR-base'
-        url = website
-    }
-    scm {
-        connection = 'scm:git:' + githubUrl
-        url = githubUrl
-    }
-}
 ext.sharedManifest = manifest {
     attributes(
             "Implementation-Title": rootProject.name,
