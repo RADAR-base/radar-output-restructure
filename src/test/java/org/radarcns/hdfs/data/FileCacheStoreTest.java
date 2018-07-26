@@ -27,9 +27,8 @@ import org.radarcns.hdfs.Application;
 import org.radarcns.hdfs.FileStoreFactory;
 import org.radarcns.hdfs.accounting.Accountant;
 import org.radarcns.hdfs.accounting.Bin;
-import org.radarcns.hdfs.accounting.BinFile;
 import org.radarcns.hdfs.accounting.OffsetRange;
-import org.radarcns.hdfs.accounting.OffsetRangeFile;
+import org.radarcns.hdfs.accounting.TopicPartition;
 import org.radarcns.hdfs.config.RestructureSettings;
 
 import java.io.IOException;
@@ -67,8 +66,11 @@ public class FileCacheStoreTest {
 
         GenericRecord record;
 
-        OffsetRange offsetRange0 = new OffsetRange("t", 0, 0, 0);
-        OffsetRange offsetRange1 = new OffsetRange("t", 1, 0, 8);
+        TopicPartition topicPartition0 = new TopicPartition("t", 0);
+        TopicPartition topicPartition1 = new TopicPartition("t", 1);
+
+        OffsetRange offsetRange0 = new OffsetRange(topicPartition0, 0, 0);
+        OffsetRange offsetRange1 = new OffsetRange(topicPartition1, 0, 8);
         Bin bin = new Bin("t", "c", "00");
 
         RestructureSettings settings = new RestructureSettings.Builder(folder.getRoot().toString())
@@ -85,52 +87,52 @@ public class FileCacheStoreTest {
             Accountant.Transaction transaction;
 
             record = new GenericRecordBuilder(simpleSchema).set("a", "something").build();
-            transaction = new Accountant.Transaction(offsetRange1.createSingleOffset(i1++), bin);
+            transaction = new Accountant.Transaction(topicPartition1, i1++, bin);
             assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
-                    cache.writeRecord("t", f1, record, transaction));
+                    cache.writeRecord(f1, record, transaction));
             record = new GenericRecordBuilder(simpleSchema).set("a", "somethingElse").build();
-            transaction = new Accountant.Transaction(offsetRange1.createSingleOffset(i1++), bin);
+            transaction = new Accountant.Transaction(topicPartition1, i1++, bin);
             assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE,
-                    cache.writeRecord("t", f1, record, transaction));
+                    cache.writeRecord(f1, record, transaction));
             record = new GenericRecordBuilder(simpleSchema).set("a", "something").build();
-            transaction = new Accountant.Transaction(offsetRange0.createSingleOffset(i0++), bin);
+            transaction = new Accountant.Transaction(topicPartition0, i0++, bin);
             assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
-                    cache.writeRecord("t", f2, record, transaction));
+                    cache.writeRecord(f2, record, transaction));
             record = new GenericRecordBuilder(simpleSchema).set("a", "third").build();
-            transaction = new Accountant.Transaction(offsetRange1.createSingleOffset(i1++), bin);
+            transaction = new Accountant.Transaction(topicPartition1, i1++, bin);
             assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE,
-                    cache.writeRecord("t", f1, record, transaction));
+                    cache.writeRecord(f1, record, transaction));
             record = new GenericRecordBuilder(simpleSchema).set("a", "f3").build();
-            transaction = new Accountant.Transaction(offsetRange1.createSingleOffset(i1++), bin);
+            transaction = new Accountant.Transaction(topicPartition1, i1++, bin);
             assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
-                    cache.writeRecord("t", f3, record, transaction));
+                    cache.writeRecord(f3, record, transaction));
             record = new GenericRecordBuilder(simpleSchema).set("a", "f2").build();
-            transaction = new Accountant.Transaction(offsetRange1.createSingleOffset(i1++), bin);
+            transaction = new Accountant.Transaction(topicPartition1, i1++, bin);
             assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
-                    cache.writeRecord("t", f2, record, transaction));
+                    cache.writeRecord(f2, record, transaction));
             record = new GenericRecordBuilder(simpleSchema).set("a", "f3").build();
-            transaction = new Accountant.Transaction(offsetRange1.createSingleOffset(i1++), bin);
+            transaction = new Accountant.Transaction(topicPartition1, i1++, bin);
             assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE,
-                    cache.writeRecord("t", f3, record, transaction));
+                    cache.writeRecord(f3, record, transaction));
             record = new GenericRecordBuilder(simpleSchema).set("a", "f4").build();
-            transaction = new Accountant.Transaction(offsetRange1.createSingleOffset(i1++), bin);
+            transaction = new Accountant.Transaction(topicPartition1, i1++, bin);
             assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
-                    cache.writeRecord("t", f4, record, transaction));
+                    cache.writeRecord(f4, record, transaction));
             record = new GenericRecordBuilder(simpleSchema).set("a", "f3").build();
-            transaction = new Accountant.Transaction(offsetRange1.createSingleOffset(i1++), bin);
+            transaction = new Accountant.Transaction(topicPartition1, i1++, bin);
             assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE,
-                    cache.writeRecord("t", f3, record, transaction));
+                    cache.writeRecord(f3, record, transaction));
             record = new GenericRecordBuilder(conflictSchema).set("a", "f3"). set("b", "conflict").build();
-            transaction = new Accountant.Transaction(offsetRange1.createSingleOffset(i1), bin);
+            transaction = new Accountant.Transaction(topicPartition1, i1, bin);
             assertEquals(FileCacheStore.WriteResponse.CACHE_AND_NO_WRITE,
-                    cache.writeRecord("t", f3, record, transaction));
+                    cache.writeRecord(f3, record, transaction));
             record = new GenericRecordBuilder(conflictSchema).set("a", "f1"). set("b", "conflict").build();
             // Cannot write to file even though the file is not in cache since schema is different
             assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_NO_WRITE,
-                    cache.writeRecord("t", f1, record, transaction));
+                    cache.writeRecord(f1, record, transaction));
             // Can write the same record to a new file
             assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
-                    cache.writeRecord("t", newFile, record, transaction));
+                    cache.writeRecord(newFile, record, transaction));
         }
 
         assertTrue(accountant.getOffsets().contains(offsetRange0));

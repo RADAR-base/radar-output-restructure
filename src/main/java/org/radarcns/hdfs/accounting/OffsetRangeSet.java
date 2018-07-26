@@ -16,108 +16,87 @@
 
 package org.radarcns.hdfs.accounting;
 
+import com.almworks.integers.LongArray;
 import org.radarcns.hdfs.util.FunctionalValue;
 import org.radarcns.hdfs.util.LockedFunctionalValue;
 import org.radarcns.hdfs.util.ReadOnlyFunctionalValue;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
+import java.util.AbstractMap;
 import java.util.Comparator;
 import java.util.Map;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.function.Supplier;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 /** Encompasses a range of offsets. */
 public class OffsetRangeSet {
-    private static final FunctionalValue<SortedSet<OffsetRange>> EMPTY_VALUE =
-            new ReadOnlyFunctionalValue<>(Collections.emptySortedSet());
+    private static final FunctionalValue<OffsetRangeLists> EMPTY_VALUE =
+            new ReadOnlyFunctionalValue<>(new OffsetRangeLists());
 
-    private final Supplier<FunctionalValue<SortedSet<OffsetRange>>> factory;
-    private final ConcurrentMap<String, FunctionalValue<SortedSet<OffsetRange>>> ranges;
+    private final Function<OffsetRangeLists, FunctionalValue<OffsetRangeLists>> factory;
+    private final ConcurrentMap<TopicPartition, FunctionalValue<OffsetRangeLists>> ranges;
 
     public OffsetRangeSet() {
-        this(() -> new LockedFunctionalValue<>(new TreeSet<>()));
+        this(LockedFunctionalValue::new);
     }
 
     public OffsetRangeSet(
-            Supplier<FunctionalValue<SortedSet<OffsetRange>>> factory) {
+            Function<OffsetRangeLists, FunctionalValue<OffsetRangeLists>> factory) {
         this.ranges = new ConcurrentHashMap<>();
+        this.factory = factory;
+    }
+
+    private OffsetRangeSet(ConcurrentMap<TopicPartition, FunctionalValue<OffsetRangeLists>> ranges,
+            Function<OffsetRangeLists, FunctionalValue<OffsetRangeLists>> factory) {
+        this.ranges = ranges;
         this.factory = factory;
     }
 
     /** Add given offset range to seen offsets. */
     public void add(OffsetRange range) {
-        ranges.computeIfAbsent(key(range), k -> factory.get())
-                .modify(topicRanges -> {
-                    SortedSet<OffsetRange> tail = topicRanges.tailSet(range);
-                    SortedSet<OffsetRange> head = topicRanges.headSet(range);
-
-                    OffsetRange next = !tail.isEmpty() ? tail.first() : null;
-                    OffsetRange previous = !head.isEmpty() ? head.last() : null;
-
-                    if (next != null) {
-                        if (next.equals(range)) {
-                            return;
-                        }
-
-                        if (next.getOffsetFrom() <= range.getOffsetTo() + 1) {
-                            if (previous != null
-                                    && previous.getOffsetTo() >= range.getOffsetFrom() - 1) {
-                                next.setOffsetFrom(previous.getOffsetFrom());
-                                topicRanges.remove(previous);
-                            } else {
-                                next.setOffsetFrom(range.getOffsetFrom());
-                            }
-                            return;
-                        }
-                    }
-
-                    if (previous != null && previous.getOffsetTo() >= range.getOffsetFrom() - 1) {
-                        previous.setOffsetTo(range.getOffsetTo());
-                        return;
-                    }
-
-                    topicRanges.add(range);
-                });
+        ranges.computeIfAbsent(range.getTopicPartition(), k -> factory.apply(new OffsetRangeLists()))
+                .modify(rangeList -> rangeList.add(range.getOffsetFrom(), range.getOffsetTo()));
     }
 
-    /** Add all offset ranges of given set to the current set. */
+    /** Add given offset range to seen offsets. */
+    public void add(TopicPartition topicPartition, long offset) {
+        ranges.computeIfAbsent(topicPartition, k -> factory.apply(new OffsetRangeLists()))
+                .modify(rangeList -> rangeList.add(offset));
+    }
+
+    /** Add all offset stream of given set to the current set. */
     public void addAll(OffsetRangeSet set) {
-        set.ranges().forEach(this::add);
+        set.stream().forEach(this::add);
     }
 
     /** Whether this range value completely contains the given range. */
     public boolean contains(OffsetRange range) {
-        return ranges.getOrDefault(key(range), EMPTY_VALUE)
-                .read(topicRanges -> {
-                    if (topicRanges.contains(range)) {
-                        return true;
-                    }
+        return ranges.getOrDefault(range.getTopicPartition(), EMPTY_VALUE)
+                .read(rangeList -> rangeList.contains(range.getOffsetFrom(), range.getOffsetTo()));
+    }
 
-                    SortedSet<OffsetRange> tail = topicRanges.tailSet(range);
-                    OffsetRange next = !tail.isEmpty() ? tail.first() : null;
-
-                    if (next != null
-                            && next.getOffsetFrom() == range.getOffsetFrom()
-                            && next.getOffsetTo() >= range.getOffsetTo()) {
-                        return true;
-                    }
-
-                    SortedSet<OffsetRange> head = topicRanges.headSet(range);
-                    OffsetRange previous = !head.isEmpty() ? head.last() : null;
-                    return previous != null && previous.getOffsetTo() >= range.getOffsetTo();
-                });
+    /** Whether this range value completely contains the given range. */
+    public boolean contains(TopicPartition partition, long offset) {
+        return ranges.getOrDefault(partition, EMPTY_VALUE)
+                .read(rangeList -> rangeList.contains(offset));
     }
 
     /** Number of distict offsets in given topic/partition. */
-    public int size(String topic, int partition) {
-        return ranges.getOrDefault(key(topic, partition), EMPTY_VALUE)
-                .read(Collection::size);
+    public int size(TopicPartition topicPartition) {
+        return ranges.getOrDefault(topicPartition, EMPTY_VALUE)
+                .read(OffsetRangeLists::size);
+    }
+
+    public OffsetRangeSet withFactory(
+            Function<OffsetRangeLists, FunctionalValue<OffsetRangeLists>> factory) {
+        return new OffsetRangeSet(
+                ranges.entrySet().stream().collect(Collectors.toConcurrentMap(
+                        Map.Entry::getKey, e -> e.getValue().read(
+                                range -> factory.apply(new OffsetRangeLists(range))))),
+                factory);
     }
 
     @Override
@@ -130,20 +109,15 @@ public class OffsetRangeSet {
         return ranges.isEmpty();
     }
 
-    private static String key(OffsetRange range) {
-        return key(range.getTopic(), range.getPartition());
-    }
-
-    private static String key(String topic, int partition) {
-        return topic + '+' + partition;
-    }
-
-    /** All offset ranges as a stream. For any given topic/partition, this yields an
+    /** All offset stream as a stream. For any given topic/partition, this yields an
      * consistent result but values from different topic/partitions may not be consistent. */
-    public Stream<OffsetRange> ranges() {
+    public Stream<OffsetRange> stream() {
         return ranges.entrySet().stream()
                 .sorted(Comparator.comparing(Map.Entry::getKey))
-                .flatMap(v -> v.getValue().read(s -> new ArrayList<>(s).stream()));
+                .map(e -> new AbstractMap.SimpleImmutableEntry<>(e.getKey(),
+                        e.getValue().read(OffsetRangeLists::new)))
+                .flatMap(e -> e.getValue().stream()
+                        .map(r -> new OffsetRange(e.getKey(), r.first, r.second)));
     }
 
     @Override
@@ -159,4 +133,139 @@ public class OffsetRangeSet {
         return ranges.hashCode();
     }
 
+    public static class OffsetRangeLists {
+        private final LongArray offsetsFrom;
+        private final LongArray offsetsTo;
+
+        public OffsetRangeLists() {
+             offsetsFrom = new LongArray(8);
+             offsetsTo = new LongArray(8);
+        }
+
+        public OffsetRangeLists(OffsetRangeLists other) {
+            offsetsFrom = new LongArray(other.offsetsFrom);
+            offsetsTo = new LongArray(other.offsetsTo);
+        }
+
+        public boolean contains(long from, long to) {
+            //  -index-1 if not found
+            int index = offsetsFrom.binarySearch(from);
+            if (index >= 0) {
+                return offsetsTo.get(index) >= to;
+            } else {
+                int indexBefore = -index - 2;
+                return indexBefore >= 0 && offsetsTo.get(indexBefore) >= to;
+            }
+        }
+
+        public boolean contains(long offset) {
+            //  -index-1 if not found
+            int index = offsetsFrom.binarySearch(offset);
+            if (index >= 0) {
+                return true;
+            } else {
+                int indexBefore = -index - 2;
+                return indexBefore >= 0 && offsetsTo.get(indexBefore) >= offset;
+            }
+        }
+
+        public void add(long offset) {
+            int index = offsetsFrom.binarySearch(offset);
+            if (index >= 0) {
+                return;
+            }
+            // index where this range would be entered
+            index = -index - 1;
+
+            if (index > 0 && offset == offsetsTo.get(index - 1) + 1) {
+                // concat with range before it and possibly stream afterwards
+                offsetsTo.set(index - 1, offset);
+                if (index < offsetsFrom.size() && offset == offsetsFrom.get(index) - 1) {
+                    offsetsTo.set(index - 1, offsetsTo.get(index));
+                    offsetsFrom.removeAt(index);
+                    offsetsTo.removeAt(index);
+                }
+            } else if (index >= offsetsFrom.size() || offset < offsetsFrom.get(index) - 1) {
+                // cannot concat, enter new range
+                offsetsFrom.insert(index, offset);
+                offsetsTo.insert(index, offset);
+            } else {
+                // concat with the stream after it
+                offsetsFrom.set(index, offset);
+            }
+        }
+
+        public void add(long from, long to) {
+            int index = offsetsFrom.binarySearch(from);
+            if (index < 0) {
+                // index where this range would be entered
+                index = -index - 1;
+
+                if (index > 0 && from <= offsetsTo.get(index - 1) + 1) {
+                    // concat with range before it and possibly stream afterwards
+                    index--;
+                } else if (index >= offsetsFrom.size() || to < offsetsFrom.get(index) - 1) {
+                    // cannot concat, enter new range
+                    offsetsFrom.insert(index, from);
+                    offsetsTo.insert(index, to);
+                    return;
+                } else {
+                    // concat with the stream after it
+                    offsetsFrom.set(index, from);
+                }
+            }
+
+            if (to <= offsetsTo.get(index)) {
+                return;
+            }
+
+            offsetsTo.set(index, to);
+
+            int overlapIndex = index + 1;
+            int startIndex = overlapIndex;
+
+            while (overlapIndex < offsetsTo.size() && to >= offsetsTo.get(overlapIndex)) {
+                overlapIndex++;
+            }
+            if (overlapIndex < offsetsFrom.size()
+                    && to >= offsetsFrom.get(overlapIndex) - 1) {
+                offsetsTo.set(index, offsetsTo.get(overlapIndex));
+                overlapIndex++;
+            }
+            if (overlapIndex != startIndex) {
+                offsetsFrom.removeRange(startIndex, overlapIndex);
+                offsetsTo.removeRange(startIndex, overlapIndex);
+            }
+        }
+
+        public Stream<LongTuple> stream() {
+            return IntStream.range(0, offsetsFrom.size())
+                    .mapToObj(i -> new LongTuple(offsetsFrom.get(i), offsetsTo.get(i)));
+        }
+
+        public int size() {
+            return offsetsFrom.size();
+        }
+
+        @Override
+        public String toString() {
+            return "[" + stream()
+                    .map(Object::toString)
+                    .collect(Collectors.joining(", ")) + ']';
+        }
+    }
+    private static class LongTuple {
+        private final long first;
+        private final long second;
+
+        private LongTuple(long first, long second) {
+            this.first = first;
+            this.second = second;
+        }
+
+        @Override
+        public String toString() {
+            return "(" + first + " - " + second + ')';
+        }
+    }
 }

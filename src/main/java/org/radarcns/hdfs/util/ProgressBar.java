@@ -100,7 +100,7 @@ public class ProgressBar {
     }
 
     private void heapSize(StringBuilder builder) {
-        builder.append("Memory: ")
+        builder.append("Mem ")
                 .append(Runtime.getRuntime().totalMemory() / 1_000_000)
                 .append("/")
                 .append(Runtime.getRuntime().maxMemory() / 1_000_000)

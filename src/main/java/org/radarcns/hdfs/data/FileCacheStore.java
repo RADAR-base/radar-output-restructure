@@ -80,7 +80,7 @@ public class FileCacheStore implements Flushable, Closeable {
      * @return Integer value according to one of the response codes.
      * @throws IOException when failing to open a file or writing to it.
      */
-    public WriteResponse writeRecord(String topic, Path path, GenericRecord record,
+    public WriteResponse writeRecord(Path path, GenericRecord record,
             Accountant.Transaction transaction) throws IOException {
         FileCache cache = caches.get(path);
         boolean hasCache = cache != null;
@@ -94,7 +94,7 @@ public class FileCacheStore implements Flushable, Closeable {
                 long timeOpen = System.nanoTime();
                 cache = new FileCache(factory, path, record, tmpDir.getPath(), accountant);
                 Timer.getInstance().add("write.open", timeOpen);
-                writeSchema(topic, path, record.getSchema());
+                writeSchema(transaction.getTopicPartition().topic, path, record.getSchema());
             } catch (IOException ex) {
                 logger.error("Could not open cache for {}", path, ex);
                 return NO_CACHE_AND_NO_WRITE;

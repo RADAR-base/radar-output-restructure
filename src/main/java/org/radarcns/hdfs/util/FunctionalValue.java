@@ -31,6 +31,11 @@ public abstract class FunctionalValue<T> {
     public abstract void modify(Consumer<? super T> consumer);
 
     @Override
+    public String toString() {
+        return read(Object::toString);
+    }
+
+    @Override
     public boolean equals(Object o) {
         if (this == o) {
             return true;

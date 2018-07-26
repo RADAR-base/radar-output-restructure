@@ -29,8 +29,10 @@ import org.radarcns.hdfs.accounting.Accountant;
 import org.radarcns.hdfs.accounting.Bin;
 import org.radarcns.hdfs.accounting.OffsetRange;
 import org.radarcns.hdfs.accounting.OffsetRangeSet;
+import org.radarcns.hdfs.accounting.TopicPartition;
 import org.radarcns.hdfs.data.FileCacheStore;
 import org.radarcns.hdfs.util.ProgressBar;
+import org.radarcns.hdfs.util.ReadOnlyFunctionalValue;
 import org.radarcns.hdfs.util.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -111,12 +113,9 @@ public class RadarHdfsRestructure {
 
     private TopicFileList getTopicPaths(FileSystem fs, Path path, OffsetRangeSet seenFiles) {
         return new TopicFileList(walk(fs, path)
-                .filter(f -> {
-                    String name = f.getName();
-                    return name.endsWith(".avro")
-                            && !seenFiles.contains(OffsetRange.parseFilename(name));
-                })
+                .filter(f -> f.getName().endsWith(".avro"))
                 .map(f -> new TopicFile(f.getParent().getParent().getName(), f))
+                .filter(f -> !seenFiles.contains(f.range))
                 .collect(Collectors.toList()));
     }
 
@@ -147,6 +146,8 @@ public class RadarHdfsRestructure {
 
         processedFileCount = new LongAdder();
         processedRecordsCount = new LongAdder();
+        OffsetRangeSet seenOffsets = accountant.getOffsets()
+                .withFactory(ReadOnlyFunctionalValue::new);
 
         ExecutorService executor = Executors.newWorkStealingPool(pathFactory.isTopicPartitioned() ? this.numThreads : 1);
 
@@ -168,7 +169,7 @@ public class RadarHdfsRestructure {
                         try (FileCacheStore cache = fileStoreFactory.newFileCacheStore(accountant)) {
                             for (TopicFile file : paths.files) {
                                 try {
-                                    this.processFile(file, cache, progressBar);
+                                    this.processFile(file, cache, progressBar, seenOffsets);
                                 } catch (JsonMappingException exc) {
                                     logger.error("Cannot map values", exc);
                                 }
@@ -196,7 +197,7 @@ public class RadarHdfsRestructure {
     }
 
     private void processFile(TopicFile file, FileCacheStore cache,
-            ProgressBar progressBar) throws IOException {
+            ProgressBar progressBar, OffsetRangeSet seenOffsets) throws IOException {
         logger.debug("Reading {}", file.path);
 
         // Read and parseFilename avro file
@@ -216,45 +217,49 @@ public class RadarHdfsRestructure {
                 new GenericDatumReader<>());
 
         GenericRecord record = null;
-        int i = 0;
+        long offset = file.range.getOffsetFrom();
         while (dataFileReader.hasNext()) {
             record = dataFileReader.next(record);
             timer.add("read", timeRead);
 
             long timeAccount = System.nanoTime();
-            OffsetRange singleOffset = file.range.createSingleOffset(i++);
+            boolean alreadyContains = seenOffsets.contains(file.range.getTopicPartition(), offset);
             timer.add("accounting.create", timeAccount);
-            // Get the fields
-            this.writeRecord(record, file.topic, cache, singleOffset, 0);
-
+            if (!alreadyContains) {
+                // Get the fields
+                this.writeRecord(file.range.getTopicPartition(), record, cache, offset, 0);
+            }
             processedRecordsCount.increment();
             progressBar.update(processedRecordsCount.sum());
+
+            offset++;
             timeRead = System.nanoTime();
         }
     }
 
-    private void writeRecord(GenericRecord record, String topicName, FileCacheStore cache,
-            OffsetRange offset, int suffix) throws IOException {
-        RecordPathFactory.RecordOrganization metadata = pathFactory.getRecordOrganization(topicName, record, suffix);
+    private void writeRecord(TopicPartition topicPartition, GenericRecord record,
+            FileCacheStore cache, long offset, int suffix) throws IOException {
+        RecordPathFactory.RecordOrganization metadata = pathFactory.getRecordOrganization(
+                topicPartition.topic, record, suffix);
 
         Timer timer = Timer.getInstance();
 
         long timeAccount = System.nanoTime();
         String timeBin = pathFactory.getTimeBin(metadata.getTime());
-        Accountant.Transaction transaction = new Accountant.Transaction(offset,
-                new Bin(topicName, metadata.getCategory(), timeBin));
+        Accountant.Transaction transaction = new Accountant.Transaction(topicPartition, offset,
+                new Bin(topicPartition.topic, metadata.getCategory(), timeBin));
         timer.add("accounting.create", timeAccount);
 
         // Write data
         long timeWrite = System.nanoTime();
         FileCacheStore.WriteResponse response = cache.writeRecord(
-                topicName, metadata.getPath(), record, transaction);
+                metadata.getPath(), record, transaction);
         timer.add("write", timeWrite);
 
         if (!response.isSuccessful()) {
             // Write was unsuccessful due to different number of columns,
             // try again with new file name
-            writeRecord(record, topicName, cache, offset, ++suffix);
+            writeRecord(topicPartition, record, cache, offset, ++suffix);
         }
     }
 

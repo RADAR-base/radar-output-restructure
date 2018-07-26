@@ -24,6 +24,7 @@ import org.junit.rules.TemporaryFolder;
 import org.radarcns.hdfs.accounting.OffsetRange;
 import org.radarcns.hdfs.accounting.OffsetRangeFile;
 import org.radarcns.hdfs.accounting.OffsetRangeSet;
+import org.radarcns.hdfs.accounting.TopicPartition;
 import org.radarcns.hdfs.data.LocalStorageDriver;
 import org.radarcns.hdfs.data.StorageDriver;
 
@@ -90,6 +91,6 @@ public class OffsetRangeFileTest {
         }
 
         OffsetRangeSet rangeSet = OffsetRangeFile.read(storage, testFile).getOffsets();
-        assertEquals(2, rangeSet.size("a", 0));
+        assertEquals(2, rangeSet.size(new TopicPartition("a", 0)));
     }
 }

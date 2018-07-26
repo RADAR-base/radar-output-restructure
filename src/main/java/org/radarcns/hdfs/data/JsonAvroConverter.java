@@ -42,13 +42,16 @@ import java.util.Map;
  * Writes an Avro record to JSON format.
  */
 public final class JsonAvroConverter implements RecordConverter {
+    private static final JsonFactory JSON_FACTORY = new JsonFactory();
+    private static final ObjectWriter JSON_WRITER = new ObjectMapper(JSON_FACTORY).writer();
 
     public static RecordConverterFactory getFactory() {
-        JsonFactory factory = new JsonFactory();
         return new RecordConverterFactory() {
             @Override
-            public RecordConverter converterFor(Writer writer, GenericRecord record, boolean writeHeader, Reader reader) throws IOException {
-                return new JsonAvroConverter(factory, writer);
+            public RecordConverter converterFor(Writer writer,
+                    GenericRecord record, boolean writeHeader,
+                    Reader reader) throws IOException {
+                return new JsonAvroConverter(writer);
             }
 
             @Override
@@ -63,17 +66,16 @@ public final class JsonAvroConverter implements RecordConverter {
         };
     }
 
-    private final ObjectWriter jsonWriter;
     private final JsonGenerator generator;
 
-    public JsonAvroConverter(JsonFactory factory, Writer writer) throws IOException {
-        generator = factory.createGenerator(writer).setPrettyPrinter(new MinimalPrettyPrinter("\n"));
-        jsonWriter = new ObjectMapper(factory).writer();
+    public JsonAvroConverter(Writer writer) throws IOException {
+        generator = JSON_FACTORY.createGenerator(writer)
+                .setPrettyPrinter(new MinimalPrettyPrinter("\n"));
     }
 
     @Override
     public boolean writeRecord(GenericRecord record) throws IOException {
-        jsonWriter.writeValue(generator, convertRecord(record));
+        JSON_WRITER.writeValue(generator, convertRecord(record));
         return true;
     }
 

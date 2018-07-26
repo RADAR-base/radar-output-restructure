@@ -27,7 +27,7 @@ import org.junit.rules.TemporaryFolder;
 import org.radarcns.hdfs.Application;
 import org.radarcns.hdfs.accounting.Accountant;
 import org.radarcns.hdfs.accounting.Bin;
-import org.radarcns.hdfs.accounting.OffsetRange;
+import org.radarcns.hdfs.accounting.TopicPartition;
 import org.radarcns.hdfs.config.RestructureSettings;
 
 import java.io.BufferedReader;
@@ -53,9 +53,9 @@ public class FileCacheTest {
     private Record exampleRecord;
     private Path tmpDir;
     private Bin bin;
-    private OffsetRange offsetRange;
     private Application factory;
     private Accountant accountant;
+    private TopicPartition topicPartition;
 
     @Before
     public void setUp() throws IOException {
@@ -70,7 +70,7 @@ public class FileCacheTest {
         setUp(settingsBuilder().build());
 
         this.bin = new Bin("t", "c", "00");
-        this.offsetRange = new OffsetRange("t", 0, 0, 10);
+        this.topicPartition = new TopicPartition("t", 0);
     }
 
     private RestructureSettings.Builder settingsBuilder() {
@@ -88,7 +88,7 @@ public class FileCacheTest {
 
         try (FileCache cache = new FileCache(factory, path, exampleRecord, tmpDir, accountant)) {
             cache.writeRecord(exampleRecord,
-                    new Accountant.Transaction(offsetRange.createSingleOffset(0), bin));
+                    new Accountant.Transaction(topicPartition, 0L, bin));
         }
 
         System.out.println("Gzip: " + Files.size(path));
@@ -109,12 +109,12 @@ public class FileCacheTest {
 
         try (FileCache cache = new FileCache(factory, path, exampleRecord, tmpDir, accountant)) {
             cache.writeRecord(exampleRecord,
-                    new Accountant.Transaction(offsetRange.createSingleOffset(0), bin));
+                    new Accountant.Transaction(topicPartition, 0, bin));
         }
 
         try (FileCache cache = new FileCache(factory, path, exampleRecord, tmpDir, accountant)) {
             cache.writeRecord(exampleRecord,
-                    new Accountant.Transaction(offsetRange.createSingleOffset(0), bin));
+                    new Accountant.Transaction(topicPartition, 0, bin));
         }
 
         System.out.println("Gzip appended: " + Files.size(path));
@@ -135,7 +135,7 @@ public class FileCacheTest {
     public void testPlain() throws IOException {
         try (FileCache cache = new FileCache(factory, path, exampleRecord, tmpDir, accountant)) {
             cache.writeRecord(exampleRecord,
-                    new Accountant.Transaction(offsetRange.createSingleOffset(0), bin));
+                    new Accountant.Transaction(topicPartition, 0, bin));
         }
 
         System.out.println("Plain: " + Files.size(path));
@@ -152,12 +152,12 @@ public class FileCacheTest {
 
         try (FileCache cache = new FileCache(factory, path, exampleRecord, tmpDir, accountant)) {
             cache.writeRecord(exampleRecord,
-                    new Accountant.Transaction(offsetRange.createSingleOffset(0), bin));
+                    new Accountant.Transaction(topicPartition, 0, bin));
         }
 
         try (FileCache cache = new FileCache(factory, path, exampleRecord, tmpDir, accountant)) {
             cache.writeRecord(exampleRecord,
-                    new Accountant.Transaction(offsetRange.createSingleOffset(1), bin));
+                    new Accountant.Transaction(topicPartition, 1, bin));
         }
 
         System.out.println("Plain appended: " + Files.size(path));
@@ -181,15 +181,15 @@ public class FileCacheTest {
             assertEquals(0, cache1.compareTo(cache2));
             // filenames are not equal
             assertEquals(-1, cache1.compareTo(cache3));
-            cache1.writeRecord(exampleRecord, new Accountant.Transaction(offsetRange.createSingleOffset(0), bin));
+            cache1.writeRecord(exampleRecord, new Accountant.Transaction(topicPartition, 0, bin));
             // last used
             assertEquals(1, cache1.compareTo(cache2));
             // last used takes precedence over filename
             assertEquals(1, cache1.compareTo(cache3));
 
             // last used reversal
-            cache2.writeRecord(exampleRecord, new Accountant.Transaction(offsetRange.createSingleOffset(1), bin));
-            cache3.writeRecord(exampleRecord, new Accountant.Transaction(offsetRange.createSingleOffset(2), bin));
+            cache2.writeRecord(exampleRecord, new Accountant.Transaction(topicPartition, 1, bin));
+            cache3.writeRecord(exampleRecord, new Accountant.Transaction(topicPartition, 2, bin));
             assertEquals(-1, cache1.compareTo(cache2));
             assertEquals(-1, cache1.compareTo(cache3));
         }

@@ -3,8 +3,8 @@ package org.radarcns.hdfs.accounting;
 import org.radarcns.hdfs.FileStoreFactory;
 import org.radarcns.hdfs.config.RestructureSettings;
 import org.radarcns.hdfs.data.StorageDriver;
-import org.radarcns.hdfs.util.TemporaryDirectory;
 import org.radarcns.hdfs.util.DirectFunctionalValue;
+import org.radarcns.hdfs.util.TemporaryDirectory;
 import org.radarcns.hdfs.util.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,7 +16,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.TreeSet;
 
 public class Accountant implements Flushable, Closeable {
     private static final Logger logger = LoggerFactory.getLogger(Accountant.class);
@@ -80,25 +79,14 @@ public class Accountant implements Flushable, Closeable {
     @Override
     public void flush() throws IOException {
         long timeFlush = System.nanoTime();
-        IOException exception = null;
-        try {
-            binFile.flush();
-        } catch (IOException ex) {
-            logger.error("Failed to close bins", ex);
-            exception = ex;
-        }
+
+        binFile.triggerWrite();
 
         try {
             offsetFile.flush();
-        } catch (IOException ex) {
-            logger.error("Failed to close offsets", ex);
-            exception = ex;
+        } finally {
+            Timer.getInstance().add("accounting.flush", timeFlush);
         }
-
-        if (exception != null) {
-            throw exception;
-        }
-        Timer.getInstance().add("accounting.flush", timeFlush);
     }
 
     public BinFile getBins() {
@@ -110,25 +98,31 @@ public class Accountant implements Flushable, Closeable {
         private final Map<Bin, Long> bins;
 
         public Ledger() {
-            offsets = new OffsetRangeSet(() -> new DirectFunctionalValue<>(new TreeSet<>()));
+            offsets = new OffsetRangeSet(DirectFunctionalValue::new);
             bins = new HashMap<>();
         }
 
         public void add(Transaction transaction) {
             long timeAdd = System.nanoTime();
-            offsets.add(transaction.offset);
+            offsets.add(transaction.topicPartition, transaction.offset);
             bins.compute(transaction.bin, (b, vOld) -> vOld == null ? 1L : vOld + 1L);
             Timer.getInstance().add("accounting.add", timeAdd);
         }
     }
 
     public static class Transaction {
-        private final OffsetRange offset;
+        private final TopicPartition topicPartition;
+        private final long offset;
         private final Bin bin;
 
-        public Transaction(OffsetRange offset, Bin bin) {
+        public Transaction(TopicPartition topicPartition, long offset, Bin bin) {
+            this.topicPartition = topicPartition;
             this.offset = offset;
             this.bin = bin;
+        }
+
+        public TopicPartition getTopicPartition() {
+            return topicPartition;
         }
     }
 }

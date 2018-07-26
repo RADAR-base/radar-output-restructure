@@ -16,24 +16,19 @@
 
 package org.radarcns.hdfs.accounting;
 
-import com.fasterxml.jackson.databind.MappingIterator;
-import com.fasterxml.jackson.databind.ObjectReader;
-import com.fasterxml.jackson.databind.ObjectWriter;
-import com.fasterxml.jackson.dataformat.csv.CsvFactory;
-import com.fasterxml.jackson.dataformat.csv.CsvGenerator;
-import com.fasterxml.jackson.dataformat.csv.CsvMapper;
-import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 import org.radarcns.hdfs.data.StorageDriver;
 import org.radarcns.hdfs.util.PostponedWriter;
+import org.radarcns.hdfs.util.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
 
@@ -42,21 +37,8 @@ import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
  * not present.
  */
 public final class OffsetRangeFile extends PostponedWriter {
+    private static final Pattern COMMA_PATTERN = Pattern.compile(",");
     private static final Logger logger = LoggerFactory.getLogger(OffsetRangeFile.class);
-
-    private static final CsvSchema SCHEMA = CsvSchema.builder()
-            .addNumberColumn("offsetFrom")
-            .addNumberColumn("offsetTo")
-            .addNumberColumn("partition")
-            .addColumn("topic")
-            .build()
-            .withHeader();
-
-    private static final CsvFactory CSV_FACTORY = new CsvFactory();
-    private static final CsvMapper CSV_MAPPER = new CsvMapper(CSV_FACTORY);
-    private static final ObjectReader CSV_READER = CSV_MAPPER.reader(SCHEMA.withHeader())
-            .forType(OffsetRange.class);
-
 
     private final StorageDriver storage;
     private final Path path;
@@ -74,9 +56,26 @@ public final class OffsetRangeFile extends PostponedWriter {
             if (storage.exists(path)) {
                 OffsetRangeSet set = new OffsetRangeSet();
                 try (BufferedReader br = storage.newBufferedReader(path)) {
-                    MappingIterator<OffsetRange> ranges = CSV_READER.readValues(br);
-                    while (ranges.hasNext()) {
-                        set.add(ranges.next());
+                    // ignore header
+                    String line = br.readLine();
+                    if (line != null) {
+                        line = br.readLine();
+                        while (line != null) {
+                            String[] cols = COMMA_PATTERN.split(line);
+                            String topic = cols[3];
+                            while (topic.charAt(0) == '"') {
+                                topic = topic.substring(1);
+                            }
+                            while (topic.charAt(topic.length() - 1) == '"') {
+                                topic = topic.substring(0, topic.length() - 1);
+                            }
+                            set.add(new OffsetRange(
+                                    topic,
+                                    Integer.parseInt(cols[2]),
+                                    Long.parseLong(cols[0]),
+                                    Long.parseLong(cols[1])));
+                            line = br.readLine();
+                        }
                     }
                 }
                 return new OffsetRangeFile(storage, path, set);
@@ -102,25 +101,31 @@ public final class OffsetRangeFile extends PostponedWriter {
     }
 
     protected void doWrite() {
-        BufferedOutputStream out;
-        CsvGenerator generator;
+        long timeStart = System.nanoTime();
 
         try {
             Path tmpPath = createTempFile("offsets", ".csv");
-            out = new BufferedOutputStream(Files.newOutputStream(tmpPath));
-            generator = CSV_FACTORY.createGenerator(out);
-            ObjectWriter writer = CSV_MAPPER.writerFor(OffsetRange.class).with(SCHEMA);
 
-            offsets.ranges()
-                    .forEach(tryCatch(r -> writer.writeValue(generator, r),
-                            "Failed to write value"));
+            try (Writer write = Files.newBufferedWriter(tmpPath)) {
+                write.append("offsetFrom,offsetTo,partition,topic\n");
+                offsets.stream()
+                        .forEach(tryCatch(r -> {
+                            write.write(String.valueOf(r.getOffsetFrom()));
+                            write.write(',');
+                            write.write(String.valueOf(r.getOffsetTo()));
+                            write.write(',');
+                            write.write(String.valueOf(r.getPartition()));
+                            write.write(',');
+                            write.write(r.getTopic());
+                            write.write('\n');
+                        },"Failed to write value"));
+            }
 
-            generator.flush();
-            generator.close();
-            out.close();
             storage.store(tmpPath, path);
         } catch (IOException e) {
             logger.error("Failed to write offsets: {}", e);
+        } finally {
+            Timer.getInstance().add("accounting.offsets", timeStart);
         }
     }
 }

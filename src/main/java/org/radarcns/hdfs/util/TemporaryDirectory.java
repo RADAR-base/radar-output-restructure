@@ -38,8 +38,7 @@ public class TemporaryDirectory implements Closeable {
         try {
             // Ignore errors the first time
             Files.walk(path)
-                    .forEach(tryCatch(Files::deleteIfExists, (p, ex) -> {
-                    }));
+                    .forEach(tryCatch(Files::deleteIfExists, (p, ex) -> {}));
         } catch (IOException ex) {
             // ignore the first time
         }
