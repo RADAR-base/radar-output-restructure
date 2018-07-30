@@ -274,7 +274,7 @@ public class CsvAvroConverter implements RecordConverter {
 
     static String cleanCsvString(String orig) {
         if (ESCAPE_PATTERN.matcher(orig).find()) {
-            String cleaned = LINE_ENDING_PATTERN.matcher(orig).replaceAll("\\n");
+            String cleaned = LINE_ENDING_PATTERN.matcher(orig).replaceAll("\\\\n");
             cleaned = TAB_PATTERN.matcher(cleaned).replaceAll("    ");
             cleaned = NON_PRINTING_PATTERN.matcher(cleaned).replaceAll("?");
             if (QUOTE_OR_COMMA_PATTERN.matcher(cleaned).find()) {
