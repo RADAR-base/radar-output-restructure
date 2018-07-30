@@ -38,6 +38,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
@@ -58,13 +59,8 @@ import static org.radarcns.hdfs.util.ProgressBar.formatTime;
 public class RadarHdfsRestructure {
     private static final Logger logger = LoggerFactory.getLogger(RadarHdfsRestructure.class);
 
-    private static final SimpleDateFormat FILE_DATE_FORMAT = new SimpleDateFormat("yyyyMMdd_HH");
     /** Number of offsets to process in a single task. */
     private static final int BATCH_SIZE = 500_000;
-
-    static {
-        FILE_DATE_FORMAT.setTimeZone(TimeZone.getTimeZone("UTC"));
-    }
 
     private final int numThreads;
     private final Configuration conf;
@@ -124,7 +120,7 @@ public class RadarHdfsRestructure {
         try {
             files = fs.listStatus(path);
         } catch (IOException e) {
-            throw new IllegalStateException(e);
+            throw new UncheckedIOException(e);
         }
         return Stream.of(files).parallel()
                 .flatMap(f -> {
@@ -151,7 +147,7 @@ public class RadarHdfsRestructure {
 
         ExecutorService executor = Executors.newWorkStealingPool(pathFactory.isTopicPartitioned() ? this.numThreads : 1);
 
-        ProgressBar progressBar = new ProgressBar(topicPaths.size, 50, 100, TimeUnit.MILLISECONDS);
+        ProgressBar progressBar = new ProgressBar(topicPaths.size, 50, 500, TimeUnit.MILLISECONDS);
 
         // Actually process the files
         topicPaths.files.stream()
@@ -181,7 +177,7 @@ public class RadarHdfsRestructure {
                                     cache.flush();
                                 }
                             }
-                        } catch (IOException ex) {
+                        } catch (IOException | UncheckedIOException ex) {
                             logger.error("Failed to process file", ex);
                         } catch (IllegalStateException ex) {
                             logger.warn("Shutting down");

@@ -42,6 +42,7 @@ import java.util.regex.Pattern;
  * records need to have exactly the same hierarchy (or at least a subset of it.)
  */
 public class CsvAvroConverter implements RecordConverter {
+    private static final Pattern ESCAPE_PATTERN = Pattern.compile("\\p{C}|[,\"]");
     private static final Pattern TAB_PATTERN = Pattern.compile("\t");
     private static final Pattern LINE_ENDING_PATTERN = Pattern.compile("[\n\r]+");
     private static final Pattern NON_PRINTING_PATTERN = Pattern.compile("\\p{C}");
@@ -272,13 +273,17 @@ public class CsvAvroConverter implements RecordConverter {
     }
 
     static String cleanCsvString(String orig) {
-        String cleaned = LINE_ENDING_PATTERN.matcher(orig).replaceAll("\\n");
-        cleaned = TAB_PATTERN.matcher(cleaned).replaceAll("    ");
-        cleaned = NON_PRINTING_PATTERN.matcher(cleaned).replaceAll("?");
-        if (QUOTE_OR_COMMA_PATTERN.matcher(cleaned).find()) {
-            return '"' + QUOTE_PATTERN.matcher(cleaned).replaceAll("\"\"") + '"';
+        if (ESCAPE_PATTERN.matcher(orig).find()) {
+            String cleaned = LINE_ENDING_PATTERN.matcher(orig).replaceAll("\\n");
+            cleaned = TAB_PATTERN.matcher(cleaned).replaceAll("    ");
+            cleaned = NON_PRINTING_PATTERN.matcher(cleaned).replaceAll("?");
+            if (QUOTE_OR_COMMA_PATTERN.matcher(cleaned).find()) {
+                return '"' + QUOTE_PATTERN.matcher(cleaned).replaceAll("\"\"") + '"';
+            } else {
+                return cleaned;
+            }
         } else {
-            return cleaned;
+            return orig;
         }
     }
 

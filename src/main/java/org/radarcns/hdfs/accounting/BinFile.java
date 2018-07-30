@@ -25,63 +25,48 @@ import javax.annotation.Nonnull;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static org.radarcns.hdfs.accounting.OffsetRangeFile.COMMA_PATTERN;
+import static org.radarcns.hdfs.accounting.OffsetRangeFile.read;
+import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
 
 /** Store overview of records written, divided into bins. */
 public class BinFile extends PostponedWriter {
     private static final Logger logger = LoggerFactory.getLogger(BinFile.class);
+    private static final String BINS_HEADER = String.join(
+            ",", "topic", "device", "timestamp", "count") + "\n";
 
-    private final ConcurrentMap<Bin, LongAdder> bins;
+    private final ConcurrentMap<Bin, Long> bins;
     private final Path path;
     private final StorageDriver storage;
 
-    public BinFile(@Nonnull StorageDriver storageDriver, @Nonnull Path path,
-            @Nonnull ConcurrentMap<Bin, LongAdder> initialData) {
+    public BinFile(@Nonnull StorageDriver storageDriver, @Nonnull Path path) {
         super("bins", 5, TimeUnit.SECONDS);
         Objects.requireNonNull(path);
-        Objects.requireNonNull(initialData);
         this.storage = storageDriver;
         this.path = path;
-        this.bins = initialData;
-    }
-
-    public static BinFile read(StorageDriver storage, Path path) {
-        ConcurrentMap<Bin, LongAdder> map = new ConcurrentHashMap<>();
-        try (BufferedReader input = storage.newBufferedReader(path)){
-            // Read in all lines as multikeymap (key, key, key, value)
-            String line = input.readLine();
-            if (line != null) {
-                line = input.readLine();
-                while (line != null) {
-                    String[] columns = line.split(",");
-                    try {
-                        Bin bin = new Bin(columns[0], columns[1], columns[2]);
-                        LongAdder adder = new LongAdder();
-                        adder.add(Long.valueOf(columns[3]));
-                        map.put(bin, adder);
-                    } catch (ArrayIndexOutOfBoundsException ex) {
-                        logger.warn("Unable to read row of the bins file. Skipping.");
-                    }
-                    line = input.readLine();
-                }
-            }
-        } catch (IOException e) {
-            logger.warn("Could not read the file with bins. Creating new file when writing.");
-        }
-        return new BinFile(storage, path, map);
+        this.bins = new ConcurrentHashMap<>();
     }
 
     /** Add number of instances to given bin. */
     public void add(Bin bin, long value) {
-        bins.computeIfAbsent(bin, b -> new LongAdder()).add(value);
+        bins.compute(bin, compute(() -> 0L, v -> v + value));
     }
 
     /** Put a map of bins. */
@@ -92,38 +77,87 @@ public class BinFile extends PostponedWriter {
     @Override
     public String toString() {
         return bins.entrySet().stream()
-                .map(e -> e.getKey() + " - " + e.getValue().sum())
+                .map(e -> e.getKey() + " - " + e.getValue())
                 .collect(Collectors.joining("\n"));
     }
 
     @Override
     protected void doWrite() {
+        Path tempPath;
         try {
-            Path tempPath = createTempFile("bins", ".csv");
+            tempPath = createTempFile("bins", ".csv");
+        } catch (IOException e) {
+            logger.error("Cannot create temporary bins file: {}", e.toString());
+            return;
+        }
 
-            // Write all bins to csv
-            try (BufferedWriter bw = Files.newBufferedWriter(tempPath)) {
-                String header = String.join(",", "topic", "device", "timestamp", "count");
-                bw.write(header);
-                bw.write('\n');
+        BufferedReader reader = null;
+        Stream<String[]> lines;
 
-                for (Map.Entry<Bin, LongAdder> entry : bins.entrySet()) {
-                    Bin bin = entry.getKey();
-                    bw.write(bin.getTopic());
-                    bw.write(',');
-                    bw.write(bin.getCategory());
-                    bw.write(',');
-                    bw.write(bin.getTime());
-                    bw.write(',');
-                    bw.write(String.valueOf(entry.getValue().sum()));
-                    bw.write('\n');
-                }
+        try {
+            reader = storage.newBufferedReader(path);
+
+            if (reader.readLine() == null) {
+                lines = Stream.empty();
+            } else {
+                lines = reader.lines()
+                        .map(COMMA_PATTERN::split);
             }
+        } catch (IOException ex){
+            logger.warn("Could not read the file with bins. Creating new file when writing.");
+            lines = Stream.empty();
+        }
+
+        Set<Bin> binKeys = new HashSet<>(bins.keySet());
+
+        try (BufferedWriter bw = Files.newBufferedWriter(tempPath)) {
+            bw.write(BINS_HEADER);
+
+            lines.forEach(s -> {
+                Bin bin = new Bin(s[0], s[1], s[2]);
+                long value = Long.parseLong(s[3]);
+                if (binKeys.remove(bin)) {
+                    value += bins.remove(bin);
+                }
+                writeLine(bw, bin, value);
+            });
+            binKeys.forEach(bin -> writeLine(bw, bin, bins.remove(bin)));
 
             storage.store(tempPath, path);
-        } catch (IOException e) {
+        } catch (UncheckedIOException | IOException e) {
             logger.error("Failed to write bins: {}", e);
+        } finally {
+            if (reader != null) {
+                try {
+                    reader.close();
+                } catch (IOException e) {
+                    logger.debug("Failed to close bin file reader", e);
+                }
+            }
         }
     }
 
+    private static void writeLine(BufferedWriter writer, Bin bin, long value) {
+        try {
+            writer.write(bin.getTopic());
+            writer.write(',');
+            writer.write(bin.getCategory());
+            writer.write(',');
+            writer.write(bin.getTime());
+            writer.write(',');
+            writer.write(Long.toString(value));
+            writer.write('\n');
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private static <K, V1, V2> BiFunction<K, V1, V2> compute(Supplier<? extends V1> init, Function<? super V1, ? extends V2> update) {
+        return (k, v) -> {
+            if (v == null) {
+                v = init.get();
+            }
+            return update.apply(v);
+        };
+    }
 }

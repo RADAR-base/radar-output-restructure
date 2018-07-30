@@ -53,10 +53,11 @@ public class TemporaryDirectory implements Closeable {
                 }
                 Files.walk(path)
                         .forEach(tryCatch(Files::deleteIfExists,
-                                (p, ex) -> logger.warn("Cannot delete temporary path {}: {}", p, ex)));
+                                (p, ex) -> logger.warn("Cannot delete temporary path {}: {}",
+                                        p, ex.toString())));
             }
         } catch (IOException ex) {
-            logger.warn("Cannot delete temporary directory {}: {}", path, ex);
+            logger.warn("Cannot delete temporary directory {}: {}", path, ex.toString());
         }
     }
 
