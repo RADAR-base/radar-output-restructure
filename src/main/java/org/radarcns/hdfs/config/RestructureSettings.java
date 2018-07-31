@@ -1,6 +1,7 @@
 package org.radarcns.hdfs.config;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -114,7 +115,7 @@ public class RestructureSettings {
                 try {
                     return Files.createTempDirectory("radar-hdfs-restructure");
                 } catch (IOException ex) {
-                    throw new IllegalStateException("Cannot create temporary directory");
+                    throw new UncheckedIOException("Cannot create temporary directory", ex);
                 }
             });
             return new RestructureSettings(this);

@@ -32,9 +32,11 @@ import java.io.Flushable;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.rmi.UnexpectedException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -174,8 +176,12 @@ public class FileCacheStore implements Flushable, Closeable {
         try {
             caches.values().parallelStream()
                     .forEach(tryCatch(cacheHandler, "Failed to update caches."));
-        } catch (IllegalStateException ex) {
-            throw (IOException) ex.getCause();
+        } catch (UncheckedIOException ex) {
+            if (ex.getCause() != null) {
+                throw ex.getCause();
+            } else {
+                throw ex;
+            }
         }
     }
 

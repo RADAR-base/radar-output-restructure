@@ -7,10 +7,12 @@ import java.util.Objects;
 public final class TopicPartition implements Comparable<TopicPartition> {
     public final String topic;
     public final int partition;
+    private final int hash;
 
     public TopicPartition(String topic, int partition) {
         this.topic = topic;
         this.partition = partition;
+        this.hash = Objects.hash(topic, partition);
     }
 
     @Override
@@ -24,7 +26,7 @@ public final class TopicPartition implements Comparable<TopicPartition> {
 
     @Override
     public int hashCode() {
-        return Objects.hash(topic, partition);
+        return hash;
     }
 
     @Override

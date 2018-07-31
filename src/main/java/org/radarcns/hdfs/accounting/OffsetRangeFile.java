@@ -37,7 +37,7 @@ import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
  * not present.
  */
 public final class OffsetRangeFile extends PostponedWriter {
-    private static final Pattern COMMA_PATTERN = Pattern.compile(",");
+    public static final Pattern COMMA_PATTERN = Pattern.compile(",");
     private static final Logger logger = LoggerFactory.getLogger(OffsetRangeFile.class);
 
     private final StorageDriver storage;
@@ -123,7 +123,7 @@ public final class OffsetRangeFile extends PostponedWriter {
 
             storage.store(tmpPath, path);
         } catch (IOException e) {
-            logger.error("Failed to write offsets: {}", e);
+            logger.error("Failed to write offsets: {}", e.toString());
         } finally {
             Timer.getInstance().add("accounting.offsets", timeStart);
         }

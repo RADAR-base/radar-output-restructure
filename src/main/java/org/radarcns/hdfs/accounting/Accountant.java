@@ -33,7 +33,7 @@ public class Accountant implements Flushable, Closeable {
         tempDir = new TemporaryDirectory(settings.getTempDir(), "accounting-");
         this.offsetFile = OffsetRangeFile.read(storage, settings.getOutputPath().resolve(OFFSETS_FILE_NAME));
         this.offsetFile.setTempDir(tempDir.getPath());
-        this.binFile = BinFile.read(storage, settings.getOutputPath().resolve(BINS_FILE_NAME));
+        this.binFile = new BinFile(storage, settings.getOutputPath().resolve(BINS_FILE_NAME));
         this.binFile.setTempDir(tempDir.getPath());
     }
 

@@ -60,6 +60,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.radarcns.hdfs.data.CsvAvroConverter.cleanCsvString;
 
 public class CsvAvroConverterTest {
     @Rule
@@ -230,5 +231,16 @@ public class CsvAvroConverterTest {
             List<String> headers = CsvAvroConverter.parseCsvLine(reader);
             assertEquals(Arrays.asList("a", "b", "ba\"ca", "\"da\""), headers);
         }
+    }
+
+    @Test
+    public void cleanString() {
+        assertEquals("test", cleanCsvString("test"));
+        assertEquals("", cleanCsvString(""));
+        assertEquals("\"\"\"\"", cleanCsvString("\""));
+        assertEquals("    test", cleanCsvString("\ttest"));
+        assertEquals("test\\n", cleanCsvString("test\r\n"));
+        assertEquals("test?", cleanCsvString("test\b"));
+        assertEquals("\"test,\"", cleanCsvString("test,"));
     }
 }

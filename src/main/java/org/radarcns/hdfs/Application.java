@@ -18,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
@@ -88,18 +89,18 @@ public class Application implements FileStoreFactory {
                     () -> System.out.println(Timer.getInstance()), "Timer"));
         }
 
-        RestructureSettings settings = new RestructureSettings.Builder(commandLineArgs.outputDirectory)
-                .compression(commandLineArgs.compression)
-                .cacheSize(commandLineArgs.cacheSize)
-                .format(commandLineArgs.format)
-                .doDeduplicate(commandLineArgs.deduplicate)
-                .tempDir(commandLineArgs.tmpDir)
-                .numThreads(commandLineArgs.numThreads)
-                .build();
-
         Application application;
 
         try {
+            RestructureSettings settings = new RestructureSettings.Builder(commandLineArgs.outputDirectory)
+                    .compression(commandLineArgs.compression)
+                    .cacheSize(commandLineArgs.cacheSize)
+                    .format(commandLineArgs.format)
+                    .doDeduplicate(commandLineArgs.deduplicate)
+                    .tempDir(commandLineArgs.tmpDir)
+                    .numThreads(commandLineArgs.numThreads)
+                    .build();
+
             HdfsSettings hdfsSettings = new HdfsSettings.Builder(commandLineArgs.hdfsName)
                     .hdfsHighAvailability(commandLineArgs.hdfsHa,
                             commandLineArgs.hdfsUri1, commandLineArgs.hdfsUri2)
@@ -117,6 +118,10 @@ public class Application implements FileStoreFactory {
         } catch (IllegalArgumentException ex) {
             logger.error("HDFS High availability name node configuration is incomplete."
                     + " Configure --namenode-1, --namenode-2 and --namenode-ha");
+            System.exit(1);
+            return;
+        } catch (UncheckedIOException ex) {
+            logger.error("Failed to create temporary directory " + commandLineArgs.tmpDir);
             System.exit(1);
             return;
         } catch (IOException ex) {

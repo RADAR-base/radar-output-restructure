@@ -57,14 +57,19 @@ public class OffsetRangeSet {
 
     /** Add given offset range to seen offsets. */
     public void add(OffsetRange range) {
-        ranges.computeIfAbsent(range.getTopicPartition(), k -> factory.apply(new OffsetRangeLists()))
+        ranges.computeIfAbsent(range.getTopicPartition(), this::newList)
                 .modify(rangeList -> rangeList.add(range.getOffsetFrom(), range.getOffsetTo()));
     }
 
     /** Add given offset range to seen offsets. */
     public void add(TopicPartition topicPartition, long offset) {
-        ranges.computeIfAbsent(topicPartition, k -> factory.apply(new OffsetRangeLists()))
+        ranges.computeIfAbsent(topicPartition, this::newList)
                 .modify(rangeList -> rangeList.add(offset));
+    }
+
+    private FunctionalValue<OffsetRangeLists> newList(@SuppressWarnings("unused")
+            TopicPartition partition) {
+        return factory.apply(new OffsetRangeLists());
     }
 
     /** Add all offset stream of given set to the current set. */
@@ -114,9 +119,7 @@ public class OffsetRangeSet {
     public Stream<OffsetRange> stream() {
         return ranges.entrySet().stream()
                 .sorted(Comparator.comparing(Map.Entry::getKey))
-                .map(e -> new AbstractMap.SimpleImmutableEntry<>(e.getKey(),
-                        e.getValue().read(OffsetRangeLists::new)))
-                .flatMap(e -> e.getValue().stream()
+                .flatMap(e -> e.getValue().read(OffsetRangeLists::new).stream()
                         .map(r -> new OffsetRange(e.getKey(), r.first, r.second)));
     }
 

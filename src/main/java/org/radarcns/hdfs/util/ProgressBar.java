@@ -129,8 +129,8 @@ public class ProgressBar {
     private void eta(StringBuilder builder, long progress) {
         builder.append("ETA ");
         if (progress > 0) {
-            long duration = (System.nanoTime() - startTime);
-            formatTime(builder,duration * (total - progress) / (progress * 1_000_000_000L));
+            double duration = (System.nanoTime() - startTime) / 1_000_000_000d;
+            formatTime(builder, (long) (duration * (total - progress) / progress));
         } else {
             builder.append('-');
         }

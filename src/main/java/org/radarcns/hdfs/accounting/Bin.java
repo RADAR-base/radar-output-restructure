@@ -7,11 +7,13 @@ public class Bin {
     private final String topic;
     private final String category;
     private final String time;
+    private final int hash;
 
     public Bin(@Nonnull String topic, @Nonnull String category, @Nonnull String time) {
         this.topic = topic;
         this.category = category;
         this.time = time;
+        this.hash = Objects.hash(topic, category, time);
     }
 
     public String getTopic() {
@@ -28,7 +30,7 @@ public class Bin {
 
     @Override
     public String toString() {
-        return topic + '|' + category + '|' + time;
+        return topic + ',' + category + ',' + time;
     }
 
     @Override
@@ -47,6 +49,6 @@ public class Bin {
 
     @Override
     public int hashCode() {
-        return Objects.hash(topic, category, time);
+        return hash;
     }
 }

@@ -1,6 +1,7 @@
 package org.radarcns.hdfs.util;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -20,10 +21,10 @@ public interface ThrowingConsumer<T> {
         };
     }
 
-    /** Regularizes throwing consumer by rethrowing IOException as IllegalStateException. */
-    static <T> Consumer<T> tryCatch(ThrowingConsumer<T> consumer, String illegalStateException) {
+    /** Regularizes throwing consumer by rethrowing IOException as UncheckedIOException. */
+    static <T> Consumer<T> tryCatch(ThrowingConsumer<T> consumer, String uncheckedIo) {
         return tryCatch(consumer, (t, ex) -> {
-            throw new IllegalStateException(illegalStateException, ex);
+            throw new UncheckedIOException(uncheckedIo, ex);
         });
     }
 }
