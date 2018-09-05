@@ -16,16 +16,11 @@
 
 package org.radarcns.hdfs.data;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.radarcns.hdfs.FileStoreFactory;
-import org.radarcns.hdfs.accounting.Accountant;
-import org.radarcns.hdfs.config.RestructureSettings;
-import org.radarcns.hdfs.util.TemporaryDirectory;
-import org.radarcns.hdfs.util.ThrowingConsumer;
-import org.radarcns.hdfs.util.Timer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static org.radarcns.hdfs.data.FileCacheStore.WriteResponse.CACHE_AND_NO_WRITE;
+import static org.radarcns.hdfs.data.FileCacheStore.WriteResponse.CACHE_AND_WRITE;
+import static org.radarcns.hdfs.data.FileCacheStore.WriteResponse.NO_CACHE_AND_NO_WRITE;
+import static org.radarcns.hdfs.data.FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE;
+import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
 
 import java.io.Closeable;
 import java.io.Flushable;
@@ -36,17 +31,20 @@ import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.rmi.UnexpectedException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-
-import static org.radarcns.hdfs.data.FileCacheStore.WriteResponse.CACHE_AND_NO_WRITE;
-import static org.radarcns.hdfs.data.FileCacheStore.WriteResponse.CACHE_AND_WRITE;
-import static org.radarcns.hdfs.data.FileCacheStore.WriteResponse.NO_CACHE_AND_NO_WRITE;
-import static org.radarcns.hdfs.data.FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE;
-import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.radarcns.hdfs.FileStoreFactory;
+import org.radarcns.hdfs.accounting.Accountant;
+import org.radarcns.hdfs.config.RestructureSettings;
+import org.radarcns.hdfs.util.TemporaryDirectory;
+import org.radarcns.hdfs.util.ThrowingConsumer;
+import org.radarcns.hdfs.util.Timer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Caches open file handles. If more than the limit is cached, the half of the files that were used

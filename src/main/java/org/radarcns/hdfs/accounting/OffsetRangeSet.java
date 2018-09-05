@@ -17,11 +17,6 @@
 package org.radarcns.hdfs.accounting;
 
 import com.almworks.integers.LongArray;
-import org.radarcns.hdfs.util.FunctionalValue;
-import org.radarcns.hdfs.util.LockedFunctionalValue;
-import org.radarcns.hdfs.util.ReadOnlyFunctionalValue;
-
-import java.util.AbstractMap;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -30,6 +25,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+import org.radarcns.hdfs.util.FunctionalValue;
+import org.radarcns.hdfs.util.LockedFunctionalValue;
+import org.radarcns.hdfs.util.ReadOnlyFunctionalValue;
 
 /** Encompasses a range of offsets. */
 public class OffsetRangeSet {

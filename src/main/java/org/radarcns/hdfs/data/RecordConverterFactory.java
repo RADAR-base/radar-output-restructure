@@ -16,8 +16,6 @@
 
 package org.radarcns.hdfs.data;
 
-import org.apache.avro.generic.GenericRecord;
-
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -32,6 +30,7 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.regex.Pattern;
+import org.apache.avro.generic.GenericRecord;
 
 public interface RecordConverterFactory extends Format {
     /**

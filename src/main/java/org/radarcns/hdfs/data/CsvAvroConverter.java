@@ -16,12 +16,6 @@
 
 package org.radarcns.hdfs.data;
 
-import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericFixed;
-import org.apache.avro.generic.GenericRecord;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.Reader;
@@ -35,6 +29,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+import org.apache.avro.Schema;
+import org.apache.avro.Schema.Field;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericFixed;
+import org.apache.avro.generic.GenericRecord;
 
 /**
  * Converts deep hierarchical Avro records into flat CSV format. It uses a simple dot syntax in the

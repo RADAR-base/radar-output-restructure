@@ -16,14 +16,6 @@
 
 package org.radarcns.hdfs.data;
 
-import org.apache.avro.generic.GenericRecord;
-import org.radarcns.hdfs.FileStoreFactory;
-import org.radarcns.hdfs.accounting.Accountant;
-import org.radarcns.hdfs.util.Timer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.annotation.Nonnull;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.Closeable;
@@ -38,6 +30,13 @@ import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
+import javax.annotation.Nonnull;
+import org.apache.avro.generic.GenericRecord;
+import org.radarcns.hdfs.FileStoreFactory;
+import org.radarcns.hdfs.accounting.Accountant;
+import org.radarcns.hdfs.util.Timer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Keeps path handles of a path. */
 public class FileCache implements Closeable, Flushable, Comparable<FileCache> {

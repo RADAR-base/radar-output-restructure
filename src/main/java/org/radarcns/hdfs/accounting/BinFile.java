@@ -16,12 +16,8 @@
 
 package org.radarcns.hdfs.accounting;
 
-import org.radarcns.hdfs.data.StorageDriver;
-import org.radarcns.hdfs.util.PostponedWriter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static org.radarcns.hdfs.accounting.OffsetRangeFile.COMMA_PATTERN;
 
-import javax.annotation.Nonnull;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -35,16 +31,16 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.LongAdder;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import static org.radarcns.hdfs.accounting.OffsetRangeFile.COMMA_PATTERN;
-import static org.radarcns.hdfs.accounting.OffsetRangeFile.read;
-import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
+import javax.annotation.Nonnull;
+import org.radarcns.hdfs.data.StorageDriver;
+import org.radarcns.hdfs.util.PostponedWriter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Store overview of records written, divided into bins. */
 public class BinFile extends PostponedWriter {
