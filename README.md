@@ -8,12 +8,7 @@ Data streamed to HDFS using the [RADAR HDFS sink connector](https://github.com/R
 
 This package is available as docker image [`radarbase/radar-hdfs-restructure`](https://hub.docker.com/r/radarbase/radar-hdfs-restructure). The entrypoint of the image is the current application. So in all of the commands listed in usage, replace `radar-hdfs-restructure` with for example:
 ```shell
-docker run \
-  --rm -t --network hadoop \
-  -v "$PWD/output:/output" \
-  radarbase/radar-hdfs-restructure:0.5.1 \
-  su-exec $(id -u):$(id -g)
-  radar-hdfs-restructure -n hdfs-namenode -o /output /myTopic
+docker run --rm -t --network hadoop -v "$PWD/output:/output" radarbase/radar-hdfs-restructure:0.5.1 -n hdfs-namenode -o /output /myTopic
 ```
 if your docker cluster is running in the `hadoop` network and your output directory should be `./output`.
 
@@ -62,6 +57,8 @@ radar-hdfs-restructure --compression gzip  --nameservice <hdfs_node> --output-di
 ```
 
 By default, files records are not deduplicated after writing. To enable this behaviour, specify the option `--deduplicate` or `-d`. This set to false by default because of an issue with Biovotion data. Please see - [issue #16](https://github.com/RADAR-base/Restructure-HDFS-topic/issues/16) before enabling it.
+
+To set the output user ID and group ID, specify the `-p local-uid=123` and `-p local-gid=12` properties.
 
 ## Extending the connector
 

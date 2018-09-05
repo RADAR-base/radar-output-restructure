@@ -40,3 +40,5 @@ ENV JAVA_OPTS -Djava.library.path=${HADOOP_HOME}/lib/native
 COPY --from=builder /code/build/third-party/* /usr/lib/
 COPY --from=builder /code/build/scripts/* /usr/bin/
 COPY --from=builder /code/build/libs/* /usr/lib/
+
+ENTRYPOINT ["radar-hdfs-restructure"]
