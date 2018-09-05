@@ -8,7 +8,12 @@ Data streamed to HDFS using the [RADAR HDFS sink connector](https://github.com/R
 
 This package is available as docker image [`radarbase/radar-hdfs-restructure`](https://hub.docker.com/r/radarbase/radar-hdfs-restructure). The entrypoint of the image is the current application. So in all of the commands listed in usage, replace `radar-hdfs-restructure` with for example:
 ```shell
-docker run --rm -t --network hadoop -v "$PWD/output:/output" radarbase/radar-hdfs-restructure:0.5.1 -n hdfs-namenode -o /output /myTopic
+docker run \
+  --rm -t --network hadoop \
+  -v "$PWD/output:/output" \
+  radarbase/radar-hdfs-restructure:0.5.1 \
+  su-exec $(id -u):$(id -g)
+  radar-hdfs-restructure -n hdfs-namenode -o /output /myTopic
 ```
 if your docker cluster is running in the `hadoop` network and your output directory should be `./output`.
 
