@@ -16,11 +16,7 @@
 
 package org.radarcns.hdfs.accounting;
 
-import org.radarcns.hdfs.data.StorageDriver;
-import org.radarcns.hdfs.util.PostponedWriter;
-import org.radarcns.hdfs.util.Timer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -29,8 +25,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
-
-import static org.radarcns.hdfs.util.ThrowingConsumer.tryCatch;
+import org.radarcns.hdfs.data.StorageDriver;
+import org.radarcns.hdfs.util.PostponedWriter;
+import org.radarcns.hdfs.util.Timer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Accesses a OffsetRange file using the CSV format. On construction, this will create the file if

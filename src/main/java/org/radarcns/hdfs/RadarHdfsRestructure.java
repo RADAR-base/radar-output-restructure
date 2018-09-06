@@ -16,7 +16,23 @@
 
 package org.radarcns.hdfs;
 
+import static org.radarcns.hdfs.util.ProgressBar.formatTime;
+
 import com.fasterxml.jackson.databind.JsonMappingException;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.text.NumberFormat;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Comparator;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.LongAdder;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
@@ -36,25 +52,6 @@ import org.radarcns.hdfs.util.ReadOnlyFunctionalValue;
 import org.radarcns.hdfs.util.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.text.NumberFormat;
-import java.text.SimpleDateFormat;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Comparator;
-import java.util.List;
-import java.util.TimeZone;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.LongAdder;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
-import static org.radarcns.hdfs.util.ProgressBar.formatTime;
 
 public class RadarHdfsRestructure {
     private static final Logger logger = LoggerFactory.getLogger(RadarHdfsRestructure.class);

@@ -1,19 +1,34 @@
+/*
+ * Copyright 2018 The Hyve
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.radarcns.hdfs.util.commandline;
+
+import static org.radarcns.hdfs.Application.CACHE_SIZE_DEFAULT;
 
 import com.beust.jcommander.DynamicParameter;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
 import com.beust.jcommander.converters.BaseConverter;
 import com.beust.jcommander.validators.PositiveInteger;
-import org.radarcns.hdfs.Plugin;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
-
-import static org.radarcns.hdfs.Application.CACHE_SIZE_DEFAULT;
+import org.radarcns.hdfs.Plugin;
 
 public class CommandLineArgs {
 
