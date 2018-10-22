@@ -20,9 +20,13 @@ import static java.time.ZoneOffset.UTC;
 
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.regex.Pattern;
 import org.apache.avro.Schema;
+import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -112,18 +116,51 @@ public abstract class RecordPathFactory implements Plugin {
 
     public static Instant getDate(GenericRecord keyField, GenericRecord valueField) {
         Schema.Field timeField = valueField.getSchema().getField("time");
-        if (timeField != null) {
+        if (timeField != null && timeField.schema().getType() == Type.DOUBLE) {
             double time = (Double) valueField.get(timeField.pos());
+            // Convert from millis to date and apply dateFormat
+            return Instant.ofEpochMilli((long) (time * 1000d));
+        }
+        timeField = keyField.getSchema().getField("timeStart");
+
+        if (timeField != null && timeField.schema().getType() == Type.DOUBLE) {
+            double time = (Double) keyField.get(timeField.pos());
             // Convert from millis to date and apply dateFormat
             return Instant.ofEpochMilli((long) (time * 1000d));
         }
 
         // WindowedKey
         timeField = keyField.getSchema().getField("start");
-        if (timeField == null) {
-            return null;
+        if (timeField != null && timeField.schema().getType() == Type.LONG) {
+            return Instant.ofEpochMilli((Long) keyField.get("start"));
         }
-        return Instant.ofEpochMilli((Long) keyField.get("start"));
+
+        // dateTime
+        timeField = valueField.getSchema().getField("dateTime");
+        if (timeField != null && timeField.schema().getType() == Type.STRING) {
+            String dateTime = valueField.get(timeField.pos()).toString();
+            try {
+                return Instant.parse(dateTime);
+            } catch (DateTimeParseException ex) {
+                // try local date
+            }
+            try {
+                return LocalDateTime.parse(dateTime).toInstant(UTC);
+            } catch (DateTimeParseException ex) {
+                // no other options
+            }
+        }
+
+        timeField = valueField.getSchema().getField("date");
+        if (timeField != null && timeField.schema().getType() == Type.STRING) {
+            String date = valueField.get(timeField.pos()).toString();
+            try {
+                return LocalDate.parse(date).atStartOfDay(UTC).toInstant();
+            } catch (DateTimeParseException ex) {
+                // no other options
+            }
+        }
+        return null;
     }
 
     public static String sanitizeId(Object id, String defaultValue) {
