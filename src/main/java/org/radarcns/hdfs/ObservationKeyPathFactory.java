@@ -19,11 +19,13 @@ package org.radarcns.hdfs;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
+import javax.annotation.Nonnull;
 import org.apache.avro.generic.GenericRecord;
 
 public class ObservationKeyPathFactory extends RecordPathFactory {
+    @Nonnull
     @Override
-    public Path getRelativePath(String topic, GenericRecord key, GenericRecord value, Instant time, int attempt) {
+    public Path getRelativePath(@Nonnull String topic, GenericRecord key, GenericRecord value, Instant time, int attempt) {
         String projectId = sanitizeId(key.get("projectId"), "unknown-project");
         String userId = sanitizeId(key.get("userId"), "unknown-user");
 
@@ -33,8 +35,9 @@ public class ObservationKeyPathFactory extends RecordPathFactory {
         return Paths.get(projectId, userId, topic, outputFileName);
     }
 
+    @Nonnull
     @Override
-    public String getCategory(GenericRecord key, GenericRecord value) {
+    public String getCategory(@Nonnull GenericRecord key, @Nonnull GenericRecord value) {
         return sanitizeId(key.get("sourceId"), "unknown-source");
     }
 }
