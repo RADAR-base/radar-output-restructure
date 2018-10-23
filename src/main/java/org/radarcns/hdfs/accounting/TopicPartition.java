@@ -17,7 +17,7 @@
 package org.radarcns.hdfs.accounting;
 
 import java.util.Objects;
-import org.jetbrains.annotations.NotNull;
+import javax.annotation.Nonnull;
 
 public final class TopicPartition implements Comparable<TopicPartition> {
     public final String topic;
@@ -45,7 +45,7 @@ public final class TopicPartition implements Comparable<TopicPartition> {
     }
 
     @Override
-    public int compareTo(@NotNull TopicPartition o) {
+    public int compareTo(@Nonnull TopicPartition o) {
         int result = topic.compareTo(o.topic);
         if (result != 0) {
             return result;
