@@ -26,6 +26,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
@@ -63,6 +64,7 @@ public class RadarHdfsRestructure {
     private final Configuration conf;
     private final FileStoreFactory fileStoreFactory;
     private final RecordPathFactory pathFactory;
+    private final long maxFilesPerTopic;
 
     private LongAdder processedFileCount;
     private LongAdder processedRecordsCount;
@@ -71,6 +73,11 @@ public class RadarHdfsRestructure {
         conf = factory.getHdfsSettings().getConfiguration();
         conf.set("fs.defaultFS", "hdfs://" + factory.getHdfsSettings().getHdfsName());
         this.numThreads = factory.getSettings().getNumThreads();
+        long maxFiles = factory.getSettings().getMaxFilesPerTopic();
+        if (maxFiles < 1) {
+            maxFiles = Long.MAX_VALUE;
+        }
+        this.maxFilesPerTopic = maxFiles;
         this.fileStoreFactory = factory;
         this.pathFactory = factory.getPathFactory();
     }
@@ -93,7 +100,7 @@ public class RadarHdfsRestructure {
 
             Instant timeStart = Instant.now();
             // Get filenames to process
-            TopicFileList topicPaths = getTopicPaths(fs, path, accountant.getOffsets());
+            List<TopicFileList> topicPaths = getTopicPaths(fs, path, accountant.getOffsets());
             logger.info("Time retrieving file list: {}",
                     formatTime(Duration.between(timeStart, Instant.now())));
 
@@ -104,12 +111,16 @@ public class RadarHdfsRestructure {
         }
     }
 
-    private TopicFileList getTopicPaths(FileSystem fs, Path path, OffsetRangeSet seenFiles) {
-        return new TopicFileList(walk(fs, path)
+    private List<TopicFileList> getTopicPaths(FileSystem fs, Path path, OffsetRangeSet seenFiles) {
+        Map<String, List<TopicFile>> topics = walk(fs, path)
                 .filter(f -> f.getName().endsWith(".avro"))
                 .map(f -> new TopicFile(f.getParent().getParent().getName(), f))
                 .filter(f -> !seenFiles.contains(f.range))
-                .collect(Collectors.toList()));
+                .collect(Collectors.groupingBy(TopicFile::getTopic));
+
+        return topics.values().stream()
+                .map(v -> new TopicFileList(v.stream().limit(maxFilesPerTopic)))
+                .collect(Collectors.toList());
     }
 
     private Stream<Path> walk(FileSystem fs, Path path) {
@@ -133,9 +144,16 @@ public class RadarHdfsRestructure {
                 });
     }
 
-    private void processPaths(TopicFileList topicPaths, Accountant accountant) throws InterruptedException {
+    private void processPaths(List<TopicFileList> topicPaths, Accountant accountant) throws InterruptedException {
+        int numFiles = topicPaths.stream()
+                .mapToInt(TopicFileList::numberOfFiles)
+                .sum();
+        long numOffsets = topicPaths.stream()
+                .mapToLong(TopicFileList::numberOfOffsets)
+                .sum();
+
         logger.info("Converting {} files with {} records",
-                topicPaths.files.size(), NumberFormat.getNumberInstance().format(topicPaths.size));
+                numFiles, NumberFormat.getNumberInstance().format(numOffsets));
 
         processedFileCount = new LongAdder();
         processedRecordsCount = new LongAdder();
@@ -144,14 +162,13 @@ public class RadarHdfsRestructure {
 
         ExecutorService executor = Executors.newWorkStealingPool(pathFactory.isTopicPartitioned() ? this.numThreads : 1);
 
-        ProgressBar progressBar = new ProgressBar(topicPaths.size, 50, 500, TimeUnit.MILLISECONDS);
+        ProgressBar progressBar = new ProgressBar(numOffsets, 50, 500, TimeUnit.MILLISECONDS);
 
         // Actually process the files
-        topicPaths.files.stream()
-                .collect(Collectors.groupingBy(TopicFile::getTopic)).values().stream()
-                .map(TopicFileList::new)
+
+        topicPaths.stream()
                 // ensure that largest values go first on the executor queue
-                .sorted(Comparator.comparingLong(TopicFileList::getSize).reversed())
+                .sorted(Comparator.comparingLong(TopicFileList::numberOfOffsets).reversed())
                 .forEach(paths -> {
                     String size = NumberFormat.getNumberInstance().format(paths.size);
                     String topic = paths.files.get(0).topic;
@@ -186,7 +203,7 @@ public class RadarHdfsRestructure {
 
         executor.shutdown();
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
-        progressBar.update(topicPaths.size);
+        progressBar.update(numOffsets);
     }
 
     private void processFile(TopicFile file, FileCacheStore cache,
@@ -260,14 +277,18 @@ public class RadarHdfsRestructure {
         private final List<TopicFile> files;
         private final long size;
 
-        public TopicFileList(List<TopicFile> files) {
-            this.files = files;
-            this.size = files.stream()
+        public TopicFileList(Stream<TopicFile> files) {
+            this.files = files.collect(Collectors.toList());
+            this.size = this.files.stream()
                     .mapToInt(TopicFile::size)
                     .sum();
         }
 
-        public long getSize() {
+        public int numberOfFiles() {
+            return this.files.size();
+        }
+
+        public long numberOfOffsets() {
             return size;
         }
     }

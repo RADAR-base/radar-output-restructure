@@ -114,6 +114,7 @@ public class Application implements FileStoreFactory {
                     .doDeduplicate(commandLineArgs.deduplicate)
                     .tempDir(commandLineArgs.tmpDir)
                     .numThreads(commandLineArgs.numThreads)
+                    .maxFilesPerTopic(commandLineArgs.maxFilesPerTopic)
                     .build();
 
             HdfsSettings hdfsSettings = new HdfsSettings.Builder(commandLineArgs.hdfsName)
