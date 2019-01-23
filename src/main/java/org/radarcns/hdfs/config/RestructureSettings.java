@@ -33,6 +33,7 @@ public class RestructureSettings {
     private final Path tempDir;
     private final Path outputPath;
     private final int numThreads;
+    private final int maxFilesPerTopic;
 
     private RestructureSettings(Builder builder) {
         this.compression = builder.compression;
@@ -42,6 +43,7 @@ public class RestructureSettings {
         this.tempDir = builder.tempDir;
         this.outputPath = builder.outputPath;
         this.numThreads = builder.numThreads;
+        this.maxFilesPerTopic = builder.maxFilesPerTopic;
     }
 
     public String getCompression() {
@@ -72,6 +74,10 @@ public class RestructureSettings {
         return this.numThreads;
     }
 
+    public int getMaxFilesPerTopic() {
+        return maxFilesPerTopic;
+    }
+
     public static class Builder {
         private int numThreads = 1;
         private String compression;
@@ -80,6 +86,7 @@ public class RestructureSettings {
         private int cacheSize = CACHE_SIZE_DEFAULT;
         private Path tempDir;
         private final Path outputPath;
+        public int maxFilesPerTopic;
 
         public Builder(String outputPath) {
             this.outputPath = Paths.get(outputPath.replaceAll("/+$", ""));
@@ -121,6 +128,11 @@ public class RestructureSettings {
                 throw new IllegalArgumentException("Number of threads must be at least 1");
             }
             this.numThreads = num;
+            return this;
+        }
+
+        public Builder maxFilesPerTopic(int num) {
+            this.maxFilesPerTopic = num;
             return this;
         }
 

@@ -90,6 +90,9 @@ public class CommandLineArgs {
     @Parameter(names = {"-s", "--cache-size"}, description = "Number of files to keep in cache in a single thread.", validateWith = PositiveInteger.class)
     public int cacheSize = CACHE_SIZE_DEFAULT;
 
+    @Parameter(names = {"--max-files-per-topic"}, description = "Maximum number of records to process, per topic. Set below 1 to disable this option.")
+    public int maxFilesPerTopic = 0;
+
     public static <T> T nonNullOrDefault(T value, Supplier<T> defaultValue) {
         return value != null ? value : defaultValue.get();
     }
