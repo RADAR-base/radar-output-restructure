@@ -23,6 +23,7 @@ public class CompressionFactory implements FormatProvider<Compression> {
     public final List<Compression> getAll() {
         return Arrays.asList(
                 new GzipCompression(),
-                new IdentityCompression());
+                new IdentityCompression(),
+                new ZipCompression());
     }
 }

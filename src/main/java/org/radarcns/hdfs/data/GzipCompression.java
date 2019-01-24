@@ -26,7 +26,7 @@ import java.util.zip.GZIPOutputStream;
 
 public class GzipCompression implements Compression {
     @Override
-    public OutputStream compress(OutputStream out) throws IOException {
+    public OutputStream compress(String fileName, OutputStream out) throws IOException {
         return new GZIPOutputStream(out);
     }
 
