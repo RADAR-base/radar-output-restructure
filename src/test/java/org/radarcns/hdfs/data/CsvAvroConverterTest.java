@@ -191,7 +191,7 @@ public class CsvAvroConverterTest {
         try (BufferedWriter writer = Files.newBufferedWriter(path)) {
             writeTestNumbers(writer);
         }
-        CsvAvroConverter.getFactory().sortUnique("t", path, path, new IdentityCompression());
+        CsvAvroConverter.getFactory().deduplicate("t", path, path, new IdentityCompression());
         assertEquals(Arrays.asList("a,b", "1,2", "3,4", "1,3", "a,a"), Files.readAllLines(path));
     }
 
@@ -205,7 +205,7 @@ public class CsvAvroConverterTest {
              Writer writer = new OutputStreamWriter(gzipOut)) {
             writeTestNumbers(writer);
         }
-        CsvAvroConverter.getFactory().sortUnique("t", path, path, new GzipCompression());
+        CsvAvroConverter.getFactory().deduplicate("t", path, path, new GzipCompression());
         try (InputStream in = Files.newInputStream(path);
                 GZIPInputStream gzipIn = new GZIPInputStream(in);
                 Reader inReader = new InputStreamReader(gzipIn);

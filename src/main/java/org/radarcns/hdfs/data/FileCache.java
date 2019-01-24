@@ -142,7 +142,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
         if (!hasError.get()) {
             if (deduplicate) {
                 long timeDedup = System.nanoTime();
-                converterFactory.sortUnique(fileName, tmpPath, tmpPath, compression);
+                converterFactory.deduplicate(fileName, tmpPath, tmpPath, compression);
                 Timer.getInstance().add("close.deduplicate", timeDedup);
             }
 

@@ -48,7 +48,7 @@ public interface RecordConverterFactory extends Format {
         return false;
     }
 
-    default void sortUnique(String fileName, Path source, Path target,
+    default void deduplicate(String fileName, Path source, Path target,
             Compression compression)
             throws IOException {
         // read all lines into memory; assume a 100-byte line length
