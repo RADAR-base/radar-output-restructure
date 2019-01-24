@@ -25,6 +25,7 @@ ext {
     hadoopVersion = '3.0.3'
     jCommanderVersion = '1.72'
     almworksVersion = '1.1.1'
+    junitVersion = '5.4.0-M1'
 }
 
 repositories {
@@ -43,7 +44,9 @@ dependencies {
 
     runtimeOnly group: 'org.apache.hadoop', name: 'hadoop-hdfs-client', version: hadoopVersion
 
-    testImplementation group: 'junit', name: 'junit', version: '4.12'
+    testCompile group: 'org.junit.jupiter', name: 'junit-jupiter-api', version: junitVersion
+    testCompile group: 'org.junit.jupiter', name: 'junit-jupiter-params', version: junitVersion
+    testRuntime group: 'org.junit.jupiter', name: 'junit-jupiter-engine', version: junitVersion
 }
 
 ext.sharedManifest = manifest {
@@ -79,6 +82,14 @@ startScripts {
         unixScriptFile.text = unixScriptFile.text.replace('PlaceHolderForPluginPath', 'radar-hdfs-plugins/*')
     }
 }
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed"
+    }
+}
+
 
 tasks.withType(Tar){
     compression = Compression.GZIP

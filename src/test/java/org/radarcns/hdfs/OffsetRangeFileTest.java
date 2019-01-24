@@ -16,11 +16,16 @@
 
 package org.radarcns.hdfs;
 
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.junit.rules.TemporaryFolder;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.nio.file.Files;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.support.io.TempDirectory;
+import org.junit.jupiter.api.support.io.TempDirectory.TempDir;
 import org.radarcns.hdfs.accounting.OffsetRange;
 import org.radarcns.hdfs.accounting.OffsetRangeFile;
 import org.radarcns.hdfs.accounting.OffsetRangeSet;
@@ -32,22 +37,15 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Path;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
+@ExtendWith(TempDirectory.class)
 public class OffsetRangeFileTest {
-    @Rule
-    public TemporaryFolder folder = new TemporaryFolder();
-
-    @Rule
-    public ExpectedException exception = ExpectedException.none();
     private Path testFile;
     private StorageDriver storage;
 
-    @Before
-    public void setUp() throws IOException {
-        testFile = folder.newFile().toPath();
+    @BeforeEach
+    public void setUp(@TempDir Path dir) throws IOException {
+        testFile = dir.resolve("test");
+        Files.createFile(testFile);
         storage = new LocalStorageDriver();
     }
 

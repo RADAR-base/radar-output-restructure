@@ -16,14 +16,19 @@
 
 package org.radarcns.hdfs.data;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData.Record;
 import org.apache.avro.generic.GenericRecordBuilder;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.support.io.TempDirectory;
+import org.junit.jupiter.api.support.io.TempDirectory.TempDir;
 import org.radarcns.hdfs.Application;
 import org.radarcns.hdfs.accounting.Accountant;
 import org.radarcns.hdfs.accounting.Bin;
@@ -39,16 +44,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.zip.GZIPInputStream;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-
 /**
  * Created by joris on 03/07/2017.
  */
+@ExtendWith(TempDirectory.class)
 public class FileCacheTest {
-
-    @Rule
-    public TemporaryFolder folder = new TemporaryFolder();
     private Path path;
     private Record exampleRecord;
     private Path tmpDir;
@@ -57,10 +57,10 @@ public class FileCacheTest {
     private Accountant accountant;
     private TopicPartition topicPartition;
 
-    @Before
-    public void setUp() throws IOException {
-        this.path = folder.newFile("f").toPath();
-        this.tmpDir = folder.newFolder().toPath();
+    @BeforeEach
+    public void setUp(@TempDir Path path, @TempDir Path tmpPath) throws IOException {
+        this.path = path.resolve("f");
+        this.tmpDir = tmpPath;
 
         Schema schema = SchemaBuilder.record("simple").fields()
                 .name("a").type("string").noDefault()
@@ -74,7 +74,7 @@ public class FileCacheTest {
     }
 
     private RestructureSettings.Builder settingsBuilder() {
-        return new RestructureSettings.Builder(folder.getRoot().toString());
+        return new RestructureSettings.Builder(path.getParent().toString());
     }
 
     private void setUp(RestructureSettings settings) throws IOException {
@@ -149,7 +149,6 @@ public class FileCacheTest {
 
     @Test
     public void testPlainAppend() throws IOException {
-
         try (FileCache cache = new FileCache(factory, path, exampleRecord, tmpDir, accountant)) {
             cache.writeRecord(exampleRecord,
                     new Accountant.Transaction(topicPartition, 0, bin));
@@ -171,27 +170,26 @@ public class FileCacheTest {
     }
 
     @Test
-    public void compareTo() throws IOException {
-        Path file3 = folder.newFile("g").toPath();
-        Path tmpDir = folder.newFolder().toPath();
-
+    @ExtendWith(TempDirectory.class)
+    public void compareTo(@TempDir Path tmp3) throws IOException {
+        Path file3 = tmp3.resolve("file3");
         try (FileCache cache1 = new FileCache(factory, path, exampleRecord, tmpDir, accountant);
              FileCache cache2 = new FileCache(factory, path, exampleRecord, tmpDir, accountant);
              FileCache cache3 = new FileCache(factory, file3, exampleRecord, tmpDir, accountant)) {
             assertEquals(0, cache1.compareTo(cache2));
             // filenames are not equal
-            assertEquals(-1, cache1.compareTo(cache3));
+            assertTrue(cache1.compareTo(cache3) < 0);
             cache1.writeRecord(exampleRecord, new Accountant.Transaction(topicPartition, 0, bin));
             // last used
-            assertEquals(1, cache1.compareTo(cache2));
+            assertTrue(cache1.compareTo(cache2) > 0);
             // last used takes precedence over filename
-            assertEquals(1, cache1.compareTo(cache3));
+            assertTrue(cache1.compareTo(cache3) > 0);
 
             // last used reversal
             cache2.writeRecord(exampleRecord, new Accountant.Transaction(topicPartition, 1, bin));
             cache3.writeRecord(exampleRecord, new Accountant.Transaction(topicPartition, 2, bin));
-            assertEquals(-1, cache1.compareTo(cache2));
-            assertEquals(-1, cache1.compareTo(cache3));
+            assertTrue(cache1.compareTo(cache2) < 0);
+            assertTrue(cache1.compareTo(cache3) < 0);
         }
     }
 }
