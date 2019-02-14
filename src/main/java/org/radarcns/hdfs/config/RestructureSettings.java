@@ -24,6 +24,8 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 
 public class RestructureSettings {
     private final String compression;
@@ -34,6 +36,7 @@ public class RestructureSettings {
     private final Path outputPath;
     private final int numThreads;
     private final int maxFilesPerTopic;
+    private final List<String> excludeTopics;
 
     private RestructureSettings(Builder builder) {
         this.compression = builder.compression;
@@ -44,6 +47,7 @@ public class RestructureSettings {
         this.outputPath = builder.outputPath;
         this.numThreads = builder.numThreads;
         this.maxFilesPerTopic = builder.maxFilesPerTopic;
+        this.excludeTopics = builder.excludeTopics;
     }
 
     public String getCompression() {
@@ -78,6 +82,10 @@ public class RestructureSettings {
         return maxFilesPerTopic;
     }
 
+    public List<String> getExcludeTopics() {
+        return excludeTopics;
+    }
+
     public static class Builder {
         private int numThreads = 1;
         private String compression;
@@ -87,6 +95,7 @@ public class RestructureSettings {
         private Path tempDir;
         private final Path outputPath;
         public int maxFilesPerTopic;
+        private List<String> excludeTopics;
 
         public Builder(String outputPath) {
             this.outputPath = Paths.get(outputPath.replaceAll("/+$", ""));
@@ -136,6 +145,11 @@ public class RestructureSettings {
             return this;
         }
 
+        public Builder excludeTopics(List<String> topics) {
+            this.excludeTopics = topics;
+            return this;
+        }
+
         public RestructureSettings build() {
             compression = nonNullOrDefault(compression, () -> "identity");
             format = nonNullOrDefault(format, () -> "csv");
@@ -146,6 +160,8 @@ public class RestructureSettings {
                     throw new UncheckedIOException("Cannot create temporary directory", ex);
                 }
             });
+            excludeTopics = nonNullOrDefault(excludeTopics, ArrayList::new);
+
             return new RestructureSettings(this);
         }
     }

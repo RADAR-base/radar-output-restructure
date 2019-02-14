@@ -65,6 +65,7 @@ public class RadarHdfsRestructure {
     private final FileStoreFactory fileStoreFactory;
     private final RecordPathFactory pathFactory;
     private final long maxFilesPerTopic;
+    private List<String> excludeTopics;
 
     private LongAdder processedFileCount;
     private LongAdder processedRecordsCount;
@@ -78,6 +79,7 @@ public class RadarHdfsRestructure {
             maxFiles = Long.MAX_VALUE;
         }
         this.maxFilesPerTopic = maxFiles;
+        this.excludeTopics = factory.getSettings().getExcludeTopics();
         this.fileStoreFactory = factory;
         this.pathFactory = factory.getPathFactory();
     }
@@ -115,6 +117,7 @@ public class RadarHdfsRestructure {
         Map<String, List<TopicFile>> topics = walk(fs, path)
                 .filter(f -> f.getName().endsWith(".avro"))
                 .map(f -> new TopicFile(f.getParent().getParent().getName(), f))
+                .filter(f -> !excludeTopics.contains(f.topic))
                 .filter(f -> !seenFiles.contains(f.range))
                 .collect(Collectors.groupingBy(TopicFile::getTopic));
 
