@@ -93,8 +93,8 @@ public class CommandLineArgs {
     @Parameter(names = {"--max-files-per-topic"}, description = "Maximum number of records to process, per topic. Set below 1 to disable this option.")
     public int maxFilesPerTopic = 0;
 
-    @Parameter(names = {"--exclude-topics"}, description = "Topics to exclude when processing the records.")
-    public List<String> excludeTopics;
+    @Parameter(names = {"--exclude-topics"}, description = "Comma-separated list of topics to exclude when processing the records.")
+    public List<String> excludeTopics = new ArrayList<>();
 
     public static <T> T nonNullOrDefault(T value, Supplier<T> defaultValue) {
         return value != null ? value : defaultValue.get();
