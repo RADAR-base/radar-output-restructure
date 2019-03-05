@@ -2,7 +2,7 @@ plugins {
     id 'java'
     id 'java-library'
     id 'application'
-    id 'com.jfrog.bintray' version '1.8.1'
+    id 'com.jfrog.bintray' version '1.8.4'
     id 'maven-publish'
 }
 
@@ -93,7 +93,7 @@ test {
 
 tasks.withType(Tar){
     compression = Compression.GZIP
-    extension = 'tar.gz'
+    archiveExtension.set('tar.gz')
 }
 
 task downloadDependencies {
@@ -104,18 +104,18 @@ task downloadDependencies {
 
 task copyDependencies(type: Copy) {
     from configurations.runtimeClasspath.files
-    into "${buildDir}/third-party/"
+    into "$buildDir/third-party/"
 }
 
 // custom tasks for creating source/javadoc jars
 task sourcesJar(type: Jar, dependsOn: classes) {
-    classifier = 'sources'
+    archiveClassifier.set('sources')
     from sourceSets.main.allSource
     manifest.from sharedManifest
 }
 
 task javadocJar(type: Jar, dependsOn: javadoc) {
-    classifier = 'javadoc'
+    archiveClassifier.set('javadoc')
     from javadoc.destinationDir
     manifest.from sharedManifest
 }
@@ -190,5 +190,5 @@ bintray {
 }
 
 wrapper {
-    gradleVersion '5.1.1'
+    gradleVersion '5.2.1'
 }

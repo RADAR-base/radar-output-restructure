@@ -108,8 +108,8 @@ public class CommandLineArgs {
         @Override
         public Plugin convert(String value) {
             try {
-                Class cls = Class.forName(value);
-                return (Plugin)cls.newInstance();
+                Class<?> cls = Class.forName(value);
+                return (Plugin)cls.getConstructor().newInstance();
             } catch (ReflectiveOperationException | ClassCastException ex) {
                 throw new ParameterException("Cannot convert " + value + " to Plugin instance", ex);
             }
