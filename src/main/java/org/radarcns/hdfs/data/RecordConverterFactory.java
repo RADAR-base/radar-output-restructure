@@ -48,7 +48,8 @@ public interface RecordConverterFactory extends Format {
         return false;
     }
 
-    default void sortUnique(Path source, Path target, Compression compression)
+    default void deduplicate(String fileName, Path source, Path target,
+            Compression compression)
             throws IOException {
         // read all lines into memory; assume a 100-byte line length
         LinkedHashSet<String> sortedLines = new LinkedHashSet<>((int)(Files.size(source) / 100));
@@ -63,7 +64,7 @@ public interface RecordConverterFactory extends Format {
         }
         try (OutputStream fileOut = Files.newOutputStream(target);
              OutputStream bufOut = new BufferedOutputStream(fileOut);
-             OutputStream zipOut = compression.compress(bufOut);
+             OutputStream zipOut = compression.compress(fileName, bufOut);
              Writer writer = new OutputStreamWriter(zipOut)) {
             writeFile(writer, header, sortedLines);
         }

@@ -14,16 +14,18 @@
  * limitations under the License.
  */
 
-package org.radarcns.hdfs.data;
+package org.radarcns.hdfs;
 
-import java.util.Arrays;
-import java.util.List;
+import static java.time.ZoneOffset.UTC;
 
-public class CompressionFactory implements FormatProvider<Compression> {
-    public final List<Compression> getAll() {
-        return Arrays.asList(
-                new GzipCompression(),
-                new IdentityCompression(),
-                new ZipCompression());
+import java.time.format.DateTimeFormatter;
+
+public class MonthlyObservationKeyPathFactory extends ObservationKeyPathFactory {
+    private static final DateTimeFormatter PER_MONTH_HOURLY_TIME_BIN_FORMAT = DateTimeFormatter.ofPattern("yyyyMM/yyyyMMdd_HH'00'")
+            .withZone(UTC);
+
+
+    public DateTimeFormatter getTimeBinFormat() {
+        return PER_MONTH_HOURLY_TIME_BIN_FORMAT;
     }
 }

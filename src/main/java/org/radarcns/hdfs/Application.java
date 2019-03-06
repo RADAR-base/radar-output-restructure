@@ -115,6 +115,7 @@ public class Application implements FileStoreFactory {
                     .tempDir(commandLineArgs.tmpDir)
                     .numThreads(commandLineArgs.numThreads)
                     .maxFilesPerTopic(commandLineArgs.maxFilesPerTopic)
+                    .excludeTopics(commandLineArgs.excludeTopics)
                     .build();
 
             HdfsSettings hdfsSettings = new HdfsSettings.Builder(commandLineArgs.hdfsName)

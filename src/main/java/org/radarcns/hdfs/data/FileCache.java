@@ -52,6 +52,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
     private final boolean deduplicate;
     private final Accountant.Ledger ledger;
     private final Accountant accountant;
+    private final String fileName;
     private long lastUse;
     private final AtomicBoolean hasError;
 
@@ -70,12 +71,12 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
         this.ledger = new Accountant.Ledger();
         this.compression = factory.getCompression();
         boolean fileIsNew = !storageDriver.exists(path) || storageDriver.size(path) == 0;
-        this.tmpPath = Files.createTempFile(tmpDir, path.getFileName().toString(),
-                ".tmp" + compression.getExtension());
+        this.fileName = path.getFileName().toString();
+        this.tmpPath = Files.createTempFile(tmpDir, fileName,".tmp" + compression.getExtension());
         this.converterFactory = factory.getRecordConverter();
         this.accountant = accountant;
 
-        OutputStream outStream = compression.compress(
+        OutputStream outStream = compression.compress(fileName,
                 new BufferedOutputStream(Files.newOutputStream(tmpPath)));
 
         InputStream inputStream;
@@ -90,7 +91,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
                 outStream.close();
                 // clear output file
                 outStream = compression.compress(
-                        new BufferedOutputStream(Files.newOutputStream(tmpPath)));
+                        fileName, new BufferedOutputStream(Files.newOutputStream(tmpPath)));
             }
             Timer.getInstance().add("write.copyOriginal", timeCopy);
         }
@@ -141,7 +142,7 @@ public class FileCache implements Closeable, Flushable, Comparable<FileCache> {
         if (!hasError.get()) {
             if (deduplicate) {
                 long timeDedup = System.nanoTime();
-                converterFactory.sortUnique(tmpPath, tmpPath, compression);
+                converterFactory.deduplicate(fileName, tmpPath, tmpPath, compression);
                 Timer.getInstance().add("close.deduplicate", timeDedup);
             }
 

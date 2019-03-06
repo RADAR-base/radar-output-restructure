@@ -23,7 +23,7 @@ import java.util.Collection;
 
 public class IdentityCompression implements Compression {
     @Override
-    public OutputStream compress(OutputStream out) {
+    public OutputStream compress(String fileName, OutputStream out) {
         return out;
     }
 

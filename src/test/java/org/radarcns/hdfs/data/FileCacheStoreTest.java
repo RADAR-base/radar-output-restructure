@@ -16,13 +16,20 @@
 
 package org.radarcns.hdfs.data;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.support.io.TempDirectory;
+import org.junit.jupiter.api.support.io.TempDirectory.TempDir;
 import org.radarcns.hdfs.Application;
 import org.radarcns.hdfs.FileStoreFactory;
 import org.radarcns.hdfs.accounting.Accountant;
@@ -31,29 +38,17 @@ import org.radarcns.hdfs.accounting.OffsetRange;
 import org.radarcns.hdfs.accounting.TopicPartition;
 import org.radarcns.hdfs.config.RestructureSettings;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
 public class FileCacheStoreTest {
-    @Rule
-    public TemporaryFolder folder = new TemporaryFolder();
-
     @Test
-    public void appendLine() throws IOException {
-        Path f1 = folder.newFile().toPath();
-        Path f2 = folder.newFile().toPath();
-        Path f3 = folder.newFile().toPath();
-        Path d4 = folder.newFolder().toPath();
+    @ExtendWith(TempDirectory.class)
+    public void appendLine(@TempDir Path root, @TempDir Path tmpDir) throws IOException {
+        Path f1 = root.resolve("f1");
+        Path f2 = root.resolve("f2");
+        Path f3 = root.resolve("f3");
+        Path d4 = root.resolve("d4");
+        Files.createDirectories(d4);
         Path f4 = d4.resolve("f4.txt");
-        Path newFile = folder.newFile().toPath();
-        Path tmpDir = folder.newFolder().toPath();
-
-        Files.delete(f1);
-        Files.delete(d4);
+        Path newFile = root.resolve("newFile");
 
         Schema simpleSchema = SchemaBuilder.record("simple").fields()
                 .name("a").type("string").noDefault()
@@ -73,7 +68,7 @@ public class FileCacheStoreTest {
         OffsetRange offsetRange1 = new OffsetRange(topicPartition1, 0, 8);
         Bin bin = new Bin("t", "c", "00");
 
-        RestructureSettings settings = new RestructureSettings.Builder(folder.getRoot().toString())
+        RestructureSettings settings = new RestructureSettings.Builder(root.toString())
                 .cacheSize(2)
                 .tempDir(tmpDir.toString())
                 .build();

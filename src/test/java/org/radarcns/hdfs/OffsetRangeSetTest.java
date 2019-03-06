@@ -1,13 +1,13 @@
 package org.radarcns.hdfs;
 
-import org.junit.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.Test;
 import org.radarcns.hdfs.accounting.OffsetRange;
 import org.radarcns.hdfs.accounting.OffsetRangeSet;
 import org.radarcns.hdfs.accounting.TopicPartition;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 public class OffsetRangeSetTest {
     @Test
@@ -29,7 +29,7 @@ public class OffsetRangeSetTest {
         assertFalse(set.contains(c));
         assertFalse(set.contains(ac));
         set.add(c);
-        assertEquals(set.toString(), 2, set.size(topicPartition));
+        assertEquals(2, set.size(topicPartition), set.toString());
         assertTrue(set.contains(c));
         assertTrue(set.contains(a));
         assertFalse(set.contains(ac));
@@ -60,5 +60,4 @@ public class OffsetRangeSetTest {
         assertTrue(offsets.contains(3));
         assertTrue(offsets.contains(0, 5));
     }
-
 }

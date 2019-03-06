@@ -25,9 +25,6 @@ import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.JsonDecoder;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -41,14 +38,15 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.support.io.TempDirectory;
+import org.junit.jupiter.api.support.io.TempDirectory.TempDir;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.radarcns.hdfs.data.CsvAvroConverterTest.writeTestNumbers;
 
 public class JsonAvroConverterTest {
-    @Rule
-    public TemporaryFolder folder = new TemporaryFolder();
-
     @Test
     public void fullAvroTest() throws IOException {
         Parser parser = new Parser();
@@ -81,12 +79,13 @@ public class JsonAvroConverterTest {
     }
 
     @Test
-    public void deduplicate() throws IOException {
-        Path path = folder.newFile().toPath();
+    @ExtendWith(TempDirectory.class)
+    public void deduplicate(@TempDir Path folder) throws IOException {
+        Path path = folder.resolve("test.txt");
         try (BufferedWriter writer = Files.newBufferedWriter(path)) {
             writeTestNumbers(writer);
         }
-        JsonAvroConverter.getFactory().sortUnique(path, path, new IdentityCompression());
+        JsonAvroConverter.getFactory().deduplicate("t", path, path, new IdentityCompression());
         assertEquals(Arrays.asList("a,b", "1,2", "3,4", "1,3", "a,a"), Files.readAllLines(path));
     }
 }

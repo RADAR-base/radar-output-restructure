@@ -58,13 +58,14 @@ public class RadarHdfsRestructure {
     private static final Logger logger = LoggerFactory.getLogger(RadarHdfsRestructure.class);
 
     /** Number of offsets to process in a single task. */
-    private static final int BATCH_SIZE = 500_000;
+    private static final long BATCH_SIZE = 500_000;
 
     private final int numThreads;
     private final Configuration conf;
     private final FileStoreFactory fileStoreFactory;
     private final RecordPathFactory pathFactory;
     private final long maxFilesPerTopic;
+    private List<String> excludeTopics;
 
     private LongAdder processedFileCount;
     private LongAdder processedRecordsCount;
@@ -78,6 +79,7 @@ public class RadarHdfsRestructure {
             maxFiles = Long.MAX_VALUE;
         }
         this.maxFilesPerTopic = maxFiles;
+        this.excludeTopics = factory.getSettings().getExcludeTopics();
         this.fileStoreFactory = factory;
         this.pathFactory = factory.getPathFactory();
     }
@@ -115,6 +117,7 @@ public class RadarHdfsRestructure {
         Map<String, List<TopicFile>> topics = walk(fs, path)
                 .filter(f -> f.getName().endsWith(".avro"))
                 .map(f -> new TopicFile(f.getParent().getParent().getName(), f))
+                .filter(f -> !excludeTopics.contains(f.topic))
                 .filter(f -> !seenFiles.contains(f.range))
                 .collect(Collectors.groupingBy(TopicFile::getTopic));
 
@@ -174,8 +177,8 @@ public class RadarHdfsRestructure {
                     String topic = paths.files.get(0).topic;
                     logger.info("Processing {} records for topic {}", size, topic);
                     executor.execute(() -> {
-                        int batchSize = (int)(BATCH_SIZE * ThreadLocalRandom.current().nextDouble(0.75, 1.25));
-                        int currentSize = 0;
+                        long batchSize = Math.round(BATCH_SIZE * ThreadLocalRandom.current().nextDouble(0.75, 1.25));
+                        long currentSize = 0;
                         try (FileCacheStore cache = fileStoreFactory.newFileCacheStore(accountant)) {
                             for (TopicFile file : paths.files) {
                                 try {
@@ -280,7 +283,7 @@ public class RadarHdfsRestructure {
         public TopicFileList(Stream<TopicFile> files) {
             this.files = files.collect(Collectors.toList());
             this.size = this.files.stream()
-                    .mapToInt(TopicFile::size)
+                    .mapToLong(TopicFile::size)
                     .sum();
         }
 
@@ -308,8 +311,8 @@ public class RadarHdfsRestructure {
             return topic;
         }
 
-        public int size() {
-            return 1 + (int) (range.getOffsetTo() - range.getOffsetFrom());
+        public long size() {
+            return 1 + range.getOffsetTo() - range.getOffsetFrom();
         }
     }
 }

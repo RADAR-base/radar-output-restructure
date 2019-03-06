@@ -25,10 +25,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.JsonDecoder;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.junit.rules.TemporaryFolder;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -53,22 +49,19 @@ import java.util.Map;
 import java.util.Set;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.support.io.TempDirectory;
+import org.junit.jupiter.api.support.io.TempDirectory.TempDir;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.radarcns.hdfs.data.CsvAvroConverter.cleanCsvString;
 
 public class CsvAvroConverterTest {
-    @Rule
-    public ExpectedException exception = ExpectedException.none();
-
-    @Rule
-    public TemporaryFolder folder = new TemporaryFolder();
-
     @Test
     public void writeRecord() throws IOException {
         Parser parser = new Parser();
@@ -94,18 +87,18 @@ public class CsvAvroConverterTest {
 
         int i = 0;
         while (actualIterator.hasNext()) {
-            assertTrue("Actual value has more entries than expected value", expectedIterator.hasNext());
+            assertTrue(expectedIterator.hasNext(), "Actual value has more entries than expected value");
             Object actual = actualIterator.next();
             Object expected = expectedIterator.next();
 
             if (expected instanceof byte[]) {
-                assertEquals("Array for argument " + keys.get(i) + " does not match", Base64.getEncoder().withoutPadding().encodeToString((byte[])expected), actual);
+                assertEquals(Base64.getEncoder().withoutPadding().encodeToString((byte[])expected), actual, "Array for argument " + keys.get(i) + " does not match");
             } else {
-                assertEquals("Value for argument " + keys.get(i) + " does not match", expected, actual);
+                assertEquals(expected, actual, "Value for argument " + keys.get(i) + " does not match");
             }
             i++;
         }
-        assertFalse("Actual value has fewer entries than expected value", expectedIterator.hasNext());
+        assertFalse(expectedIterator.hasNext(), "Actual value has fewer entries than expected value");
 
         converter.writeRecord(record);
 
@@ -192,25 +185,27 @@ public class CsvAvroConverterTest {
     }
 
     @Test
-    public void deduplicate() throws IOException {
-        Path path = folder.newFile().toPath();
+    @ExtendWith(TempDirectory.class)
+    public void deduplicate(@TempDir Path dir) throws IOException {
+        Path path = dir.resolve("test");
         try (BufferedWriter writer = Files.newBufferedWriter(path)) {
             writeTestNumbers(writer);
         }
-        CsvAvroConverter.getFactory().sortUnique(path, path, new IdentityCompression());
+        CsvAvroConverter.getFactory().deduplicate("t", path, path, new IdentityCompression());
         assertEquals(Arrays.asList("a,b", "1,2", "3,4", "1,3", "a,a"), Files.readAllLines(path));
     }
 
 
     @Test
-    public void deduplicateGzip() throws IOException {
-        Path path = folder.newFile("test.csv.gz").toPath();
+    @ExtendWith(TempDirectory.class)
+    public void deduplicateGzip(@TempDir Path dir) throws IOException {
+        Path path = dir.resolve("test.csv.gz");
         try (OutputStream out = Files.newOutputStream(path);
              GZIPOutputStream gzipOut = new GZIPOutputStream(out);
              Writer writer = new OutputStreamWriter(gzipOut)) {
             writeTestNumbers(writer);
         }
-        CsvAvroConverter.getFactory().sortUnique(path, path, new GzipCompression());
+        CsvAvroConverter.getFactory().deduplicate("t", path, path, new GzipCompression());
         try (InputStream in = Files.newInputStream(path);
                 GZIPInputStream gzipIn = new GZIPInputStream(in);
                 Reader inReader = new InputStreamReader(gzipIn);
