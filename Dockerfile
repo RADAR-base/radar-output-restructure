@@ -37,7 +37,7 @@ LABEL description="RADAR-base HDFS data restructuring"
 
 ENV JAVA_OPTS -Djava.library.path=${HADOOP_HOME}/lib/native
 
-RUN apk update && apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat
 
 COPY --from=builder /code/build/third-party/* /usr/lib/
 COPY --from=builder /code/build/scripts/* /usr/bin/
