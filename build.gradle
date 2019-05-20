@@ -7,7 +7,7 @@ plugins {
 }
 
 group 'org.radarcns'
-version '0.5.5'
+version '0.5.6'
 mainClassName = 'org.radarcns.hdfs.Application'
 
 sourceCompatibility = '1.8'
