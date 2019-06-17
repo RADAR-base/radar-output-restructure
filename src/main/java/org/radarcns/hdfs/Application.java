@@ -31,6 +31,9 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import org.radarcns.hdfs.accounting.Accountant;
 import org.radarcns.hdfs.config.HdfsSettings;
 import org.radarcns.hdfs.config.RestructureSettings;
@@ -58,10 +61,15 @@ public class Application implements FileStoreFactory {
     private final RecordPathFactory pathFactory;
     private final List<String> inputPaths;
     private final RestructureSettings settings;
+    private final int pollInterval;
+    private final boolean isService;
+    private RadarHdfsRestructure hdfsReader;
 
     private Application(Builder builder) {
         this.storageDriver = builder.storageDriver;
         this.settings = builder.settings;
+        this.isService = builder.asService;
+        this.pollInterval = builder.pollInterval;
 
         converterFactory = builder.formatFactory.get(settings.getFormat());
         compression = builder.compressionFactory.get(settings.getCompression());
@@ -131,6 +139,8 @@ public class Application implements FileStoreFactory {
                     .storageDriver(commandLineArgs.storageDriver)
                     .properties(commandLineArgs.properties)
                     .inputPaths(commandLineArgs.inputPaths)
+                    .asService(commandLineArgs.asService)
+                    .pollInterval(commandLineArgs.pollInterval)
                     .build();
         } catch (IllegalArgumentException ex) {
             logger.error("HDFS High availability name node configuration is incomplete."
@@ -193,10 +203,41 @@ public class Application implements FileStoreFactory {
         System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism",
                 String.valueOf(settings.getNumThreads() - 1));
 
-        Instant timeStart = Instant.now();
-        RadarHdfsRestructure hdfsReader = new RadarHdfsRestructure(this);
         try {
             Files.createDirectories(settings.getTempDir());
+        } catch (IOException ex) {
+            logger.error("Failed to create temporary directory");
+            return;
+        }
+
+        ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
+        executorService.execute(() -> hdfsReader = new RadarHdfsRestructure(this));
+
+        if (isService) {
+            logger.info("Press Ctrl+C to exit...");
+            executorService.scheduleAtFixedRate(this::runRestructure,
+                    pollInterval / 4, pollInterval, TimeUnit.SECONDS);
+        } else {
+            executorService.execute(this::runRestructure);
+        }
+
+        try {
+            Thread.sleep(Long.MAX_VALUE);
+        } catch (InterruptedException e) {
+            logger.info("Interrupted, shutting down...");
+            executorService.shutdownNow();
+            try {
+                executorService.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+                Thread.currentThread().interrupt();
+            } catch (InterruptedException ex) {
+                logger.info("Interrupted again...");
+            }
+        }
+    }
+
+    private void runRestructure() {
+        Instant timeStart = Instant.now();
+        try {
             for (String input : inputPaths) {
                 logger.info("In:  {}", input);
                 logger.info("Out: {}", pathFactory.getRoot());
@@ -220,6 +261,8 @@ public class Application implements FileStoreFactory {
         private FormatFactory formatFactory;
         private Map<String, String> properties = new HashMap<>();
         private List<String> inputPaths;
+        private boolean asService;
+        private int pollInterval;
 
         public Builder(RestructureSettings settings) {
             this.settings = settings;
@@ -253,6 +296,16 @@ public class Application implements FileStoreFactory {
 
         public Builder properties(Map<String, String> props) {
             this.properties.putAll(props);
+            return this;
+        }
+
+        public Builder asService(boolean asService) {
+            this.asService = asService;
+            return this;
+        }
+
+        public Builder pollInterval(int pollInterval) {
+            this.pollInterval = pollInterval;
             return this;
         }
 

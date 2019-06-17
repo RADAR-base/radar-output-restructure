@@ -1,4 +1,6 @@
 language: java
+# Force use of dist where oraclejdk8 is supported
+dist: trusty
 jdk:
   - oraclejdk8
 sudo: false
