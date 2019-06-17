@@ -96,6 +96,12 @@ public class CommandLineArgs {
     @Parameter(names = {"--exclude-topic"}, description = "Topic to exclude when processing the records. Can be supplied more than once to exclude multiple topics.")
     public List<String> excludeTopics = new ArrayList<>();
 
+    @Parameter(names = {"-s", "--service"}, description = "Run the output generation as a service")
+    public boolean asService = false;
+
+    @Parameter(names = {"-i", "--interval"}, description = "Polling interval when running as a service (seconds)")
+    public int pollInterval = 3600;
+
     public static <T> T nonNullOrDefault(T value, Supplier<T> defaultValue) {
         return value != null ? value : defaultValue.get();
     }
