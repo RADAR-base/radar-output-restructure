@@ -60,6 +60,8 @@ By default, files records are not deduplicated after writing. To enable this beh
 
 To set the output user ID and group ID, specify the `-p local-uid=123` and `-p local-gid=12` properties.
 
+To run the output generator as a service that will regularly poll the HDFS directory, add the `--service` flag and optionally the `--interval` flag to adjust the polling interval.
+
 ## Extending the connector
 
 To implement alternative storage paths, storage drivers or storage formats, put your custom JAR in
