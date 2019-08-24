@@ -199,7 +199,7 @@ public class Application implements FileStoreFactory {
         return hdfsSettings;
     }
 
-    public void start() {
+    private void start() {
         System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism",
                 String.valueOf(settings.getNumThreads() - 1));
 
@@ -217,21 +217,20 @@ public class Application implements FileStoreFactory {
             logger.info("Press Ctrl+C to exit...");
             executorService.scheduleAtFixedRate(this::runRestructure,
                     pollInterval / 4, pollInterval, TimeUnit.SECONDS);
+            try {
+                Thread.sleep(Long.MAX_VALUE);
+            } catch (InterruptedException e) {
+                logger.info("Interrupted, shutting down...");
+                executorService.shutdownNow();
+                try {
+                    executorService.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+                    Thread.currentThread().interrupt();
+                } catch (InterruptedException ex) {
+                    logger.info("Interrupted again...");
+                }
+            }
         } else {
             executorService.execute(this::runRestructure);
-        }
-
-        try {
-            Thread.sleep(Long.MAX_VALUE);
-        } catch (InterruptedException e) {
-            logger.info("Interrupted, shutting down...");
-            executorService.shutdownNow();
-            try {
-                executorService.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
-                Thread.currentThread().interrupt();
-            } catch (InterruptedException ex) {
-                logger.info("Interrupted again...");
-            }
         }
     }
 
@@ -268,43 +267,43 @@ public class Application implements FileStoreFactory {
             this.settings = settings;
         }
 
-        public Builder hdfsSettings(HdfsSettings hdfsSettings) {
+        Builder hdfsSettings(HdfsSettings hdfsSettings) {
             this.hdfsSettings = hdfsSettings;
             return this;
         }
 
-        public Builder storageDriver(Object storageDriver) throws ClassCastException {
+        Builder storageDriver(Object storageDriver) throws ClassCastException {
             this.storageDriver = (StorageDriver) storageDriver;
             return this;
         }
 
-        public Builder pathFactory(Object factory)
+        Builder pathFactory(Object factory)
                 throws ClassCastException {
             this.pathFactory = (RecordPathFactory) factory;
             return this;
         }
 
-        public Builder compressionFactory(Object factory) throws ClassCastException {
+        Builder compressionFactory(Object factory) throws ClassCastException {
             this.compressionFactory = (CompressionFactory) factory;
             return this;
         }
 
-        public Builder formatFactory(Object factory) throws ClassCastException {
+        Builder formatFactory(Object factory) throws ClassCastException {
             this.formatFactory = (FormatFactory) factory;
             return this;
         }
 
-        public Builder properties(Map<String, String> props) {
+        Builder properties(Map<String, String> props) {
             this.properties.putAll(props);
             return this;
         }
 
-        public Builder asService(boolean asService) {
+        Builder asService(boolean asService) {
             this.asService = asService;
             return this;
         }
 
-        public Builder pollInterval(int pollInterval) {
+        Builder pollInterval(int pollInterval) {
             this.pollInterval = pollInterval;
             return this;
         }
@@ -322,7 +321,7 @@ public class Application implements FileStoreFactory {
             return new Application(this);
         }
 
-        public Builder inputPaths(List<String> inputPaths) {
+        Builder inputPaths(List<String> inputPaths) {
             this.inputPaths = inputPaths;
             return this;
         }
