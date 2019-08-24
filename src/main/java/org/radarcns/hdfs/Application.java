@@ -214,6 +214,7 @@ public class Application implements FileStoreFactory {
         executorService.execute(() -> hdfsReader = new RadarHdfsRestructure(this));
 
         if (isService) {
+            logger.info("Running as a Service with poll interval: {} seconds", pollInterval);
             logger.info("Press Ctrl+C to exit...");
             executorService.scheduleAtFixedRate(this::runRestructure,
                     pollInterval / 4, pollInterval, TimeUnit.SECONDS);
@@ -230,7 +231,9 @@ public class Application implements FileStoreFactory {
                 }
             }
         } else {
+            logger.info("Running as a One-shot app...");
             executorService.execute(this::runRestructure);
+            executorService.shutdown();
         }
     }
 
