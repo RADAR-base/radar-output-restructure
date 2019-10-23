@@ -32,9 +32,11 @@ public class ProgressBar {
     private final AtomicBoolean isDone;
     private final long updateIntervalNanos;
     private final AtomicLong lastUpdate;
+    private final String label;
     private int previousLineLength;
 
-    public ProgressBar(long total, int numStripes, long updateInterval, TimeUnit updateIntervalUnit) {
+    public ProgressBar(String label, long total, int numStripes, long updateInterval,
+            TimeUnit updateIntervalUnit) {
         this.updateIntervalNanos = updateIntervalUnit.toNanos(updateInterval);
         if (total < 0) {
             throw new IllegalArgumentException("Total of progress bar must be positive");
@@ -42,6 +44,7 @@ public class ProgressBar {
         if (numStripes <= 0) {
             throw new IllegalArgumentException("Number of stripes in progress bar must be positive");
         }
+        this.label = label;
         this.total = total;
         this.numStripes = numStripes;
         this.startTime = System.nanoTime();
@@ -66,7 +69,7 @@ public class ProgressBar {
             return;
         }
 
-        StringBuilder builder = new StringBuilder(numStripes + 25);
+        StringBuilder builder = new StringBuilder(numStripes + 30 + label.length());
 
         float progressPercent;
         if (total > 0) {
@@ -75,6 +78,8 @@ public class ProgressBar {
             progressPercent = 100f;
         }
 
+        builder.append(label);
+        builder.append(": ");
         bar(builder, progressPercent);
         builder.append(' ');
         percentage(builder, progressPercent);

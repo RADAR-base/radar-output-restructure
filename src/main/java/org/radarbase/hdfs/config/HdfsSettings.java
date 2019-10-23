@@ -48,7 +48,10 @@ public class HdfsSettings {
 
         public Builder(final String name) {
             this.hdfsName = name;
+            this.hdfsConf.put("fs.defaultFS", "hdfs://" + name);
+            this.hdfsConf.put("fs.hdfs.impl.disable.cache", "true");
         }
+
 
         public Builder hdfsHighAvailability(String hdfsHa, String hdfsNameNode1, String hdfsNameNode2) {
             // Configure high availability

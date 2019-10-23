@@ -18,6 +18,7 @@ package org.radarbase.hdfs;
 
 import java.io.IOException;
 import org.radarbase.hdfs.accounting.Accountant;
+import org.radarbase.hdfs.accounting.RemoteLockManager;
 import org.radarbase.hdfs.config.HdfsSettings;
 import org.radarbase.hdfs.config.RestructureSettings;
 import org.radarbase.hdfs.data.Compression;
@@ -34,4 +35,5 @@ public interface FileStoreFactory {
     RecordConverterFactory getRecordConverter();
     RestructureSettings getSettings();
     HdfsSettings getHdfsSettings();
+    RemoteLockManager getRemoteLockManager();
 }

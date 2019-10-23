@@ -102,6 +102,9 @@ public class CommandLineArgs {
     @Parameter(names = {"-i", "--interval"}, description = "Polling interval when running as a service (seconds)")
     public int pollInterval = 3600;
 
+    @Parameter(names = {"--lock-directory"}, description = "HDFS lock directory")
+    public String lockDirectory = "/logs/org.radarbase.hdfs/lock";
+
     public static <T> T nonNullOrDefault(T value, Supplier<T> defaultValue) {
         return value != null ? value : defaultValue.get();
     }

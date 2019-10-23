@@ -34,7 +34,10 @@ import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import org.apache.hadoop.fs.Path;
 import org.radarbase.hdfs.accounting.Accountant;
+import org.radarbase.hdfs.accounting.HdfsRemoteLockManager;
+import org.radarbase.hdfs.accounting.RemoteLockManager;
 import org.radarbase.hdfs.config.HdfsSettings;
 import org.radarbase.hdfs.config.RestructureSettings;
 import org.radarbase.hdfs.data.Compression;
@@ -64,6 +67,7 @@ public class Application implements FileStoreFactory {
     private final int pollInterval;
     private final boolean isService;
     private RadarHdfsRestructure hdfsReader;
+    private RemoteLockManager remoteLock;
 
     private Application(Builder builder) {
         this.storageDriver = builder.storageDriver;
@@ -82,6 +86,7 @@ public class Application implements FileStoreFactory {
         this.inputPaths = builder.inputPaths;
 
         hdfsSettings = builder.hdfsSettings;
+        this.remoteLock = builder.remoteLock;
     }
 
     public static void main(String [] args) {
@@ -131,8 +136,14 @@ public class Application implements FileStoreFactory {
                             commandLineArgs.hdfsUri1, commandLineArgs.hdfsUri2)
                     .build();
 
+            Path lockPath = new Path(commandLineArgs.lockDirectory);
+            RemoteLockManager remoteLock = new HdfsRemoteLockManager(
+                    lockPath.getFileSystem(hdfsSettings.getConfiguration()),
+                    lockPath);
+
             application = new Builder(settings)
                     .hdfsSettings(hdfsSettings)
+                    .remoteLock(remoteLock)
                     .pathFactory(commandLineArgs.pathFactory)
                     .compressionFactory(commandLineArgs.compressionFactory)
                     .formatFactory(commandLineArgs.formatFactory)
@@ -199,6 +210,11 @@ public class Application implements FileStoreFactory {
         return hdfsSettings;
     }
 
+    @Override
+    public RemoteLockManager getRemoteLockManager() {
+        return remoteLock;
+    }
+
     public void start() {
         System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism",
                 String.valueOf(settings.getNumThreads() - 1));
@@ -245,6 +261,8 @@ public class Application implements FileStoreFactory {
             }
         } catch (IOException ex) {
             logger.error("Processing failed", ex);
+        } catch (InterruptedException e) {
+            logger.error("Processing interrupted");
         }
 
         logger.info("Processed {} files and {} records",
@@ -263,6 +281,7 @@ public class Application implements FileStoreFactory {
         private List<String> inputPaths;
         private boolean asService;
         private int pollInterval;
+        private RemoteLockManager remoteLock;
 
         public Builder(RestructureSettings settings) {
             this.settings = settings;
@@ -324,6 +343,11 @@ public class Application implements FileStoreFactory {
 
         public Builder inputPaths(List<String> inputPaths) {
             this.inputPaths = inputPaths;
+            return this;
+        }
+
+        public Builder remoteLock(RemoteLockManager remoteLock) {
+            this.remoteLock = remoteLock;
             return this;
         }
     }

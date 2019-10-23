@@ -72,7 +72,7 @@ public class FileCacheStoreTest {
                 .build();
 
         FileStoreFactory factory = new Application.Builder(settings).build();
-        Accountant accountant = new Accountant(factory);
+        Accountant accountant = new Accountant(factory, "t");
 
         try (FileCacheStore cache = factory.newFileCacheStore(accountant)) {
             int i0 = 0;

@@ -16,20 +16,12 @@
 
 package org.radarbase.hdfs;
 
-import static org.radarbase.hdfs.util.ProgressBar.formatTime;
-
 import com.fasterxml.jackson.databind.JsonMappingException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.text.NumberFormat;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
@@ -49,6 +41,7 @@ import org.radarbase.hdfs.accounting.Accountant;
 import org.radarbase.hdfs.accounting.OffsetRange;
 import org.radarbase.hdfs.accounting.OffsetRangeSet;
 import org.radarbase.hdfs.accounting.RemoteLockManager;
+import org.radarbase.hdfs.accounting.RemoteLockManager.RemoteLock;
 import org.radarbase.hdfs.accounting.TopicPartition;
 import org.radarbase.hdfs.data.FileCacheStore;
 import org.radarbase.hdfs.util.ProgressBar;
@@ -77,7 +70,6 @@ public class RadarHdfsRestructure {
 
     public RadarHdfsRestructure(FileStoreFactory factory) {
         conf = factory.getHdfsSettings().getConfiguration();
-        conf.set("fs.defaultFS", "hdfs://" + factory.getHdfsSettings().getHdfsName());
         this.numThreads = factory.getSettings().getNumThreads();
         long maxFiles = factory.getSettings().getMaxFilesPerTopic();
         if (maxFiles < 1) {
@@ -87,6 +79,7 @@ public class RadarHdfsRestructure {
         this.excludeTopics = factory.getSettings().getExcludeTopics();
         this.fileStoreFactory = factory;
         this.pathFactory = factory.getPathFactory();
+        this.lockManager = factory.getRemoteLockManager();
     }
 
     public long getProcessedFileCount() {
@@ -97,29 +90,44 @@ public class RadarHdfsRestructure {
         return processedRecordsCount.sum();
     }
 
-    public void start(String directoryName) throws IOException {
+    public void start(String directoryName) throws IOException, InterruptedException {
         // Get files and directories
         Path path = new Path(directoryName);
         FileSystem fs = path.getFileSystem(conf);
-        path = fs.getFileStatus(path).getPath();  // get absolute file
+        Path absolutePath = fs.getFileStatus(path).getPath();  // get absolute file
 
-        List<Path> topics = getTopicPaths(fs, path);
+        List<Path> paths = getTopicPaths(fs, absolutePath);
 
+        logger.info("Processing topics:{}", paths.stream()
+            .map(p -> "\n  - " + p.getName())
+            .collect(Collectors.joining()));
 
-        try (Accountant accountant = new Accountant(fileStoreFactory)) {
-            logger.info("Retrieving file list from {}", path);
+        processedFileCount = new LongAdder();
+        processedRecordsCount = new LongAdder();
 
-            Instant timeStart = Instant.now();
-            // Get filenames to process
-            List<TopicFileList> topicPaths = getTopicPaths(fs, path, accountant.getOffsets());
-            logger.info("Time retrieving file list: {}",
-                    formatTime(Duration.between(timeStart, Instant.now())));
+        ExecutorService executor = Executors.newWorkStealingPool(this.numThreads);
 
-            processPaths(topicPaths, accountant);
-        } catch (InterruptedException e) {
-            logger.error("Processing interrupted");
-            Thread.currentThread().interrupt();
-        }
+        paths.forEach(p -> executor.execute(() -> {
+            String topic = p.getName();
+            logger.info("Processing topic {}", p);
+            try (RemoteLock ignored = lockManager.acquireTopicLock(topic);
+                    Accountant accountant = new Accountant(fileStoreFactory, topic)) {
+                // Get filenames to process
+                OffsetRangeSet seenFiles = accountant.getOffsets();
+                TopicFileList topicPaths =  new TopicFileList(walk(fs, p)
+                        .filter(f -> f.getName().endsWith(".avro"))
+                        .map(f -> new TopicFile(topic, f))
+                        .filter(f -> !seenFiles.contains(f.range))
+                        .limit(maxFilesPerTopic));
+
+                processPaths(topicPaths, accountant);
+            } catch (IOException ex) {
+                logger.error("Failed to map files of topic {}", topic, ex);
+            }
+        }));
+
+        executor.shutdown();
+        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
     }
 
     private List<Path> getTopicPaths(FileSystem fs, Path path) {
@@ -130,19 +138,6 @@ public class RadarHdfsRestructure {
 
         Collections.shuffle(topics);
         return topics;
-    }
-
-    private List<TopicFileList> getTopicPaths(FileSystem fs, Path startPath, Path topicPath, OffsetRangeSet seenFiles) {
-        Path actualPath = startPath.toUri().getRawPath();
-        Map<String, List<TopicFile>> topics = walk(fs, topicPath)
-                .filter(f -> f.getName().endsWith(".avro"))
-                .map(f -> new TopicFile(f.getParent().getParent().getName(), f))
-                .filter(f -> !seenFiles.contains(f.range))
-                .collect(Collectors.groupingBy(TopicFile::getTopic));
-
-        return topics.values().stream()
-                .map(v -> new TopicFileList(v.stream().limit(maxFilesPerTopic)))
-                .collect(Collectors.toList());
     }
 
     private Stream<Path> walk(FileSystem fs, Path path) {
@@ -173,7 +168,8 @@ public class RadarHdfsRestructure {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
-        return Stream.of(files).parallel()
+        return Stream.of(files)
+                .parallel()
                 .flatMap(f -> {
                     Path p = f.getPath();
                     String filename = p.getName();
@@ -192,65 +188,46 @@ public class RadarHdfsRestructure {
                 .distinct();
     }
 
-    private void processPaths(List<TopicFileList> topicPaths, Accountant accountant) throws InterruptedException {
-        int numFiles = topicPaths.stream()
-                .mapToInt(TopicFileList::numberOfFiles)
-                .sum();
-        long numOffsets = topicPaths.stream()
-                .mapToLong(TopicFileList::numberOfOffsets)
-                .sum();
+    private void processPaths(TopicFileList topicPaths, Accountant accountant) {
+        int numFiles = topicPaths.numberOfFiles();
+        long numOffsets = topicPaths.numberOfOffsets();
 
         logger.info("Converting {} files with {} records",
                 numFiles, NumberFormat.getNumberInstance().format(numOffsets));
 
-        processedFileCount = new LongAdder();
-        processedRecordsCount = new LongAdder();
         OffsetRangeSet seenOffsets = accountant.getOffsets()
                 .withFactory(ReadOnlyFunctionalValue::new);
 
-        ExecutorService executor = Executors.newWorkStealingPool(pathFactory.isTopicPartitioned() ? this.numThreads : 1);
-
-        ProgressBar progressBar = new ProgressBar(numOffsets, 50, 500, TimeUnit.MILLISECONDS);
-
-        // Actually process the files
-
-        topicPaths.stream()
-                // ensure that largest values go first on the executor queue
-                .sorted(Comparator.comparingLong(TopicFileList::numberOfOffsets).reversed())
-                .forEach(paths -> {
-                    String size = NumberFormat.getNumberInstance().format(paths.size);
-                    String topic = paths.files.get(0).topic;
-                    logger.info("Processing {} records for topic {}", size, topic);
-                    executor.execute(() -> {
-                        long batchSize = Math.round(BATCH_SIZE * ThreadLocalRandom.current().nextDouble(0.75, 1.25));
-                        long currentSize = 0;
-                        try (FileCacheStore cache = fileStoreFactory.newFileCacheStore(accountant)) {
-                            for (TopicFile file : paths.files) {
-                                try {
-                                    this.processFile(file, cache, progressBar, seenOffsets);
-                                } catch (JsonMappingException exc) {
-                                    logger.error("Cannot map values", exc);
-                                }
-                                processedFileCount.increment();
-
-                                currentSize += file.size();
-                                if (currentSize >= batchSize) {
-                                    currentSize = 0;
-                                    cache.flush();
-                                }
-                            }
-                        } catch (IOException | UncheckedIOException ex) {
-                            logger.error("Failed to process file", ex);
-                        } catch (IllegalStateException ex) {
-                            logger.warn("Shutting down");
-                        }
-                    });
-                });
-
+        ProgressBar progressBar = new ProgressBar(topicPaths.files.get(0).topic, numOffsets, 50, 500, TimeUnit.MILLISECONDS);
         progressBar.update(0);
 
-        executor.shutdown();
-        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+        // Actually process the files
+        String size = NumberFormat.getNumberInstance().format(topicPaths.size);
+        String topic = topicPaths.files.get(0).topic;
+        logger.info("Processing {} records for topic {}", size, topic);
+        long batchSize = Math.round(BATCH_SIZE * ThreadLocalRandom.current().nextDouble(0.75, 1.25));
+        long currentSize = 0;
+        try (FileCacheStore cache = fileStoreFactory.newFileCacheStore(accountant)) {
+            for (TopicFile file : topicPaths.files) {
+                try {
+                    this.processFile(file, cache, progressBar, seenOffsets);
+                } catch (JsonMappingException exc) {
+                    logger.error("Cannot map values", exc);
+                }
+                processedFileCount.increment();
+
+                currentSize += file.size();
+                if (currentSize >= batchSize) {
+                    currentSize = 0;
+                    cache.flush();
+                }
+            }
+        } catch (IOException | UncheckedIOException ex) {
+            logger.error("Failed to process file", ex);
+        } catch (IllegalStateException ex) {
+            logger.warn("Shutting down");
+        }
+
         progressBar.update(numOffsets);
     }
 

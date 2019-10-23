@@ -76,7 +76,7 @@ public class FileCacheTest {
 
     private void setUp(RestructureSettings settings) throws IOException {
         this.factory = new Application.Builder(settings).build();
-        this.accountant = new Accountant(factory);
+        this.accountant = new Accountant(factory, "t");
     }
 
     @Test
