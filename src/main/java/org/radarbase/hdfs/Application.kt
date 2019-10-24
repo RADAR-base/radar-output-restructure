@@ -102,6 +102,7 @@ class Application private constructor(builder: Builder) : FileStoreFactory {
         executorService.execute { hdfsReader = RadarHdfsRestructure(this) }
 
         if (isService) {
+            logger.info("Running as a Service with poll interval of {} seconds", pollInterval)
             logger.info("Press Ctrl+C to exit...")
             executorService.scheduleAtFixedRate({ this.runRestructure() },
                     (pollInterval / 4).toLong(), pollInterval.toLong(), TimeUnit.SECONDS)
