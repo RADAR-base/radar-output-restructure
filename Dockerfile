@@ -29,7 +29,7 @@ COPY ./src /code/src
 
 RUN ./gradlew jar
 
-FROM smizy/hadoop-base:3.0.3-alpine
+FROM gradiant/hadoop-base:3.1.2
 
 MAINTAINER Joris Borgdorff <joris@thehyve.nl>, Yatharth Ranjan<yatharth.ranjan@kcl.ac.uk>
 
