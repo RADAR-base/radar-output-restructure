@@ -16,14 +16,13 @@
 
 package org.radarbase.hdfs.util
 
-import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.atomic.LongAdder
 
 /** Timer for multi-threaded timings. The timer may be disabled to increase program performance.  */
 object Timer {
-    private val times: ConcurrentMap<Category, LongAdder> = ConcurrentHashMap()
+    private val times: ConcurrentMap<String, TimerEntry> = ConcurrentHashMap()
 
     /**
      * Whether the timer is enabled. A disabled timer will have much less performance impact on
@@ -32,12 +31,17 @@ object Timer {
     @Volatile
     var isEnabled: Boolean = true
 
-    /** Add number of nanoseconds to given type of measurement.  */
-    fun add(type: String, nanoTimeStart: Long) {
-        if (isEnabled) {
-            val time = System.nanoTime() - nanoTimeStart
-            val cat = Category(type)
-            times.computeIfAbsent(cat) { LongAdder() }.add(time)
+    fun <T> time(type: String, action: () -> T): T {
+        return if (isEnabled) {
+            val startTime = System.nanoTime()
+            try {
+                action()
+            } finally {
+                val time = System.nanoTime() - startTime
+                times.computeIfAbsent(type) { TimerEntry() }.add(time)
+            }
+        } else {
+            action()
         }
     }
 
@@ -45,26 +49,37 @@ object Timer {
         if (!isEnabled) {
             return "Timings: disabled"
         }
-        val builder = StringBuilder()
+        val builder = StringBuilder(100 * times.size)
         builder.append("Timings:")
 
         this.times.entries
-                .groupByTo(TreeMap()) { it.key.type }
                 .forEach { entry ->
                     builder.append("\n\t")
                     builder.append(entry.key)
                     builder.append(" - time: ")
-                    formatTime(builder, entry.value.stream()
-                            .mapToLong { (_, adder) -> adder.sum() }
-                            .sum())
+                    formatTime(builder, entry.value.totalTime.sum())
                     builder.append(" - threads: ")
-                    builder.append(entry.value.size)
+                    builder.append(entry.value.threads.size)
+                    builder.append(" - invocations: ")
+                    builder.append(entry.value.invocations)
                 }
 
         return builder.toString()
     }
 
-    private data class Category(val type: String, val thread: String = Thread.currentThread().name)
+    private class TimerEntry {
+        val invocations = LongAdder()
+        val totalTime = LongAdder()
+        val threads = ConcurrentHashMap<Long, Long>()
+
+        fun add(nanoTime: Long) {
+            invocations.increment()
+            totalTime.add(nanoTime)
+            Thread.currentThread().id.let {
+                threads[it] = it
+            }
+        }
+    }
 
     private fun formatTime(builder: StringBuilder, nanoTime: Long) {
         val seconds = (nanoTime / 1_000_000_000L).toInt()

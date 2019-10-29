@@ -33,9 +33,11 @@ import java.io.IOException
 import java.io.UncheckedIOException
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.time.Duration
 import java.time.Instant
+import java.time.temporal.Temporal
 import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -49,11 +51,10 @@ class Application private constructor(builder: Builder) : FileStoreFactory {
     override val compression: Compression
     override val hdfsSettings: HdfsSettings
     override val pathFactory: RecordPathFactory
-    private val inputPaths: List<String>?
+    private val inputPaths: List<String>
     override val settings: RestructureSettings
     private val pollInterval: Int
     private val isService: Boolean
-    private var hdfsReader: RadarHdfsRestructure? = null
     private val lockPath: Path?
 
     override val remoteLockManager: RemoteLockManager
@@ -98,12 +99,11 @@ class Application private constructor(builder: Builder) : FileStoreFactory {
             return
         }
 
-        val executorService = Executors.newSingleThreadScheduledExecutor()
-        executorService.execute { hdfsReader = RadarHdfsRestructure(this) }
-
         if (isService) {
             logger.info("Running as a Service with poll interval of {} seconds", pollInterval)
             logger.info("Press Ctrl+C to exit...")
+            val executorService = Executors.newSingleThreadScheduledExecutor()
+
             executorService.scheduleAtFixedRate({ this.runRestructure() },
                     (pollInterval / 4).toLong(), pollInterval.toLong(), TimeUnit.SECONDS)
 
@@ -120,35 +120,34 @@ class Application private constructor(builder: Builder) : FileStoreFactory {
                 }
             }
         } else {
-            executorService.execute { this.runRestructure() }
-            executorService.shutdown()
-            try {
-                executorService.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS)
-            } catch (e: InterruptedException) {
-                logger.info("Interrupted, shutting down now...")
-                Thread.currentThread().interrupt()
-            }
+            runRestructure()
         }
     }
 
     private fun runRestructure() {
         val timeStart = Instant.now()
         try {
-            for (input in inputPaths!!) {
-                logger.info("In:  {}", input)
-                logger.info("Out: {}", pathFactory.root)
-                hdfsReader!!.start(input)
+            RadarHdfsRestructure(this).use { restructure ->
+                for (input in inputPaths) {
+                    logger.info("In:  {}", input)
+                    logger.info("Out: {}", pathFactory.root)
+                    restructure.process(input)
+                }
+
+                val numberFormat = NumberFormat.getNumberInstance()
+                logger.info("Processed {} files and {} records in ",
+                        numberFormat.format(restructure.processedFileCount),
+                        numberFormat.format(restructure.processedRecordsCount),
+                        timeStart.durationSince().formatTime())
             }
         } catch (ex: IOException) {
             logger.error("Processing failed", ex)
         } catch (e: InterruptedException) {
             logger.error("Processing interrupted")
         }
-
-        logger.info("Processed {} files and {} records",
-                hdfsReader!!.processedFileCount, hdfsReader!!.processedRecordsCount)
-        logger.info("Time taken: {}", formatTime(Duration.between(timeStart, Instant.now())))
     }
+
+    private fun Temporal.durationSince() = Duration.between(this, Instant.now())
 
     class Builder(val settings: RestructureSettings, val hdfsSettings: HdfsSettings) {
         var storageDriver: StorageDriver? = null
@@ -156,7 +155,7 @@ class Application private constructor(builder: Builder) : FileStoreFactory {
         var compressionFactory: CompressionFactory? = null
         var formatFactory: FormatFactory? = null
         val properties = HashMap<String, String>()
-        var inputPaths: List<String>? = null
+        var inputPaths: List<String> = listOf()
         var asService: Boolean = false
         var pollInterval: Int = 0
         var lockPath: Path? = null
@@ -235,7 +234,7 @@ class Application private constructor(builder: Builder) : FileStoreFactory {
                     formatFactory = commandLineArgs.formatFactory as FormatFactory?
                     storageDriver = commandLineArgs.storageDriver as StorageDriver?
                     properties += commandLineArgs.properties
-                    inputPaths=  commandLineArgs.inputPaths
+                    inputPaths = commandLineArgs.inputPaths
                     asService = commandLineArgs.asService
                     pollInterval = commandLineArgs.pollInterval
                 }.build()

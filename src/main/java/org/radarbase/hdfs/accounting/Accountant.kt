@@ -20,10 +20,12 @@ import org.radarbase.hdfs.FileStoreFactory
 import org.radarbase.hdfs.util.DirectFunctionalValue
 import org.radarbase.hdfs.util.TemporaryDirectory
 import org.radarbase.hdfs.util.Timer
+import org.radarbase.hdfs.util.Timer.time
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.Flushable
 import java.io.IOException
+import java.nio.file.Files
 import java.nio.file.Paths
 
 class Accountant @Throws(IOException::class)
@@ -35,23 +37,23 @@ constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
         get() = offsetFile.offsets
 
     init {
-        val offsetPath = factory.settings.outputPath
+        val offsetsDirectory = factory.settings.outputPath
                 .resolve(OFFSETS_FILE_NAME)
-                .resolve("$topic.csv")
+
+        Files.createDirectories(offsetsDirectory)
+
+        val offsetPath = offsetsDirectory.resolve("$topic.csv")
         this.offsetFile = OffsetRangeFile.read(factory.storageDriver, offsetPath)
-        this.offsetFile.setTempDir(tempDir.path)
+        this.offsetFile.tempDir = tempDir.path
     }
 
-    fun process(ledger: Ledger) {
-        val timeProcess = System.nanoTime()
+    fun process(ledger: Ledger) = time("accounting.process") {
         offsetFile.addAll(ledger.offsets)
         offsetFile.triggerWrite()
-        Timer.add("accounting.process", timeProcess)
     }
 
     @Throws(IOException::class)
-    override fun close() {
-        val timeClose = System.nanoTime()
+    override fun close() = time("accounting.close") {
         var exception: IOException? = null
 
         try {
@@ -66,27 +68,18 @@ constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
         if (exception != null) {
             throw exception
         }
-        Timer.add("accounting.close", timeClose)
     }
 
     @Throws(IOException::class)
-    override fun flush() {
-        val timeFlush = System.nanoTime()
-
-        try {
-            offsetFile.flush()
-        } finally {
-            Timer.add("accounting.flush", timeFlush)
-        }
+    override fun flush() = time("accounting.flush") {
+        offsetFile.flush()
     }
 
     class Ledger {
         internal val offsets: OffsetRangeSet = OffsetRangeSet { DirectFunctionalValue(it) }
 
-        fun add(transaction: Transaction) {
-            val timeAdd = System.nanoTime()
+        fun add(transaction: Transaction) = time("accounting.add") {
             offsets.add(transaction.topicPartition, transaction.offset)
-            Timer.add("accounting.add", timeAdd)
         }
     }
 

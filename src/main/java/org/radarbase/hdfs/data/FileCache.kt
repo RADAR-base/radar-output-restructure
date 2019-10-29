@@ -25,7 +25,6 @@ import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.OutputStream
 import java.io.OutputStreamWriter
-import java.io.Reader
 import java.io.Writer
 import java.nio.file.Files
 import java.nio.file.Path
@@ -34,7 +33,7 @@ import org.apache.avro.generic.GenericRecord
 import org.radarbase.hdfs.FileStoreFactory
 import org.radarbase.hdfs.accounting.Accountant
 import org.radarbase.hdfs.util.Timer
-import org.slf4j.Logger
+import org.radarbase.hdfs.util.Timer.time
 import org.slf4j.LoggerFactory
 
 /** Keeps path handles of a path.  */
@@ -71,17 +70,16 @@ class FileCache(
         if (fileIsNew) {
             inputStream = ByteArrayInputStream(ByteArray(0))
         } else {
-            val timeCopy = System.nanoTime()
-            inputStream = compression.decompress(storageDriver.newInputStream(path))
-
-            if (!copy(path, outStream, compression)) {
-                // restart output buffer
-                outStream.close()
-                // clear output file
-                outStream = compression.compress(
-                        fileName, BufferedOutputStream(Files.newOutputStream(tmpPath)))
+            inputStream = time("write.copyOriginal") {
+                if (!copy(path, outStream, compression)) {
+                    // restart output buffer
+                    outStream.close()
+                    // clear output file
+                    outStream = compression.compress(
+                            fileName, BufferedOutputStream(Files.newOutputStream(tmpPath)))
+                }
+                compression.decompress(storageDriver.newInputStream(path))
             }
-            Timer.add("write.copyOriginal", timeCopy)
         }
 
         this.writer = OutputStreamWriter(outStream)
@@ -108,10 +106,7 @@ class FileCache(
      */
     @Throws(IOException::class)
     fun writeRecord(record: GenericRecord, transaction: Accountant.Transaction): Boolean {
-        val timer = Timer
-        val timeStart = System.nanoTime()
-        val result = this.recordConverter.writeRecord(record)
-        timer.add("write.convert", timeStart)
+        val result = time("write.convert") { this.recordConverter.writeRecord(record) }
         lastUse = System.nanoTime()
         if (result) {
             ledger.add(transaction)
@@ -124,32 +119,28 @@ class FileCache(
     }
 
     @Throws(IOException::class)
-    override fun close() {
-        val timeClose = System.nanoTime()
+    override fun close() = time("close") {
         recordConverter.close()
         writer.close()
 
         if (!hasError.get()) {
             if (deduplicate) {
-                val timeDedup = System.nanoTime()
-                converterFactory.deduplicate(fileName, tmpPath, tmpPath, compression)
-                Timer.add("close.deduplicate", timeDedup)
+                time("close.deduplicate") {
+                    converterFactory.deduplicate(fileName, tmpPath, tmpPath, compression)
+                }
             }
 
-            val timeStore = System.nanoTime()
-            storageDriver.store(tmpPath, path)
-            Timer.add("close.store", timeStore)
+            time("close.store") {
+                storageDriver.store(tmpPath, path)
+            }
 
             accountant.process(ledger)
         }
-        Timer.add("close", timeClose)
     }
 
     @Throws(IOException::class)
-    override fun flush() {
-        val timeFlush = System.nanoTime()
+    override fun flush() = time("flush") {
         recordConverter.flush()
-        Timer.add("flush", timeFlush)
     }
 
     /**

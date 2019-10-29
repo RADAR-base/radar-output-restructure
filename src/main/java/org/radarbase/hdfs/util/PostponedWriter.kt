@@ -46,7 +46,7 @@ abstract class PostponedWriter
 
     private val executor: ScheduledExecutorService
     private val writeFuture: AtomicReference<Future<*>>
-    private var tempDir: Path? = null
+    internal var tempDir: Path? = null
 
     init {
         executor = Executors.newScheduledThreadPool(1) { r -> Thread(r, name) }
@@ -117,15 +117,10 @@ abstract class PostponedWriter
 
     /** Create temporary file to write to.  */
     @Throws(IOException::class)
-    protected fun createTempFile(prefix: String, suffix: String): Path {
-        return tempDir?.also {
+    protected open fun createTempFile(prefix: String, suffix: String): Path {
+        return tempDir?.let {
             Files.createTempFile(it, prefix, suffix)
         } ?: Files.createTempFile(prefix, suffix)
-    }
-
-    /** Directory to write temporary files in.  */
-    fun setTempDir(tempDir: Path) {
-        this.tempDir = tempDir
     }
 
     companion object {

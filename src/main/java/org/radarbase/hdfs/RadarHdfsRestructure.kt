@@ -16,269 +16,139 @@
 
 package org.radarbase.hdfs
 
-import com.fasterxml.jackson.databind.JsonMappingException
-import java.io.IOException
-import java.io.UncheckedIOException
-import java.text.NumberFormat
-import java.util.concurrent.Executors
-import java.util.concurrent.ThreadLocalRandom
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.LongAdder
-import java.util.stream.Collectors
-import java.util.stream.Stream
-import org.apache.avro.file.DataFileReader
-import org.apache.avro.generic.GenericDatumReader
-import org.apache.avro.generic.GenericRecord
-import org.apache.avro.mapred.FsInput
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.FileStatus
 import org.apache.hadoop.fs.FileSystem
 import org.apache.hadoop.fs.Path
 import org.radarbase.hdfs.accounting.Accountant
 import org.radarbase.hdfs.accounting.OffsetRange
-import org.radarbase.hdfs.accounting.OffsetRangeSet
-import org.radarbase.hdfs.accounting.RemoteLockManager
-import org.radarbase.hdfs.accounting.TopicPartition
-import org.radarbase.hdfs.data.FileCacheStore
-import org.radarbase.hdfs.util.ProgressBar
-import org.radarbase.hdfs.util.ReadOnlyFunctionalValue
-import org.radarbase.hdfs.util.Timer
 import org.slf4j.LoggerFactory
-import kotlin.math.roundToLong
+import java.io.Closeable
+import java.io.IOException
+import java.lang.Exception
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.LongAdder
+import java.util.stream.Collectors
+import java.util.stream.Stream
 
-class RadarHdfsRestructure(private val fileStoreFactory: FileStoreFactory) {
-    private val numThreads: Int = fileStoreFactory.settings.numThreads
+class RadarHdfsRestructure(private val fileStoreFactory: FileStoreFactory): Closeable {
     private val conf: Configuration = fileStoreFactory.hdfsSettings.configuration
     private val pathFactory: RecordPathFactory = fileStoreFactory.pathFactory
     private val maxFilesPerTopic: Long = fileStoreFactory.settings.maxFilesPerTopic.toLong()
             .takeIf { it >= 1 }
             ?: java.lang.Long.MAX_VALUE
 
+    private val executor = Executors.newWorkStealingPool(fileStoreFactory.settings.numThreads)
+    private val lockManager = fileStoreFactory.remoteLockManager
     private val excludeTopics: List<String>? = fileStoreFactory.settings.excludeTopics
+    private val isClosed = AtomicBoolean(false)
 
-    var processedFileCount = LongAdder()
-        private set
-    var processedRecordsCount = LongAdder()
-        private set
-
-    @Volatile
-    private var lockManager: RemoteLockManager? = null
+    val processedFileCount = LongAdder()
+    val processedRecordsCount = LongAdder()
 
     @Throws(IOException::class, InterruptedException::class)
-    fun start(directoryName: String) {
+    fun process(directoryName: String) {
         // Get files and directories
         val path = Path(directoryName)
         val fs = path.getFileSystem(conf)
         val absolutePath = fs.getFileStatus(path).path  // get absolute file
 
+        logger.info("Scanning for topics...")
+
         val paths = getTopicPaths(fs, absolutePath)
 
-        logger.info("Processing topics:{}", paths.stream()
-                .map { p -> "\n  - " + p.name }
-                .collect(Collectors.joining()))
+        logger.info("{} topics found", paths.size)
 
-        processedFileCount = LongAdder()
-        processedRecordsCount = LongAdder()
-        lockManager = fileStoreFactory.remoteLockManager
+        paths.map { p -> executor.submit<ProcessingStatistics> { mapTopic(fs, p) } }
+                .forEach {
+                    try {
+                        val (fileCount, recordCount) = it.get()
+                        processedFileCount.add(fileCount)
+                        processedRecordsCount.add(recordCount)
+                    } catch (ex: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                    } catch (ex: Exception) {
+                        logger.warn("Failed to map topic", ex)
+                    }
+                }
+    }
 
-        val executor = Executors.newWorkStealingPool(this.numThreads)
+    private fun mapTopic(fs: FileSystem, topicPath: Path): ProcessingStatistics {
+        if (isClosed.get()) {
+            return ProcessingStatistics(0L, 0L)
+        }
 
-        paths.forEach { p ->
-            executor.execute {
-                val topic = p.name
-                try {
-                    lockManager!!.acquireTopicLock(topic)!!.use {
-                        Accountant(fileStoreFactory, topic).use { accountant ->
-                            // Get filenames to process
+        val topic = topicPath.name
+
+        return try {
+            lockManager.acquireTopicLock(topic)?.use { _ ->
+                Accountant(fileStoreFactory, topic).use { accountant ->
+                    RestructureWorker(pathFactory, fs, accountant, fileStoreFactory, isClosed).use { worker ->
+                        try {
                             val seenFiles = accountant.offsets
-                            val topicPaths = TopicFileList(walk(fs, p)
-                                    .filter { f -> f.name.endsWith(".avro") }
+                            val topicPaths = TopicFileList(topic, findRecordPaths(fs, topicPath)
                                     .map { f -> TopicFile(topic, f) }
                                     .filter { f -> !seenFiles.contains(f.range) }
                                     .limit(maxFilesPerTopic))
 
-                            processPaths(topicPaths, accountant)
+                            if (topicPaths.numberOfFiles > 0) {
+                                worker.processPaths(topicPaths)
+                            }
+                        } catch (ex: Exception) {
+                            logger.error("Failed to map files of topic {}", topic, ex)
                         }
-                    }
-                } catch (ex: IOException) {
-                    logger.error("Failed to map files of topic {}", topic, ex)
-                }
-            }
-        }
 
-        executor.shutdown()
-        executor.awaitTermination(java.lang.Long.MAX_VALUE, TimeUnit.SECONDS)
-    }
-
-    private fun getTopicPaths(fs: FileSystem, path: Path): List<Path> {
-        return findTopicPaths(fs, path)
-                .distinct()
-                .filter { f -> !excludeTopics!!.contains(f.name) }
-                .collect(Collectors.toList())
-                .also { it.shuffle() }
-    }
-
-    private fun walk(fs: FileSystem, path: Path): Stream<Path> {
-        val files: Array<FileStatus>
-        try {
-            files = fs.listStatus(path)
-        } catch (e: IOException) {
-            throw UncheckedIOException(e)
-        }
-
-        return Stream.of(*files).parallel()
-                .flatMap { f ->
-                    when {
-                        f.path.name == "+tmp" -> Stream.empty()
-                        f.isDirectory -> walk(fs, f.path)
-                        else -> Stream.of(f.path)
-                    }
-                }
-    }
-
-    private fun findTopicPaths(fs: FileSystem, path: Path): Stream<Path> {
-        val files: Array<FileStatus>
-        try {
-            files = fs.listStatus(path)
-        } catch (e: IOException) {
-            throw UncheckedIOException(e)
-        }
-
-        return Stream.of(*files)
-                .parallel()
-                .flatMap<Path> { f ->
-                    val p = f.path
-                    val filename = p.name
-                    when {
-                        filename == "+tmp" -> Stream.empty()
-                        f.isDirectory -> findTopicPaths(fs, p)
-                        filename.endsWith(".avro") -> Stream.of(p.parent.parent)
-                        else -> Stream.empty()
-                    }
-                }
-                .distinct()
-    }
-
-    private fun processPaths(topicPaths: TopicFileList, accountant: Accountant) {
-        val numFiles = topicPaths.numberOfFiles
-        val numOffsets = topicPaths.numberOfOffsets
-
-        val topic = topicPaths.files[0].topic
-
-        logger.info("Processing topic {}: converting {} files with {} records",
-                topic, numFiles, NumberFormat.getNumberInstance().format(numOffsets))
-
-        val seenOffsets = accountant.offsets
-                .withFactory { ReadOnlyFunctionalValue(it) }
-
-        // TODO: proper progressbar management
-        val progressBar = ProgressBar(topic, numOffsets, 50, 500, TimeUnit.MILLISECONDS)
-        progressBar.update(0)
-
-        // Actually process the files
-        val size = NumberFormat.getNumberInstance().format(topicPaths.numberOfOffsets)
-        logger.info("Processing {} records for topic {}", size, topic)
-        val batchSize = (BATCH_SIZE * ThreadLocalRandom.current().nextDouble(0.75, 1.25)).roundToLong()
-        var currentSize: Long = 0
-        try {
-            fileStoreFactory.newFileCacheStore(accountant).use { cache ->
-                for (file in topicPaths.files) {
-                    try {
-                        this.processFile(file, cache, progressBar, seenOffsets)
-                    } catch (exc: JsonMappingException) {
-                        logger.error("Cannot map values", exc)
-                    }
-
-                    processedFileCount.increment()
-
-                    currentSize += file.size
-                    if (currentSize >= batchSize) {
-                        currentSize = 0
-                        cache.flush()
+                        ProcessingStatistics(worker.processedFileCount, worker.processedRecordsCount)
                     }
                 }
             }
         } catch (ex: IOException) {
-            logger.error("Failed to process file", ex)
-        } catch (ex: UncheckedIOException) {
-            logger.error("Failed to process file", ex)
-        } catch (ex: IllegalStateException) {
-            logger.warn("Shutting down")
-        }
-
-        progressBar.update(numOffsets)
+            logger.error("Failed to map files of topic {}", topic, ex)
+            null
+        } ?: ProcessingStatistics(0L, 0L)
     }
 
-    @Throws(IOException::class)
-    private fun processFile(file: TopicFile, cache: FileCacheStore,
-                            progressBar: ProgressBar, seenOffsets: OffsetRangeSet) {
-        logger.debug("Reading {}", file.path)
-
-        // Read and parseFilename avro file
-        val input = FsInput(file.path, conf)
-
-        // processing zero-length files may trigger a stall. See:
-        // https://github.com/RADAR-base/Restructure-HDFS-topic/issues/3
-        if (input.length() == 0L) {
-            logger.warn("File {} has zero length, skipping.", file.path)
-            return
+    override fun close() {
+        isClosed.set(true)
+        executor.shutdown()
+        try {
+            executor.awaitTermination(10, TimeUnit.SECONDS)
+        } catch (ex: InterruptedException) {
+            Thread.currentThread().interrupt()
         }
+    }
 
-        val timer = Timer
+    private fun getTopicPaths(fs: FileSystem, path: Path): List<Path> = findTopicPaths(fs, path)
+                .distinct()
+                .filter { f -> !excludeTopics!!.contains(f.name) }
+                .collect(Collectors.toList())
+                .also { it.shuffle() }
 
-        var timeRead = System.nanoTime()
-        val dataFileReader = DataFileReader(input,
-                GenericDatumReader<GenericRecord>())
+    private fun findTopicPaths(fs: FileSystem, path: Path): Stream<Path> {
+        val fileStatuses = fs.listStatus(path)
+        val avroFile = fileStatuses.find { it.isFile && it.path.name.endsWith(".avro") }
+        return if (avroFile != null) {
+            Stream.of(avroFile.path.parent.parent)
+        } else {
+            Stream.of(*fileStatuses)
+                    .filter { it.isDirectory && it.path.name != "+tmp" }
+                    .flatMap { findTopicPaths(fs, it.path) }
+        }
+    }
 
-        var tmpRecord: GenericRecord? = null
-        var offset = file.range.offsetFrom
-        while (dataFileReader.hasNext()) {
-            val record = dataFileReader.next(tmpRecord)
-                    .also { tmpRecord = it }
-            timer.add("read", timeRead)
-
-            val timeAccount = System.nanoTime()
-            val alreadyContains = seenOffsets.contains(file.range.topicPartition, offset)
-            timer.add("accounting.create", timeAccount)
-            if (!alreadyContains) {
-                // Get the fields
-                this.writeRecord(file.range.topicPartition, record, cache, offset, 0)
+    private fun findRecordPaths(fs: FileSystem, path: Path): Stream<Path> = Stream.of(*fs.listStatus(path))
+            .flatMap { fileStatus ->
+                val p = fileStatus.path
+                val filename = p.name
+                when {
+                    fileStatus.isDirectory && filename != "+tmp" -> findRecordPaths(fs, p)
+                    filename.endsWith(".avro") -> Stream.of(p)
+                    else -> Stream.empty()
+                }
             }
-            processedRecordsCount.increment()
-            progressBar.update(processedRecordsCount.sum())
 
-            offset++
-            timeRead = System.nanoTime()
-        }
-    }
-
-    @Throws(IOException::class)
-    private fun writeRecord(topicPartition: TopicPartition, record: GenericRecord?,
-                            cache: FileCacheStore, offset: Long, suffix: Int) {
-        var currentSuffix = suffix
-        val (path) = pathFactory.getRecordOrganization(
-                topicPartition.topic, record!!, currentSuffix)
-
-        val timer = Timer
-
-        val timeAccount = System.nanoTime()
-        val transaction = Accountant.Transaction(topicPartition, offset)
-        timer.add("accounting.create", timeAccount)
-
-        // Write data
-        val timeWrite = System.nanoTime()
-        val response = cache.writeRecord(
-                path, record, transaction)
-        timer.add("write", timeWrite)
-
-        if (!response.isSuccessful) {
-            // Write was unsuccessful due to different number of columns,
-            // try again with new file name
-            writeRecord(topicPartition, record, cache, offset, ++currentSuffix)
-        }
-    }
-
-    private class TopicFileList(files: Stream<TopicFile>) {
+    internal class TopicFileList(val topic: String, files: Stream<TopicFile>) {
         val files: List<TopicFile> = files.collect(Collectors.toList())
         val numberOfOffsets: Long = this.files.stream()
                 .mapToLong { it.size }
@@ -287,16 +157,15 @@ class RadarHdfsRestructure(private val fileStoreFactory: FileStoreFactory) {
         val numberOfFiles: Int = this.files.size
     }
 
-    private class TopicFile(val topic: String, val path: Path) {
+    internal class TopicFile(val topic: String, val path: Path) {
         val range: OffsetRange = OffsetRange.parseFilename(path.name)
 
         val size: Long = 1 + range.offsetTo - range.offsetFrom
     }
 
+    private data class ProcessingStatistics(val fileCount: Long, val recordCount: Long)
+
     companion object {
         private val logger = LoggerFactory.getLogger(RadarHdfsRestructure::class.java)
-
-        /** Number of offsets to process in a single task.  */
-        private const val BATCH_SIZE: Long = 500000
     }
 }

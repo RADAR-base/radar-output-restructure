@@ -16,28 +16,19 @@
 
 package org.radarbase.hdfs.data
 
-import org.radarbase.hdfs.data.FileCacheStore.WriteResponse.CACHE_AND_NO_WRITE
-import org.radarbase.hdfs.data.FileCacheStore.WriteResponse.CACHE_AND_WRITE
-import org.radarbase.hdfs.data.FileCacheStore.WriteResponse.NO_CACHE_AND_NO_WRITE
-import org.radarbase.hdfs.data.FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE
-import org.radarbase.hdfs.util.ThrowingConsumer.tryCatch
-
-import java.io.Closeable
-import java.io.Flushable
-import java.io.IOException
-import java.io.OutputStreamWriter
-import java.io.UncheckedIOException
-import java.nio.file.Files
-import java.nio.file.Path
-import java.util.ArrayList
-import java.util.HashMap
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.hdfs.FileStoreFactory
 import org.radarbase.hdfs.accounting.Accountant
+import org.radarbase.hdfs.data.FileCacheStore.WriteResponse.*
 import org.radarbase.hdfs.util.TemporaryDirectory
-import org.radarbase.hdfs.util.Timer
+import org.radarbase.hdfs.util.ThrowingConsumer.tryCatch
+import org.radarbase.hdfs.util.Timer.time
 import org.slf4j.LoggerFactory
+import java.io.*
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.*
 
 /**
  * Caches open file handles. If more than the limit is cached, the half of the files that were used
@@ -82,10 +73,8 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
             Files.createDirectories(dir)
 
             try {
-                val timeOpen = System.nanoTime()
-                FileCache(factory, path, record, tmpDir.path, accountant)
+                time("write.open") { FileCache(factory, path, record, tmpDir.path, accountant) }
                         .also {
-                            Timer.add("write.open", timeOpen)
                             writeSchema(transaction.topicPartition.topic, path, record.schema)
                             caches[path] = it
                         }
@@ -114,8 +103,7 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
     }
 
     @Throws(IOException::class)
-    private fun writeSchema(topic: String, path: Path, schema: Schema) {
-        val writeSchema = System.nanoTime()
+    private fun writeSchema(topic: String, path: Path, schema: Schema) = time("write.schema") {
         // Write was successful, finalize the write
         val schemaPath = path.resolveSibling("schema-$topic.json")
         // First check if we already checked this path, because otherwise the storage.exists call
@@ -129,7 +117,6 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
                     writer -> writer.write(schema.toString(true)) } }
             }
         }
-        Timer.add("write.schema", writeSchema)
     }
 
     /**

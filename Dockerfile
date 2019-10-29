@@ -35,7 +35,8 @@ MAINTAINER Joris Borgdorff <joris@thehyve.nl>, Yatharth Ranjan<yatharth.ranjan@k
 
 LABEL description="RADAR-base HDFS data restructuring"
 
-ENV JAVA_OPTS -Djava.library.path=${HADOOP_HOME}/lib/native -Djava.security.egd=file:/dev/./urandom
+ENV JAVA_OPTS="-Djava.library.path=${HADOOP_HOME}/lib/native -Djava.security.egd=file:/dev/./urandom -XX:+UseG1GC -XX:MaxHeapFreeRatio=10 -XX:MinHeapFreeRatio=10" \
+    LD_LIBRARY_PATH=/lib64
 
 RUN apk add --no-cache libc6-compat
 

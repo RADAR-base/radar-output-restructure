@@ -20,7 +20,6 @@ import com.beust.jcommander.IParameterValidator
 import com.beust.jcommander.ParameterException
 
 class NonEmptyValidator : IParameterValidator {
-    @Throws(ParameterException::class)
     override fun validate(name: String, value: String?) {
         if (value == null || value.isEmpty()) {
             throw ParameterException("Parameter " + name + " should be supplied. "

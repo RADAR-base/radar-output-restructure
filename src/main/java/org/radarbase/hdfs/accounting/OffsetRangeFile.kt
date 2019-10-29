@@ -19,7 +19,7 @@ package org.radarbase.hdfs.accounting
 import org.radarbase.hdfs.data.StorageDriver
 import org.radarbase.hdfs.util.PostponedWriter
 import org.radarbase.hdfs.util.ThrowingConsumer.tryCatch
-import org.radarbase.hdfs.util.Timer
+import org.radarbase.hdfs.util.Timer.time
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.nio.file.Files
@@ -38,9 +38,7 @@ class OffsetRangeFile(private val storage: StorageDriver, private val path: Path
 
     fun addAll(rangeSet: OffsetRangeSet) = offsets.addAll(rangeSet)
 
-    override fun doWrite() {
-        val timeStart = System.nanoTime()
-
+    override fun doWrite() = time("accounting.offsets") {
         try {
             val tmpPath = createTempFile("offsets", ".csv")
 
@@ -62,8 +60,6 @@ class OffsetRangeFile(private val storage: StorageDriver, private val path: Path
             storage.store(tmpPath, path)
         } catch (e: IOException) {
             logger.error("Failed to write offsets: {}", e.toString())
-        } finally {
-            Timer.add("accounting.offsets", timeStart)
         }
     }
 

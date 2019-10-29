@@ -16,6 +16,7 @@
 
 package org.radarbase.hdfs.util
 
+import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -31,7 +32,6 @@ class ProgressBar(private val label: String, private val total: Long, private va
     private val isDone: AtomicBoolean = AtomicBoolean(false)
     private val updateIntervalNanos: Long = updateIntervalUnit.toNanos(updateInterval)
     private val lastUpdate: AtomicLong = AtomicLong(0L)
-    private var previousLineLength: Int = 0
 
     init {
         require(total >= 0) { "Total of progress bar must be positive" }
@@ -45,7 +45,12 @@ class ProgressBar(private val label: String, private val total: Long, private va
             return
         }
 
-        require(progress in 0..total) { "Update value $progress out of range [0, $total]." }
+        try {
+            require(progress in 0..total) { "Update value $progress out of range [0, $total]." }
+        } catch (ex: Exception) {
+            logger.error("{}", ex.toString())
+            return
+        }
 
         if (progress == total && !isDone.compareAndSet(false, true)) {
             return
@@ -53,15 +58,12 @@ class ProgressBar(private val label: String, private val total: Long, private va
 
         val builder = StringBuilder(numStripes + 30 + label.length)
 
-        val progressPercent: Float
-        if (total > 0) {
-            progressPercent = Math.min(100f * progress / total, 100f)
+        val progressPercent: Float = if (total > 0) {
+            (100f * progress / total).coerceAtMost(100f)
         } else {
-            progressPercent = 100f
+            100f
         }
 
-        builder.append(label)
-        builder.append(": ")
         bar(builder, progressPercent)
         builder.append(' ')
         percentage(builder, progressPercent)
@@ -69,33 +71,29 @@ class ProgressBar(private val label: String, private val total: Long, private va
         eta(builder, progress)
         builder.append(" - ")
         heapSize(builder)
+        builder.append(" <")
+        builder.append(label)
+        builder.append('>')
 
-        // overwrite any characters from the previous print
-        val currentLineLength = builder.length
-        synchronized(this) {
-            while (builder.length < previousLineLength) {
-                builder.append(' ')
-            }
-            previousLineLength = currentLineLength
-
-            if (progress >= total) {
-                builder.append('\n')
-            }
-
-            print(builder.toString())
-        }
+        logger.info(builder.toString())
     }
 
     private fun heapSize(builder: StringBuilder) {
-        builder.append("Mem ")
-                .append(Runtime.getRuntime().totalMemory() / 1000000)
-                .append("/")
-                .append(Runtime.getRuntime().maxMemory() / 1000000)
+        val r = Runtime.getRuntime()
+        val free = r.maxMemory() - r.totalMemory() + r.freeMemory()
+
+        builder.append("MemFree ")
+                .append(free / 1000000)
                 .append(" MB")
     }
 
     private fun percentage(builder: StringBuilder, progressPercent: Float) {
-        builder.append(progressPercent.toInt()).append('%')
+        val percent = progressPercent.toInt()
+
+        if (percent < 10) builder.append("  ")
+        else if (percent < 100) builder.append(' ')
+
+        builder.append(percent).append('%')
     }
 
     private fun bar(builder: StringBuilder, progressPercent: Float) {
@@ -103,7 +101,7 @@ class ProgressBar(private val label: String, private val total: Long, private va
         val notFilled = '-'
         val filled = '*'
         // 2 init + numStripes + 2 end + 4 percentage
-        builder.append("\r[")
+        builder.append("[")
         for (i in 0 until stripesFilled) {
             builder.append(filled)
         }
@@ -119,7 +117,7 @@ class ProgressBar(private val label: String, private val total: Long, private va
             val duration = (System.nanoTime() - startTime) / 1_000_000_000.0
             formatTime(builder, (duration * (total - progress) / progress).toLong())
         } else {
-            builder.append('-')
+            builder.append("-:--:--")
         }
     }
 
@@ -139,8 +137,8 @@ class ProgressBar(private val label: String, private val total: Long, private va
             return builder
         }
 
-        fun formatTime(duration: Duration): String {
-            val millis = duration.toMillis()
+        fun Duration.formatTime(): String {
+            val millis = toMillis()
             val builder = StringBuilder(16)
             formatTime(builder, millis / 1000)
                     .append('.')
@@ -153,5 +151,7 @@ class ProgressBar(private val label: String, private val total: Long, private va
             }
             return builder.append(millisLast).toString()
         }
+
+        private val logger = LoggerFactory.getLogger(ProgressBar::class.java)
     }
 }

@@ -47,6 +47,7 @@ constructor(root: Path, prefix: String) : Closeable {
         try {
             // Ignore errors the first time
             Files.walk(path)
+                    .sorted(Comparator.reverseOrder())
                     .forEach {
                         try {
                             Files.deleteIfExists(it)
@@ -68,6 +69,7 @@ constructor(root: Path, prefix: String) : Closeable {
                 }
 
                 Files.walk(path)
+                        .sorted(Comparator.reverseOrder())
                         .forEach {
                             try {
                                 Files.deleteIfExists(it)
@@ -80,7 +82,6 @@ constructor(root: Path, prefix: String) : Closeable {
         } catch (ex: IOException) {
             logger.warn("Cannot delete temporary directory {}: {}", path, ex.toString())
         }
-
     }
 
     override fun close() {
