@@ -25,10 +25,7 @@ import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.IOException
 import java.lang.Exception
-import java.util.concurrent.CompletionService
-import java.util.concurrent.ExecutorCompletionService
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.LongAdder
 import java.util.stream.Collectors
@@ -41,7 +38,6 @@ class RadarHdfsRestructure(private val fileStoreFactory: FileStoreFactory): Clos
             .takeIf { it >= 1 }
             ?: java.lang.Long.MAX_VALUE
 
-    private val executor = Executors.newWorkStealingPool(fileStoreFactory.settings.numThreads)
     private val lockManager = fileStoreFactory.remoteLockManager
     private val excludeTopics: List<String>? = fileStoreFactory.settings.excludeTopics
     private val isClosed = AtomicBoolean(false)
@@ -62,23 +58,16 @@ class RadarHdfsRestructure(private val fileStoreFactory: FileStoreFactory): Clos
 
         logger.info("{} topics found", paths.size)
 
-        val service = ExecutorCompletionService<ProcessingStatistics>(executor)
-
-        paths.forEach { p -> service.submit { mapTopic(fs, p) } }
-
-        repeat(paths.size) {
-            try {
-                val future = service.take()
-                val (fileCount, recordCount) = future.get()
-                processedFileCount.add(fileCount)
-                processedRecordsCount.add(recordCount)
-            } catch (ex: InterruptedException) {
-                Thread.currentThread().interrupt()
-                return
-            } catch (ex: Exception) {
-                logger.warn("Failed to map topic", ex)
-            }
-        }
+        paths.parallelStream()
+                .forEach { p ->
+                    try {
+                        val (fileCount, recordCount) = mapTopic(fs, p)
+                        processedFileCount.add(fileCount)
+                        processedRecordsCount.add(recordCount)
+                    } catch (ex: Exception) {
+                        logger.warn("Failed to map topic", ex)
+                    }
+                }
     }
 
     private fun mapTopic(fs: FileSystem, topicPath: Path): ProcessingStatistics {
@@ -118,12 +107,6 @@ class RadarHdfsRestructure(private val fileStoreFactory: FileStoreFactory): Clos
 
     override fun close() {
         isClosed.set(true)
-        executor.shutdown()
-        try {
-            executor.awaitTermination(10, TimeUnit.SECONDS)
-        } catch (ex: InterruptedException) {
-            Thread.currentThread().interrupt()
-        }
     }
 
     private fun getTopicPaths(fs: FileSystem, path: Path): List<Path> = findTopicPaths(fs, path)
