@@ -117,7 +117,6 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
                     out.write(schema.toString(true).toByteArray())
                 }
                 storage.store(tmpSchemaPath, schemaPath)
-                Files.delete(tmpSchemaPath)
             }
         }
     }

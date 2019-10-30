@@ -22,6 +22,7 @@ import software.amazon.awssdk.services.s3.model.NoSuchKeyException
 import java.io.IOException
 import java.io.InputStream
 import java.net.URI
+import java.nio.file.Files
 import java.nio.file.Path
 
 class S3StorageDriver : StorageDriver {
@@ -71,6 +72,7 @@ class S3StorageDriver : StorageDriver {
     @Throws(IOException::class)
     override fun store(localPath: Path, newPath: Path) {
         awsClient.putObject({ it.bucket(bucket).key(newPath.toString()) }, localPath)
+        Files.delete(localPath)
     }
 
     @Throws(IOException::class)
