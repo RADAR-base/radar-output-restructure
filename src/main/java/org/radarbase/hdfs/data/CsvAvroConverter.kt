@@ -45,13 +45,12 @@ constructor(private val writer: Writer, record: GenericRecord, writeHeader: Bool
 
     init {
         headers = if (writeHeader) {
-                    createHeaders(record)
-                            .also { writeLine(it) }
-                } else {
-                    // If file already exists read the schema from the CSV file
-                    BufferedReader(reader, 200).use {
-                        bufReader -> parseCsvLine(bufReader) }
-                }
+            createHeaders(record)
+                    .also { writeLine(it) }
+        } else {
+            // If file already exists read the schema from the CSV file
+            BufferedReader(reader, 200).use { parseCsvLine(it) }
+        }
 
         values = ArrayList(headers.size)
     }
@@ -82,11 +81,11 @@ constructor(private val writer: Writer, record: GenericRecord, writeHeader: Bool
 
     @Throws(IOException::class)
     private fun writeLine(objects: List<*>) {
-        for (i in objects.indices) {
+        objects.forEachIndexed { i, obj ->
             if (i > 0) {
                 writer.append(',')
             }
-            writer.append(objects[i].toString())
+            writer.append(obj.toString())
         }
         writer.append('\n')
     }
@@ -106,7 +105,7 @@ constructor(private val writer: Writer, record: GenericRecord, writeHeader: Bool
         return map
     }
 
-    fun convertRecordValues(record: GenericRecord): List<String> {
+    private fun convertRecordValues(record: GenericRecord): List<String> {
         values.clear()
         val schema = record.schema
         for (field in schema.fields) {
@@ -167,21 +166,14 @@ constructor(private val writer: Writer, record: GenericRecord, writeHeader: Bool
     }
 
     private fun checkHeader(prefix: String, size: Int) {
-        require(prefix == headers[size]) {
-            ("Header " + prefix + " does not match "
-                    + headers[size])
-        }
+        require(prefix == headers[size]) { "Header $prefix does not match ${headers[size]}" }
     }
 
     @Throws(IOException::class)
-    override fun close() {
-        writer.close()
-    }
+    override fun close() = writer.close()
 
     @Throws(IOException::class)
-    override fun flush() {
-        writer.flush()
-    }
+    override fun flush() = writer.flush()
 
     companion object {
         private val ESCAPE_PATTERN = Pattern.compile("\\p{C}|[,\"]")
@@ -192,26 +184,19 @@ constructor(private val writer: Writer, record: GenericRecord, writeHeader: Bool
         private val QUOTE_PATTERN = Pattern.compile("\"")
         private val BASE64_ENCODER = Base64.getEncoder().withoutPadding()
 
-        val factory: RecordConverterFactory
-            get() = object : RecordConverterFactory {
+        val factory = object : RecordConverterFactory {
+            override val extension: String = ".csv"
 
-                override val extension: String
-                    get() = ".csv"
+            override val formats: Collection<String> = setOf("csv")
 
-                override val formats: Collection<String>
-                    get() = setOf("csv")
-
-                @Throws(IOException::class)
-                override fun converterFor(writer: Writer, record: GenericRecord,
-                                          writeHeader: Boolean, reader: Reader): CsvAvroConverter {
-                    return CsvAvroConverter(writer, record,
+            @Throws(IOException::class)
+            override fun converterFor(writer: Writer, record: GenericRecord,
+                                      writeHeader: Boolean, reader: Reader): CsvAvroConverter =
+                    CsvAvroConverter(writer, record,
                             writeHeader, reader)
-                }
 
-                override fun hasHeader(): Boolean {
-                    return true
-                }
-            }
+            override val hasHeader: Boolean = true
+        }
 
         @Throws(IOException::class)
         fun parseCsvLine(reader: Reader): List<String> {

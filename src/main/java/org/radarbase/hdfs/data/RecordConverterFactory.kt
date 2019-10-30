@@ -44,14 +44,15 @@ interface RecordConverterFactory : Format {
     @Throws(IOException::class)
     fun converterFor(writer: Writer, record: GenericRecord, writeHeader: Boolean, reader: Reader): RecordConverter
 
-    open fun hasHeader(): Boolean {
-        return false
-    }
+    open val hasHeader: Boolean
+        get() {
+            return false
+        }
 
     @Throws(IOException::class)
     fun deduplicate(fileName: String, source: Path, target: Path,
                     compression: Compression) {
-        val withHeader = hasHeader()
+        val withHeader = hasHeader
 
         val (header, lines) = Files.newInputStream(source).use {
             inFile -> compression.decompress(inFile).use {

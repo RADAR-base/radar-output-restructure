@@ -87,34 +87,24 @@ constructor(writer: Writer) : RecordConverter {
     }
 
     @Throws(IOException::class)
-    override fun flush() {
-        generator.flush()
-    }
+    override fun flush() = generator.flush()
 
     @Throws(IOException::class)
-    override fun close() {
-        generator.close()
-    }
+    override fun close() = generator.close()
 
     companion object {
         private val JSON_FACTORY = JsonFactory()
         private val JSON_WRITER = ObjectMapper(JSON_FACTORY).writer()
 
-        val factory: RecordConverterFactory
-            get() = object : RecordConverterFactory {
+        val factory: RecordConverterFactory = object : RecordConverterFactory {
+            override val extension: String = ".json"
 
-                override val extension: String
-                    get() = ".json"
+            override val formats: Collection<String> = setOf("json")
 
-                override val formats: Collection<String>
-                    get() = setOf("json")
-
-                @Throws(IOException::class)
-                override fun converterFor(writer: Writer,
-                                          record: GenericRecord, writeHeader: Boolean,
-                                          reader: Reader): RecordConverter {
-                    return JsonAvroConverter(writer)
-                }
-            }
+            @Throws(IOException::class)
+            override fun converterFor(writer: Writer,
+                                      record: GenericRecord, writeHeader: Boolean,
+                                      reader: Reader): RecordConverter = JsonAvroConverter(writer)
+        }
     }
 }
