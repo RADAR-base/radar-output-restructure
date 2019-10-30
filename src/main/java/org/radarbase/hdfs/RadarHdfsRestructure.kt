@@ -25,6 +25,8 @@ import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.IOException
 import java.lang.Exception
+import java.util.concurrent.CompletionService
+import java.util.concurrent.ExecutorCompletionService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -60,18 +62,23 @@ class RadarHdfsRestructure(private val fileStoreFactory: FileStoreFactory): Clos
 
         logger.info("{} topics found", paths.size)
 
-        paths.map { p -> executor.submit<ProcessingStatistics> { mapTopic(fs, p) } }
-                .forEach {
-                    try {
-                        val (fileCount, recordCount) = it.get()
-                        processedFileCount.add(fileCount)
-                        processedRecordsCount.add(recordCount)
-                    } catch (ex: InterruptedException) {
-                        Thread.currentThread().interrupt()
-                    } catch (ex: Exception) {
-                        logger.warn("Failed to map topic", ex)
-                    }
-                }
+        val service = ExecutorCompletionService<ProcessingStatistics>(executor)
+
+        paths.forEach { p -> service.submit { mapTopic(fs, p) } }
+
+        repeat(paths.size) {
+            try {
+                val future = service.take()
+                val (fileCount, recordCount) = future.get()
+                processedFileCount.add(fileCount)
+                processedRecordsCount.add(recordCount)
+            } catch (ex: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return
+            } catch (ex: Exception) {
+                logger.warn("Failed to map topic", ex)
+            }
+        }
     }
 
     private fun mapTopic(fs: FileSystem, topicPath: Path): ProcessingStatistics {
