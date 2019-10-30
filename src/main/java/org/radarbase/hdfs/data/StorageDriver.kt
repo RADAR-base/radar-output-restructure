@@ -20,27 +20,21 @@ import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStream
 import java.io.InputStreamReader
-import java.io.OutputStream
-import java.io.Reader
 import java.nio.file.Path
 import org.radarbase.hdfs.Plugin
 
 interface StorageDriver : Plugin {
-    fun exists(path: Path): Boolean
-    @Throws(IOException::class)
-    fun newInputStream(path: Path): InputStream
+    /** Query the path status. Returns null if the file does not exist. */
+    fun status(path: Path): PathStatus?
 
     @Throws(IOException::class)
-    fun newOutputStream(path: Path, append: Boolean): OutputStream
+    fun newInputStream(path: Path): InputStream
 
     @Throws(IOException::class)
     fun move(oldPath: Path, newPath: Path)
 
     @Throws(IOException::class)
     fun store(localPath: Path, newPath: Path)
-
-    @Throws(IOException::class)
-    fun size(path: Path): Long
 
     @Throws(IOException::class)
     fun delete(path: Path)
@@ -50,4 +44,6 @@ interface StorageDriver : Plugin {
         val reader = InputStreamReader(newInputStream(path))
         return BufferedReader(reader)
     }
+
+    data class PathStatus(val size: Long)
 }

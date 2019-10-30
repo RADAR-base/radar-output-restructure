@@ -16,25 +16,15 @@
 
 package org.radarbase.hdfs.data
 
-import java.io.BufferedOutputStream
-import java.io.ByteArrayInputStream
-import java.io.Closeable
-import java.io.Flushable
-import java.io.IOException
-import java.io.InputStream
-import java.io.InputStreamReader
-import java.io.OutputStream
-import java.io.OutputStreamWriter
-import java.io.Writer
-import java.nio.file.Files
-import java.nio.file.Path
-import java.util.concurrent.atomic.AtomicBoolean
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.hdfs.FileStoreFactory
 import org.radarbase.hdfs.accounting.Accountant
-import org.radarbase.hdfs.util.Timer
 import org.radarbase.hdfs.util.Timer.time
 import org.slf4j.LoggerFactory
+import java.io.*
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Keeps path handles of a path.  */
 class FileCache(
@@ -60,7 +50,7 @@ class FileCache(
     private val hasError: AtomicBoolean = AtomicBoolean(false)
 
     init {
-        val fileIsNew = !storageDriver.exists(path) || storageDriver.size(path) == 0L
+        val fileIsNew = storageDriver.status(path)?.takeIf { it.size > 0L } == null
         this.tmpPath = Files.createTempFile(tmpDir, fileName, ".tmp" + compression.extension)
 
         var outStream = compression.compress(fileName,
@@ -165,7 +155,7 @@ class FileCache(
             var i = 0
             while (corruptPath == null && i < 100) {
                 val path = source.resolveSibling(source.fileName.toString() + ".corrupted" + suffix)
-                if (!storageDriver.exists(path)) {
+                if (storageDriver.status(path) == null) {
                     corruptPath = path
                 }
                 suffix = "-$i"

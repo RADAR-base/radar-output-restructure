@@ -69,7 +69,7 @@ class OffsetRangeFile(private val storage: StorageDriver, private val path: Path
 
         fun read(storage: StorageDriver, path: Path): OffsetRangeFile {
             try {
-                if (storage.exists(path)) {
+                if (storage.status(path) != null) {
                     val set = OffsetRangeSet()
                     storage.newBufferedReader(path).use { br ->
                         // ignore header

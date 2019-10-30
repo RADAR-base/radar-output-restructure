@@ -18,14 +18,11 @@ package org.radarbase.hdfs.data
 
 import java.io.IOException
 import java.io.InputStream
-import java.io.OutputStream
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
-import java.nio.file.StandardOpenOption.APPEND
-import java.nio.file.StandardOpenOption.CREATE
 import java.nio.file.attribute.PosixFilePermissions
 
 class LocalStorageDriver : StorageDriver {
@@ -37,19 +34,17 @@ class LocalStorageDriver : StorageDriver {
         gid = properties["local-gid"]?.toIntOrNull() ?: -1
     }
 
-    override fun exists(path: Path): Boolean = Files.exists(path)
+    @Throws(IOException::class)
+    override fun status(path: Path): StorageDriver.PathStatus? {
+        return if (Files.exists(path)) {
+            StorageDriver.PathStatus(Files.size(path))
+        } else {
+            null
+        }
+    }
 
     @Throws(IOException::class)
     override fun newInputStream(path: Path): InputStream = Files.newInputStream(path)
-
-    @Throws(IOException::class)
-    override fun newOutputStream(path: Path, append: Boolean): OutputStream {
-        return if (append) {
-            Files.newOutputStream(path, APPEND, CREATE)
-        } else {
-            Files.newOutputStream(path)
-        }
-    }
 
     @Throws(IOException::class)
     override fun move(oldPath: Path, newPath: Path) {
@@ -71,9 +66,6 @@ class LocalStorageDriver : StorageDriver {
         Files.setPosixFilePermissions(localPath, PosixFilePermissions.fromString("rw-r--r--"))
         move(localPath, newPath)
     }
-
-    @Throws(IOException::class)
-    override fun size(path: Path): Long = Files.size(path)
 
     @Throws(IOException::class)
     override fun delete(path: Path) = Files.delete(path)
