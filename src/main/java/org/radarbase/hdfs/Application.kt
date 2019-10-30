@@ -135,7 +135,7 @@ class Application private constructor(builder: Builder) : FileStoreFactory {
                 }
 
                 val numberFormat = NumberFormat.getNumberInstance()
-                logger.info("Processed {} files and {} records in ",
+                logger.info("Processed {} files and {} records in {}",
                         numberFormat.format(restructure.processedFileCount),
                         numberFormat.format(restructure.processedRecordsCount),
                         timeStart.durationSince().formatTime())
