@@ -52,7 +52,7 @@ class RadarHdfsRestructure(private val fileStoreFactory: FileStoreFactory): Clos
         val fs = path.getFileSystem(conf)
         val absolutePath = fs.getFileStatus(path).path  // get absolute file
 
-        logger.info("Scanning for topics...")
+        logger.info("Scanning topics...")
 
         val paths = getTopicPaths(fs, absolutePath)
 
