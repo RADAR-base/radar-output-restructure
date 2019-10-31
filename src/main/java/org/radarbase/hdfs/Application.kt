@@ -178,7 +178,7 @@ class Application(override val config: RestructureConfig) : FileStoreFactory {
                         .run { commandLineArgs.outputDirectory?.let { copy(paths = paths.copy(output = Paths.get(it))) } ?: this }
                         .run { commandLineArgs.hdfsName?.let { copy(hdfs = hdfs.copy(name = it)) } ?: this }
                         .run { commandLineArgs.format?.let { copy(format = format.copy(type = it)) } ?: this }
-                        .run { commandLineArgs.deduplicate?.let { copy(format = format.copy(deduplicate = it)) } ?: this }
+                        .run { commandLineArgs.deduplicate?.let { copy(format = format.copy(deduplication = format.deduplication.copy(enable = it))) } ?: this }
                         .run { commandLineArgs.compression?.let { copy(compression = compression.copy(type = it)) } ?: this }
                         .also { it.validate() }
 

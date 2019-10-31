@@ -20,6 +20,7 @@ import org.apache.avro.generic.GenericRecord
 import org.radarbase.hdfs.FileStoreFactory
 import org.radarbase.hdfs.accounting.Accountant
 import org.radarbase.hdfs.compression.Compression
+import org.radarbase.hdfs.config.DeduplicationConfig
 import org.radarbase.hdfs.format.RecordConverter
 import org.radarbase.hdfs.format.RecordConverterFactory
 import org.radarbase.hdfs.storage.StorageDriver
@@ -55,19 +56,12 @@ class FileCache(
     private val fileName: String = path.fileName.toString()
     private var lastUse: Long = 0
     private val hasError: AtomicBoolean = AtomicBoolean(false)
-    private val deduplicate: Boolean
-    private val deduplicateFields: List<String>
+    private val deduplicate: DeduplicationConfig
 
     init {
         val topicConfig = factory.config.topics[topic]
-        val defaultDeduplicate = factory.config.format.deduplicate
-        if (topicConfig != null) {
-            deduplicate = topicConfig.isDeduplicated(defaultDeduplicate)
-            deduplicateFields = topicConfig.deduplicateFields
-        } else {
-            deduplicate = defaultDeduplicate
-            deduplicateFields = emptyList()
-        }
+        val defaultDeduplicate = factory.config.format.deduplication
+        deduplicate = topicConfig?.deduplication(defaultDeduplicate) ?: defaultDeduplicate
 
         val fileIsNew = !storageDriver.exists(path) || storageDriver.size(path) == 0L
         this.tmpPath = Files.createTempFile(tmpDir, fileName, ".tmp" + compression.extension)
@@ -133,10 +127,10 @@ class FileCache(
         writer.close()
 
         if (!hasError.get()) {
-            if (deduplicate) {
+            if (deduplicate.enable!!) {
                 time("close.deduplicate") {
                     val dedupTmp = tmpPath.resolveSibling("${tmpPath.fileName}.dedup")
-                    converterFactory.deduplicate(fileName, tmpPath, dedupTmp, compression, deduplicateFields)
+                    converterFactory.deduplicate(fileName, tmpPath, dedupTmp, compression, deduplicate.distinctFields ?: emptySet(), deduplicate.ignoreFields ?: emptySet())
                     try {
                         Files.move(dedupTmp, tmpPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
                     } catch (ex: AtomicMoveNotSupportedException) {

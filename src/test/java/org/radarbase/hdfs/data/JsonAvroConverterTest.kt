@@ -71,6 +71,6 @@ class JsonAvroConverterTest {
         val path = folder.resolve("test.txt")
         Files.newBufferedWriter(path).use { writer -> writeTestNumbers(writer) }
         JsonAvroConverter.factory.deduplicate("t", path, path, IdentityCompression())
-        assertEquals(listOf("a,b", "1,2", "3,4", "1,3", "a,a"), Files.readAllLines(path))
+        assertEquals(listOf("a,b", "1,2", "3,4", "1,3", "a,a", "3,3"), Files.readAllLines(path))
     }
 }

@@ -48,7 +48,7 @@ interface RecordConverterFactory : Format {
 
     @Throws(IOException::class)
     fun deduplicate(fileName: String, source: Path, target: Path,
-                    compression: Compression, distinctFields: List<String> = emptyList()) {
+                    compression: Compression, distinctFields: Set<String> = emptySet(), ignoreFields: Set<String> = emptySet()) {
         val withHeader = hasHeader
 
         val (header, lines) = Files.newInputStream(source).use {

@@ -163,7 +163,7 @@ class CsvAvroConverterTest {
         val toPath = dir.resolve("test.dedup")
         Files.newBufferedWriter(path).use { writer -> writeTestNumbers(writer) }
         CsvAvroConverter.factory.deduplicate("t", path, toPath, IdentityCompression())
-        assertEquals(listOf("a,b", "1,3", "3,4", "1,2", "a,a"), Files.readAllLines(toPath))
+        assertEquals(listOf("a,b", "1,3", "3,4", "1,2", "a,a", "3,3"), Files.readAllLines(toPath))
     }
 
 
@@ -174,8 +174,20 @@ class CsvAvroConverterTest {
         val toPath = dir.resolve("test.dedup")
         Files.newBufferedWriter(path).use { writer -> writeTestNumbers(writer) }
         CsvAvroConverter.factory.deduplicate("t", path, toPath, IdentityCompression(),
-                distinctFields = listOf("a"))
-        assertEquals(listOf("a,b", "3,4", "1,2", "a,a"), Files.readAllLines(toPath))
+                distinctFields = setOf("a"))
+        assertEquals(listOf("a,b", "1,2", "a,a", "3,3"), Files.readAllLines(toPath))
+    }
+
+
+    @Test
+    @Throws(IOException::class)
+    fun deduplicateIgnoreFields(@TempDir dir: Path) {
+        val path = dir.resolve("test")
+        val toPath = dir.resolve("test.dedup")
+        Files.newBufferedWriter(path).use { writer -> writeTestNumbers(writer) }
+        CsvAvroConverter.factory.deduplicate("t", path, toPath, IdentityCompression(),
+                ignoreFields = setOf("a"))
+        assertEquals(listOf("a,b", "3,4", "1,2", "a,a", "3,3"), Files.readAllLines(toPath))
     }
 
     @Test
@@ -190,7 +202,7 @@ class CsvAvroConverterTest {
             `in` -> GZIPInputStream(`in`).use {
             gzipIn -> InputStreamReader(gzipIn).readLines() } }
 
-        assertEquals(listOf("a,b", "1,3", "3,4", "1,2", "a,a"), storedLines)
+        assertEquals(listOf("a,b", "1,3", "3,4", "1,2", "a,a", "3,3"), storedLines)
     }
 
     companion object {
@@ -204,6 +216,7 @@ class CsvAvroConverterTest {
             writer.write("3,4\n")
             writer.write("1,2\n")
             writer.write("a,a\n")
+            writer.write("3,3\n")
         }
     }
 }

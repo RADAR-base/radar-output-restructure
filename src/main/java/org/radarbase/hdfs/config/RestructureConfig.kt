@@ -83,7 +83,7 @@ data class FormatConfig(
         override val factory: String = FormatFactory::class.qualifiedName!!,
         override val properties: Map<String, String> = emptyMap(),
         val type: String = "csv",
-        val deduplicate: Boolean = false
+        val deduplication: DeduplicationConfig = DeduplicationConfig(enable = false, distinctFields = emptySet(), ignoreFields = emptySet())
 ) : PluginConfig {
     fun createFactory(): FormatFactory = factory.toPluginInstance(properties)
     fun createConverter(): RecordConverterFactory = createFactory()[type]
@@ -106,11 +106,21 @@ private inline fun <reified T: Plugin> String.toPluginInstance(properties: Map<S
 }
 
 data class TopicConfig(
-        val deduplicate: Boolean? = null,
-        val deduplicateFields: List<String> = listOf(),
+        val deduplication: DeduplicationConfig? = null,
         val exclude: Boolean = false) {
-    fun isDeduplicated(defaultValue: Boolean) = deduplicate ?: defaultValue
+    fun deduplication(deduplicationDefault: DeduplicationConfig): DeduplicationConfig {
+        return deduplication
+                ?.run { if (enable == null) copy(enable = deduplicationDefault.enable) else this }
+                ?.run { if (distinctFields == null) copy(distinctFields = deduplicationDefault.distinctFields) else this }
+                ?.run { if (ignoreFields == null) copy(distinctFields = deduplicationDefault.ignoreFields) else this }
+                ?: deduplicationDefault
+    }
 }
+
+data class DeduplicationConfig(
+        val enable: Boolean? = null,
+        val distinctFields: Set<String>? = null,
+        val ignoreFields: Set<String>? = null)
 
 data class HdfsConfig(
         val name: String? = null,

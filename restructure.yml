@@ -18,7 +18,12 @@ format:
   # Format type: CSV or JSON
   type: csv
   # Whether to deduplicate the files in each topic by default
-  deduplicate: true
+  deduplication:
+    enable: true
+    # Use specific fields to consider records distinct. Disregarded if empty.
+    # distinctFields: []
+    # Ignore specific fields to consider records distinct. Disregarded if empty.
+    # ignoreFields: []
   # Format factory class
   # factory: org.radarbase.hdfs.format.FormatFactory
   # Additional format properties
@@ -52,15 +57,24 @@ topics:
   # topic name
   connect_fitbit_source:
     # deduplicate this topic, regardless of the format settings
-    deduplicate: true
-    # deduplicate this topic only using given fields.
-    deduplicateFields: [time]
+    deduplication:
+      enable: true
+      # deduplicate this topic only using given fields.
+      distinctFields: [key.sourceId, value.time]
+  # topic name
+  connect_fitbit_source2:
+    # deduplicate this topic, regardless of the format settings
+    deduplication:
+      enable: true
+      # deduplicate this topic without regard of given fields.
+      ignoreFields: [value.timeReceived]
   connect_fitbit_bad:
     # Do not process this topic
     exclude: true
   biovotion_acceleration:
     # Disable deduplication
-    deduplicate: false
+    deduplication:
+      enable: false
 
 # HDFS settings
 hdfs:
