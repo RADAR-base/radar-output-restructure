@@ -16,40 +16,42 @@
 
 package org.radarbase.hdfs.data
 
-import java.io.BufferedReader
-import java.io.IOException
-import java.io.Reader
-import java.io.Writer
+import com.opencsv.CSVReader
+import com.opencsv.CSVWriter
 import java.nio.ByteBuffer
 import java.util.ArrayList
 import java.util.Base64
-import java.util.Collections
 import java.util.LinkedHashMap
-import java.util.regex.Pattern
 import org.apache.avro.Schema
-import org.apache.avro.Schema.Field
 import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericFixed
 import org.apache.avro.generic.GenericRecord
+import java.io.*
+import java.nio.file.Files
+import java.nio.file.Path
 
 /**
  * Converts deep hierarchical Avro records into flat CSV format. It uses a simple dot syntax in the
  * column names to indicate hierarchy. After the first data record is added, all following
  * records need to have exactly the same hierarchy (or at least a subset of it.)
  */
-class CsvAvroConverter @Throws(IOException::class)
-constructor(private val writer: Writer, record: GenericRecord, writeHeader: Boolean,
-            reader: Reader) : RecordConverter {
+class CsvAvroConverter(
+        private val writer: Writer,
+        record: GenericRecord,
+        writeHeader: Boolean,
+        reader: Reader
+) : RecordConverter {
+
+    private val csvWriter = CSVWriter(writer)
     private var headers: List<String>
     private val values: MutableList<String>
 
     init {
         headers = if (writeHeader) {
             createHeaders(record)
-                    .also { writeLine(it) }
+                    .also { csvWriter.writeNext(it.toTypedArray(), false) }
         } else {
-            // If file already exists read the schema from the CSV file
-            BufferedReader(reader, 200).use { parseCsvLine(it) }
+            CSVReader(reader).readNext().toList()
         }
 
         values = ArrayList(headers.size)
@@ -69,27 +71,15 @@ constructor(private val writer: Writer, record: GenericRecord, writeHeader: Bool
                 return false
             }
 
-            writeLine(retValues)
+            csvWriter.writeNext(retValues.toTypedArray(), false)
+            values.clear()
             return true
         } catch (ex: IllegalArgumentException) {
             return false
         } catch (ex: IndexOutOfBoundsException) {
             return false
         }
-
     }
-
-    @Throws(IOException::class)
-    private fun writeLine(objects: List<*>) {
-        objects.forEachIndexed { i, obj ->
-            if (i > 0) {
-                writer.append(',')
-            }
-            writer.append(obj.toString())
-        }
-        writer.append('\n')
-    }
-
 
     override fun convertRecord(record: GenericRecord): Map<String, Any?> {
         values.clear()
@@ -151,7 +141,7 @@ constructor(private val writer: Writer, record: GenericRecord, writeHeader: Bool
             }
             Schema.Type.STRING -> {
                 checkHeader(prefix, values.size)
-                values.add(cleanCsvString(data.toString()))
+                values.add(data.toString())
             }
             Schema.Type.ENUM, Schema.Type.INT, Schema.Type.LONG, Schema.Type.DOUBLE, Schema.Type.FLOAT, Schema.Type.BOOLEAN -> {
                 checkHeader(prefix, values.size)
@@ -176,18 +166,32 @@ constructor(private val writer: Writer, record: GenericRecord, writeHeader: Bool
     override fun flush() = writer.flush()
 
     companion object {
-        private val ESCAPE_PATTERN = Pattern.compile("\\p{C}|[,\"]")
-        private val TAB_PATTERN = Pattern.compile("\t")
-        private val LINE_ENDING_PATTERN = Pattern.compile("[\n\r]+")
-        private val NON_PRINTING_PATTERN = Pattern.compile("\\p{C}")
-        private val QUOTE_OR_COMMA_PATTERN = Pattern.compile("[\",]")
-        private val QUOTE_PATTERN = Pattern.compile("\"")
         private val BASE64_ENCODER = Base64.getEncoder().withoutPadding()
 
         val factory = object : RecordConverterFactory {
             override val extension: String = ".csv"
 
             override val formats: Collection<String> = setOf("csv")
+
+            @Throws(IOException::class)
+            override fun deduplicate(fileName: String, source: Path, target: Path,
+                            compression: Compression, usingFields: List<String>) {
+                val withHeader = hasHeader
+
+                Files.newInputStream(source).use {
+                    inFile -> compression.decompress(inFile).use {
+                    zipIn -> InputStreamReader(zipIn).use {
+                    inReader -> BufferedReader(inReader).use {
+                    reader -> CSVReader(reader).use {
+                    csvReader -> Files.newOutputStream(target).use {
+                    fileOut -> BufferedOutputStream(fileOut).use {
+                    bufOut -> compression.compress(fileName, bufOut).use {
+                    zipOut -> OutputStreamWriter(zipOut).use {
+                    writer -> CSVWriter(writer).use { csvWriter ->
+                        val lines = readDeduplicatedSequence(csvReader, withHeader, usingFields)
+                        csvWriter.writeAll(lines.asIterable(), false)
+                    } } } } } } } } } }
+            }
 
             @Throws(IOException::class)
             override fun converterFor(writer: Writer, record: GenericRecord,
@@ -198,44 +202,26 @@ constructor(private val writer: Writer, record: GenericRecord, writeHeader: Bool
             override val hasHeader: Boolean = true
         }
 
-        @Throws(IOException::class)
-        fun parseCsvLine(reader: Reader): List<String> {
-            val headers = ArrayList<String>()
-            var builder = StringBuilder(20)
-            var ch = reader.read()
-            var inString = false
-            var hadQuote = false
+        fun readDeduplicatedSequence(csvReader: CSVReader, withHeader: Boolean, usingFields: List<String>): Sequence<Array<String>> {
+            val header = if (withHeader) {
+                csvReader.readNext() ?: return emptySequence()
+            } else null
 
-            while (ch != '\n'.toInt() && ch != '\r'.toInt() && ch != -1) {
-                when (ch) {
-                    '"'.toInt() -> when {
-                        inString -> {
-                            inString = false
-                            hadQuote = true
-                        }
-                        hadQuote -> {
-                            inString = true
-                            hadQuote = false
-                            builder.append('"')
-                        }
-                        else -> inString = true
-                    }
-                    ','.toInt() -> when {
-                        inString -> builder.append(',')
-                        else -> {
-                            if (hadQuote) {
-                                hadQuote = false
-                            }
-                            headers.add(builder.toString())
-                            builder = StringBuilder(20)
-                        }
-                    }
-                    else -> builder.append(ch.toChar())
-                }
-                ch = reader.read()
+            val fieldIndexes = usingFields
+                    .map { f -> header?.indexOf(f) }
+                    .takeIf { indexes -> indexes.none { it == null } }
+                    ?.filterNotNull()
+                    ?: emptyList()
+
+            val readLines = generateSequence { csvReader.readNext() }
+
+            val lines = if (fieldIndexes.isEmpty()) {
+                readLines.distinctBy { it.joinToString() }
+            } else {
+                readLines.distinctBy { line -> fieldIndexes.joinToString { line[it] } }
             }
-            headers.add(builder.toString())
-            return headers
+            return header?.let { sequenceOf(header) + lines }
+                    ?: lines
         }
 
         internal fun createHeaders(record: GenericRecord): List<String> {
@@ -245,21 +231,6 @@ constructor(private val writer: Writer, record: GenericRecord, writeHeader: Bool
                 createHeader(headers, record.get(field.pos()), field.schema(), field.name())
             }
             return headers
-        }
-
-        fun cleanCsvString(orig: String): String {
-            return if (ESCAPE_PATTERN.matcher(orig).find()) {
-                var cleaned = LINE_ENDING_PATTERN.matcher(orig).replaceAll("\\\\n")
-                cleaned = TAB_PATTERN.matcher(cleaned).replaceAll("    ")
-                cleaned = NON_PRINTING_PATTERN.matcher(cleaned).replaceAll("?")
-                if (QUOTE_OR_COMMA_PATTERN.matcher(cleaned).find()) {
-                    '"'.toString() + QUOTE_PATTERN.matcher(cleaned).replaceAll("\"\"") + '"'.toString()
-                } else {
-                    cleaned
-                }
-            } else {
-                orig
-            }
         }
 
         private fun createHeader(headers: MutableList<String>, data: Any?, schema: Schema, prefix: String) {

@@ -19,8 +19,7 @@ package org.radarbase.hdfs
 import java.io.IOException
 import org.radarbase.hdfs.accounting.Accountant
 import org.radarbase.hdfs.accounting.RemoteLockManager
-import org.radarbase.hdfs.config.HdfsSettings
-import org.radarbase.hdfs.config.RestructureSettings
+import org.radarbase.hdfs.config.RestructureConfig
 import org.radarbase.hdfs.data.Compression
 import org.radarbase.hdfs.data.FileCacheStore
 import org.radarbase.hdfs.data.RecordConverterFactory
@@ -32,8 +31,7 @@ interface FileStoreFactory {
     val storageDriver: StorageDriver
     val compression: Compression
     val recordConverter: RecordConverterFactory
-    val settings: RestructureSettings
-    val hdfsSettings: HdfsSettings
+    val config: RestructureConfig
     val remoteLockManager: RemoteLockManager
 
     @Throws(IOException::class)

@@ -44,10 +44,10 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
     private val schemasAdded: MutableMap<Path, Path>
 
     init {
-        val settings = factory.settings
-        this.maxCacheSize = settings.cacheSize
+        val config = factory.config
+        this.maxCacheSize = config.cacheSize
         this.caches = HashMap(maxCacheSize * 4 / 3 + 1)
-        this.tmpDir = TemporaryDirectory(settings.tempDir, "file-cache-")
+        this.tmpDir = TemporaryDirectory(config.tempPath, "file-cache-")
         this.schemasAdded = HashMap()
     }
 
@@ -61,8 +61,7 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
      * @throws IOException when failing to open a file or writing to it.
      */
     @Throws(IOException::class)
-    fun writeRecord(path: Path, record: GenericRecord,
-                    transaction: Accountant.Transaction): WriteResponse {
+    fun writeRecord(path: Path, record: GenericRecord, transaction: Accountant.Transaction): WriteResponse {
         val existingCache: FileCache? = caches[path]
         val fileCache = if (existingCache != null) {
             existingCache
@@ -73,7 +72,7 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
             Files.createDirectories(dir)
 
             try {
-                time("write.open") { FileCache(factory, path, record, tmpDir.path, accountant) }
+                time("write.open") { FileCache(factory, transaction.topicPartition.topic, path, record, tmpDir.path, accountant) }
                         .also {
                             writeSchema(transaction.topicPartition.topic, path, record.schema)
                             caches[path] = it

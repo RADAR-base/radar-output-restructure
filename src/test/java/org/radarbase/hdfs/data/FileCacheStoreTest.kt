@@ -27,11 +27,12 @@ import org.radarbase.hdfs.Application
 import org.radarbase.hdfs.accounting.Accountant
 import org.radarbase.hdfs.accounting.OffsetRange
 import org.radarbase.hdfs.accounting.TopicPartition
-import org.radarbase.hdfs.config.HdfsSettings
-import org.radarbase.hdfs.config.RestructureSettings
+import org.radarbase.hdfs.config.HdfsConfig
+import org.radarbase.hdfs.config.RestructureConfig
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
 
 class FileCacheStoreTest {
     @Test
@@ -62,13 +63,14 @@ class FileCacheStoreTest {
         val offsetRange0 = OffsetRange(topicPartition0, 0, 0)
         val offsetRange1 = OffsetRange(topicPartition1, 0, 8)
 
-        val factory = Application.Builder(
-                RestructureSettings.Builder(root.toString()).apply {
-                    cacheSize = 2
-                    tempDir = tmpDir
-                }.build(),
-                HdfsSettings.Builder("test").build())
-                .build()
+        val factory = Application(
+                RestructureConfig(
+                        outputPath = root,
+                        cacheSize = 2,
+                        tempPath = tmpDir,
+                        inputPaths = listOf(Paths.get("/")),
+                        hdfs = HdfsConfig("test")),
+                false)
         val accountant = Accountant(factory, "t")
 
         factory.newFileCacheStore(accountant).use { cache ->

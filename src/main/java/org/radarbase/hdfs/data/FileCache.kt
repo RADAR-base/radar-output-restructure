@@ -32,19 +32,24 @@ import java.util.concurrent.atomic.AtomicBoolean
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.hdfs.FileStoreFactory
 import org.radarbase.hdfs.accounting.Accountant
+import org.radarbase.hdfs.config.TopicConfig
 import org.radarbase.hdfs.util.Timer
 import org.radarbase.hdfs.util.Timer.time
 import org.slf4j.LoggerFactory
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.StandardCopyOption
 
 /** Keeps path handles of a path.  */
 class FileCache(
         factory: FileStoreFactory,
+        topic: String,
         /** File that the cache is maintaining.  */
         val path: Path,
         /** Example record to create converter from, this is not written to path. */
         record: GenericRecord,
         /** Local temporary directory to store files in. */
-        tmpDir: Path, private val accountant: Accountant
+        tmpDir: Path,
+        private val accountant: Accountant
 ) : Closeable, Flushable, Comparable<FileCache> {
 
     private val writer: Writer
@@ -53,7 +58,7 @@ class FileCache(
     private val tmpPath: Path
     private val compression: Compression = factory.compression
     private val converterFactory: RecordConverterFactory = factory.recordConverter
-    private val deduplicate: Boolean = factory.settings.isDeduplicate
+    private val topic = factory.config.topic(topic)
     private val ledger: Accountant.Ledger = Accountant.Ledger()
     private val fileName: String = path.fileName.toString()
     private var lastUse: Long = 0
@@ -124,9 +129,15 @@ class FileCache(
         writer.close()
 
         if (!hasError.get()) {
-            if (deduplicate) {
+            if (topic.deduplicate) {
                 time("close.deduplicate") {
-                    converterFactory.deduplicate(fileName, tmpPath, tmpPath, compression)
+                    val dedupTmp = tmpPath.resolveSibling("${tmpPath.fileName}.dedup")
+                    converterFactory.deduplicate(fileName, tmpPath, dedupTmp, compression, topic.deduplicateFields)
+                    try {
+                        Files.move(dedupTmp, tmpPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+                    } catch (ex: AtomicMoveNotSupportedException) {
+                        Files.move(dedupTmp, tmpPath, StandardCopyOption.REPLACE_EXISTING)
+                    }
                 }
             }
 

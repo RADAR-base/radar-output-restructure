@@ -158,9 +158,10 @@ class CsvAvroConverterTest {
     @Throws(IOException::class)
     fun deduplicate(@TempDir dir: Path) {
         val path = dir.resolve("test")
+        val toPath = dir.resolve("test.dedup")
         Files.newBufferedWriter(path).use { writer -> writeTestNumbers(writer) }
-        CsvAvroConverter.factory.deduplicate("t", path, path, IdentityCompression())
-        assertEquals(listOf("a,b", "1,2", "3,4", "1,3", "a,a"), Files.readAllLines(path))
+        CsvAvroConverter.factory.deduplicate("t", path, toPath, IdentityCompression())
+        assertEquals(listOf("a,b", "1,2", "3,4", "1,3", "a,a"), Files.readAllLines(toPath))
     }
 
 
@@ -168,35 +169,15 @@ class CsvAvroConverterTest {
     @Throws(IOException::class)
     fun deduplicateGzip(@TempDir dir: Path) {
         val path = dir.resolve("test.csv.gz")
+        val toPath = dir.resolve("test.csv.gz.dedup")
+
         Files.newOutputStream(path).use { out -> GZIPOutputStream(out).use { gzipOut -> OutputStreamWriter(gzipOut).use { writer -> writeTestNumbers(writer) } } }
-        CsvAvroConverter.factory.deduplicate("t", path, path, GzipCompression())
-        val storedLines = Files.newInputStream(path).use {
+        CsvAvroConverter.factory.deduplicate("t", path, toPath, GzipCompression())
+        val storedLines = Files.newInputStream(toPath).use {
             `in` -> GZIPInputStream(`in`).use {
             gzipIn -> InputStreamReader(gzipIn).readLines() } }
 
         assertEquals(listOf("a,b", "1,2", "3,4", "1,3", "a,a"), storedLines)
-    }
-
-    @Test
-    @Throws(IOException::class)
-    fun parseCsvLine() {
-        ByteArrayInputStream("a,b,\"ba\"\"ca\",\"\"\"da\"\"\"".toByteArray(UTF_8)).use { `in` ->
-            InputStreamReader(`in`).use { reader ->
-                val headers = CsvAvroConverter.parseCsvLine(reader)
-                assertEquals(listOf("a", "b", "ba\"ca", "\"da\""), headers)
-            }
-        }
-    }
-
-    @Test
-    fun cleanString() {
-        assertEquals("test", CsvAvroConverter.cleanCsvString("test"))
-        assertEquals("", CsvAvroConverter.cleanCsvString(""))
-        assertEquals("\"\"\"\"", CsvAvroConverter.cleanCsvString("\""))
-        assertEquals("    test", CsvAvroConverter.cleanCsvString("\ttest"))
-        assertEquals("test\\n", CsvAvroConverter.cleanCsvString("test\r\n"))
-        assertEquals("test?", CsvAvroConverter.cleanCsvString("test\b"))
-        assertEquals("\"test,\"", CsvAvroConverter.cleanCsvString("test,"))
     }
 
     companion object {

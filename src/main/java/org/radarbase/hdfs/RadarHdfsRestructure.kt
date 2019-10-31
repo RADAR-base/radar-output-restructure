@@ -25,21 +25,23 @@ import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.IOException
 import java.lang.Exception
-import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.LongAdder
 import java.util.stream.Collectors
 import java.util.stream.Stream
 
 class RadarHdfsRestructure(private val fileStoreFactory: FileStoreFactory): Closeable {
-    private val conf: Configuration = fileStoreFactory.hdfsSettings.configuration
+    private val conf: Configuration = fileStoreFactory.config.hdfs.configuration
     private val pathFactory: RecordPathFactory = fileStoreFactory.pathFactory
-    private val maxFilesPerTopic: Long = fileStoreFactory.settings.maxFilesPerTopic.toLong()
-            .takeIf { it >= 1 }
+    private val maxFilesPerTopic: Long = fileStoreFactory.config.maxFilesPerTopic?.toLong()
             ?: java.lang.Long.MAX_VALUE
 
     private val lockManager = fileStoreFactory.remoteLockManager
-    private val excludeTopics: List<String>? = fileStoreFactory.settings.excludeTopics
+    private val excludeTopics: Set<String> = fileStoreFactory.config.topics
+            .filter { (_, conf) -> conf.exclude }
+            .map { (topic, _) -> topic }
+            .toSet()
+
     private val isClosed = AtomicBoolean(false)
 
     val processedFileCount = LongAdder()
@@ -111,7 +113,7 @@ class RadarHdfsRestructure(private val fileStoreFactory: FileStoreFactory): Clos
 
     private fun getTopicPaths(fs: FileSystem, path: Path): List<Path> = findTopicPaths(fs, path)
                 .distinct()
-                .filter { f -> !excludeTopics!!.contains(f.name) }
+                .filter { f -> !excludeTopics.contains(f.name) }
                 .collect(Collectors.toList())
                 .also { it.shuffle() }
 
