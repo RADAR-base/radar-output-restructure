@@ -25,7 +25,9 @@ import org.apache.avro.io.DecoderFactory
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.radarbase.hdfs.compression.IdentityCompression
 import org.radarbase.hdfs.data.CsvAvroConverterTest.Companion.writeTestNumbers
+import org.radarbase.hdfs.format.JsonAvroConverter
 import java.io.IOException
 import java.io.InputStreamReader
 import java.io.StringReader

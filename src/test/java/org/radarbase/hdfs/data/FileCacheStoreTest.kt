@@ -31,10 +31,10 @@ import org.radarbase.hdfs.config.HdfsConfig
 import org.radarbase.hdfs.config.PathConfig
 import org.radarbase.hdfs.config.RestructureConfig
 import org.radarbase.hdfs.config.WorkerConfig
+import org.radarbase.hdfs.worker.FileCacheStore
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.Paths
 
 class FileCacheStoreTest {
     @Test

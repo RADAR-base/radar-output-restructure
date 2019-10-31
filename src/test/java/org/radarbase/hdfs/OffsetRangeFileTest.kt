@@ -23,8 +23,8 @@ import org.junit.jupiter.api.io.TempDir
 import org.radarbase.hdfs.accounting.OffsetRange
 import org.radarbase.hdfs.accounting.OffsetRangeFile
 import org.radarbase.hdfs.accounting.TopicPartition
-import org.radarbase.hdfs.data.LocalStorageDriver
-import org.radarbase.hdfs.data.StorageDriver
+import org.radarbase.hdfs.storage.LocalStorageDriver
+import org.radarbase.hdfs.storage.StorageDriver
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path

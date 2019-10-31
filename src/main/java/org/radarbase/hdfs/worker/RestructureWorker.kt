@@ -1,4 +1,4 @@
-package org.radarbase.hdfs
+package org.radarbase.hdfs.worker
 
 import com.fasterxml.jackson.databind.JsonMappingException
 import org.apache.avro.file.DataFileReader
@@ -6,9 +6,12 @@ import org.apache.avro.generic.GenericDatumReader
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.mapred.FsInput
 import org.apache.hadoop.fs.FileSystem
+import org.radarbase.hdfs.FileStoreFactory
+import org.radarbase.hdfs.RadarHdfsRestructure
 import org.radarbase.hdfs.accounting.Accountant
 import org.radarbase.hdfs.accounting.OffsetRangeSet
 import org.radarbase.hdfs.accounting.TopicPartition
+import org.radarbase.hdfs.path.RecordPathFactory
 import org.radarbase.hdfs.util.ProgressBar
 import org.radarbase.hdfs.util.ReadOnlyFunctionalValue
 import org.radarbase.hdfs.util.Timer.time

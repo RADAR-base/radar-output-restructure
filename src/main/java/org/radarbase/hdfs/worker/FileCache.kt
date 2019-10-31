@@ -14,11 +14,15 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs.data
+package org.radarbase.hdfs.worker
 
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.hdfs.FileStoreFactory
 import org.radarbase.hdfs.accounting.Accountant
+import org.radarbase.hdfs.compression.Compression
+import org.radarbase.hdfs.format.RecordConverter
+import org.radarbase.hdfs.format.RecordConverterFactory
+import org.radarbase.hdfs.storage.StorageDriver
 import org.radarbase.hdfs.util.Timer.time
 import org.slf4j.LoggerFactory
 import java.io.*

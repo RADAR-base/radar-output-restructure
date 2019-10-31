@@ -2,9 +2,15 @@ package org.radarbase.hdfs.config
 
 import org.apache.hadoop.conf.Configuration
 import org.radarbase.hdfs.Application.Companion.CACHE_SIZE_DEFAULT
-import org.radarbase.hdfs.ObservationKeyPathFactory
-import org.radarbase.hdfs.RecordPathFactory
-import org.radarbase.hdfs.data.*
+import org.radarbase.hdfs.Plugin
+import org.radarbase.hdfs.path.ObservationKeyPathFactory
+import org.radarbase.hdfs.compression.Compression
+import org.radarbase.hdfs.compression.CompressionFactory
+import org.radarbase.hdfs.format.FormatFactory
+import org.radarbase.hdfs.format.RecordConverterFactory
+import org.radarbase.hdfs.path.RecordPathFactory
+import org.radarbase.hdfs.storage.LocalStorageDriver
+import org.radarbase.hdfs.storage.StorageDriver
 import org.slf4j.LoggerFactory
 import java.lang.IllegalStateException
 import java.nio.file.Files
@@ -61,7 +67,7 @@ data class PathConfig(
         val temp: Path = Files.createTempDirectory("radar-hdfs-restructure"),
         val output: Path = Paths.get("output")
 ) : PluginConfig {
-    fun createFactory(): RecordPathFactory = factory.toClassInstance()
+    fun createFactory(): RecordPathFactory = factory.toPluginInstance(properties)
 }
 
 data class CompressionConfig(
@@ -69,7 +75,7 @@ data class CompressionConfig(
         override val properties: Map<String, String> = emptyMap(),
         val type: String = "none"
 ) : PluginConfig {
-    fun createFactory(): CompressionFactory = factory.toClassInstance()
+    fun createFactory(): CompressionFactory = factory.toPluginInstance(properties)
     fun createCompression(): Compression = createFactory()[type]
 }
 
@@ -79,7 +85,7 @@ data class FormatConfig(
         val type: String = "csv",
         val deduplicate: Boolean = false
 ) : PluginConfig {
-    fun createFactory(): FormatFactory = factory.toClassInstance()
+    fun createFactory(): FormatFactory = factory.toPluginInstance(properties)
     fun createConverter(): RecordConverterFactory = createFactory()[type]
 }
 
@@ -87,12 +93,13 @@ data class StorageConfig(
         override val factory: String = LocalStorageDriver::class.qualifiedName!!,
         override val properties: Map<String, String> = emptyMap()
 ): PluginConfig {
-    fun createFactory(): StorageDriver = factory.toClassInstance()
+    fun createFactory(): StorageDriver = factory.toPluginInstance(properties)
 }
 
-private inline fun <reified T: Any> String.toClassInstance(): T {
+private inline fun <reified T: Plugin> String.toPluginInstance(properties: Map<String, String>): T {
     return try {
-        Class.forName(this).getConstructor().newInstance() as T
+        (Class.forName(this).getConstructor().newInstance() as T)
+                .also { it.init(properties) }
     } catch (ex: ReflectiveOperationException) {
         throw IllegalStateException("Cannot map class $this to ${T::class.java.name}")
     }

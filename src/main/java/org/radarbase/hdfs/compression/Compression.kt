@@ -14,17 +14,18 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs.util.commandline
+package org.radarbase.hdfs.compression
 
-import com.beust.jcommander.IParameterValidator
-import com.beust.jcommander.ParameterException
+import org.radarbase.hdfs.format.Format
+import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 
-class NonEmptyValidator : IParameterValidator {
-    override fun validate(name: String, value: String?) {
-        if (value?.isEmpty() == true) {
-            throw ParameterException("Parameter " + name + " should be supplied. "
-                    + "It cannot be empty or null. (found " + value + ")."
-                    + "Please run with --help or -h for more information.")
-        }
-    }
+interface Compression : Format {
+    override val extension: String
+    @Throws(IOException::class)
+    fun compress(fileName: String, out: OutputStream): OutputStream
+
+    @Throws(IOException::class)
+    fun decompress(`in`: InputStream): InputStream
 }

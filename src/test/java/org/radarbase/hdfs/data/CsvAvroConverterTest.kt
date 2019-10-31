@@ -26,8 +26,10 @@ import org.apache.avro.io.DecoderFactory
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.radarbase.hdfs.compression.GzipCompression
+import org.radarbase.hdfs.compression.IdentityCompression
+import org.radarbase.hdfs.format.CsvAvroConverter
 import java.io.*
-import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.*

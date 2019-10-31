@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs.data
+package org.radarbase.hdfs.format
 
 import com.opencsv.CSVReader
 import com.opencsv.CSVWriter
@@ -26,6 +26,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericFixed
 import org.apache.avro.generic.GenericRecord
+import org.radarbase.hdfs.compression.Compression
 import java.io.*
 import java.nio.file.Files
 import java.nio.file.Path

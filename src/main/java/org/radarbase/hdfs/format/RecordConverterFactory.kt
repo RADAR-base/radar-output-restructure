@@ -14,14 +14,12 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs.data
+package org.radarbase.hdfs.format
 
 import java.io.BufferedOutputStream
 import java.io.BufferedReader
 import java.io.IOException
-import java.io.InputStream
 import java.io.InputStreamReader
-import java.io.OutputStream
 import java.io.OutputStreamWriter
 import java.io.Reader
 import java.io.Writer
@@ -30,6 +28,7 @@ import java.nio.file.Path
 import java.util.LinkedHashSet
 import java.util.regex.Pattern
 import org.apache.avro.generic.GenericRecord
+import org.radarbase.hdfs.compression.Compression
 
 interface RecordConverterFactory : Format {
     /**
@@ -56,13 +55,17 @@ interface RecordConverterFactory : Format {
             inFile -> compression.decompress(inFile).use {
             zipIn -> InputStreamReader(zipIn).use {
             inReader -> BufferedReader(inReader).use {
-            reader -> readFile(reader, withHeader) } } } }
+            reader ->
+            readFile(reader, withHeader)
+        } } } }
 
         Files.newOutputStream(target).use {
             fileOut -> BufferedOutputStream(fileOut).use {
             bufOut -> compression.compress(fileName, bufOut).use {
             zipOut -> OutputStreamWriter(zipOut).use {
-            writer -> writeFile(writer, header, lines) } } } }
+            writer ->
+            writeFile(writer, header, lines)
+        } } } }
     }
 
     override fun matchesFilename(name: String): Boolean {

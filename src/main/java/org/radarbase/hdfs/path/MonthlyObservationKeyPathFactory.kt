@@ -14,19 +14,18 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs.data
+package org.radarbase.hdfs.path
 
-import java.io.InputStream
-import java.io.OutputStream
-import java.util.Arrays
+import java.time.ZoneOffset.UTC
 
-class IdentityCompression : Compression {
+import java.time.format.DateTimeFormatter
 
-    override val formats = setOf("identity", "none")
+class MonthlyObservationKeyPathFactory : ObservationKeyPathFactory() {
+    override val timeBinFormat: DateTimeFormatter
+        get() = PER_MONTH_HOURLY_TIME_BIN_FORMAT
 
-    override val extension = ""
-
-    override fun compress(fileName: String, out: OutputStream): OutputStream = out
-
-    override fun decompress(`in`: InputStream): InputStream = `in`
+    companion object {
+        private val PER_MONTH_HOURLY_TIME_BIN_FORMAT = DateTimeFormatter.ofPattern("yyyyMM/yyyyMMdd_HH'00'")
+                .withZone(UTC)
+    }
 }

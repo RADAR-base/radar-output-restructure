@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs.util.commandline
+package org.radarbase.hdfs.config
 
 import com.beust.jcommander.Parameter
 import com.beust.jcommander.validators.PositiveInteger
 import org.radarbase.hdfs.config.RestructureConfig.Companion.RESTRUCTURE_CONFIG_FILE_NAME
-import java.util.*
 
 class CommandLineArgs {
     @Parameter(description = "<input_path_1> [<input_path_2> ...]", variableArity = true)

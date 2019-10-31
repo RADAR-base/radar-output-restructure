@@ -30,6 +30,7 @@ import org.radarbase.hdfs.accounting.TopicPartition
 import org.radarbase.hdfs.config.HdfsConfig
 import org.radarbase.hdfs.config.PathConfig
 import org.radarbase.hdfs.config.RestructureConfig
+import org.radarbase.hdfs.worker.FileCache
 import java.io.IOException
 import java.io.InputStreamReader
 import java.nio.file.Files

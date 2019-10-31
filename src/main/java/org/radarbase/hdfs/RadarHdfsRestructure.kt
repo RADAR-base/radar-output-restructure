@@ -21,6 +21,8 @@ import org.apache.hadoop.fs.FileSystem
 import org.apache.hadoop.fs.Path
 import org.radarbase.hdfs.accounting.Accountant
 import org.radarbase.hdfs.accounting.OffsetRange
+import org.radarbase.hdfs.path.RecordPathFactory
+import org.radarbase.hdfs.worker.RestructureWorker
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.IOException

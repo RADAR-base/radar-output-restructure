@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs.data
+package org.radarbase.hdfs.worker
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.hdfs.FileStoreFactory
 import org.radarbase.hdfs.accounting.Accountant
-import org.radarbase.hdfs.data.FileCacheStore.WriteResponse.*
+import org.radarbase.hdfs.worker.FileCacheStore.WriteResponse.*
 import org.radarbase.hdfs.util.TemporaryDirectory
 import org.radarbase.hdfs.util.ThrowingConsumer.tryCatch
 import org.radarbase.hdfs.util.Timer.time

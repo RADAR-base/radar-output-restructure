@@ -20,10 +20,11 @@ import java.io.IOException
 import org.radarbase.hdfs.accounting.Accountant
 import org.radarbase.hdfs.accounting.RemoteLockManager
 import org.radarbase.hdfs.config.RestructureConfig
-import org.radarbase.hdfs.data.Compression
-import org.radarbase.hdfs.data.FileCacheStore
-import org.radarbase.hdfs.data.RecordConverterFactory
-import org.radarbase.hdfs.data.StorageDriver
+import org.radarbase.hdfs.compression.Compression
+import org.radarbase.hdfs.format.RecordConverterFactory
+import org.radarbase.hdfs.path.RecordPathFactory
+import org.radarbase.hdfs.storage.StorageDriver
+import org.radarbase.hdfs.worker.FileCacheStore
 
 /** Factory for all factory classes and settings.  */
 interface FileStoreFactory {

@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs.data
+package org.radarbase.hdfs.format
 
-import java.io.IOException
-import java.io.InputStream
-import java.io.OutputStream
+import java.util.Locale
 
-interface Compression : Format {
-    override val extension: String
-    @Throws(IOException::class)
-    fun compress(fileName: String, out: OutputStream): OutputStream
+interface Format {
+    val formats: Collection<String>
 
-    @Throws(IOException::class)
-    fun decompress(`in`: InputStream): InputStream
+    val extension: String
+
+    open fun matchesFilename(name: String): Boolean {
+        return name.toLowerCase(Locale.US).endsWith(extension.toLowerCase(Locale.US))
+    }
 }
