@@ -30,13 +30,13 @@ import java.nio.file.Paths
 class Accountant @Throws(IOException::class)
 constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
     private val offsetFile: OffsetRangeFile
-    private val tempDir: TemporaryDirectory = TemporaryDirectory(factory.config.tempPath, "accounting-")
+    private val tempDir: TemporaryDirectory = TemporaryDirectory(factory.config.paths.temp, "accounting-")
 
     val offsets: OffsetRangeSet
         get() = offsetFile.offsets
 
     init {
-        val offsetsDirectory = factory.config.outputPath
+        val offsetsDirectory = factory.config.paths.output
                 .resolve(OFFSETS_FILE_NAME)
 
         Files.createDirectories(offsetsDirectory)

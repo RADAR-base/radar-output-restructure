@@ -3,12 +3,8 @@ package org.radarbase.hdfs.config
 import org.apache.hadoop.conf.Configuration
 import org.radarbase.hdfs.Application.Companion.CACHE_SIZE_DEFAULT
 import org.radarbase.hdfs.ObservationKeyPathFactory
-import org.radarbase.hdfs.Plugin
 import org.radarbase.hdfs.RecordPathFactory
-import org.radarbase.hdfs.data.CompressionFactory
-import org.radarbase.hdfs.data.FormatFactory
-import org.radarbase.hdfs.data.LocalStorageDriver
-import org.radarbase.hdfs.data.StorageDriver
+import org.radarbase.hdfs.data.*
 import org.slf4j.LoggerFactory
 import java.lang.IllegalStateException
 import java.nio.file.Files
@@ -16,154 +12,121 @@ import java.nio.file.Path
 import java.nio.file.Paths
 
 data class RestructureConfig(
-        val interval: Long = 3600,
-        val compression: String = "none",
-        val format: String = "csv",
-        val cacheSize: Int = CACHE_SIZE_DEFAULT,
-        val inputPaths: List<Path>,
-        val tempPath: Path,
-        val outputPath: Path,
-        val numThreads: Int = 1,
-        val maxFilesPerTopic: Int? = null,
-        val deduplicate: Boolean = false,
+        val service: ServiceConfig = ServiceConfig(false),
+        val worker: WorkerConfig = WorkerConfig(),
         val topics: Map<String, TopicConfig> = emptyMap(),
-        val hdfs: HdfsConfig,
-        val pathFactory: PluginConfig<RecordPathFactory> = PluginConfig(ObservationKeyPathFactory(), emptyMap()),
-        val compressionFactory: PluginConfig<CompressionFactory> = PluginConfig(CompressionFactory(), emptyMap()),
-        val formatFactory: PluginConfig<FormatFactory> = PluginConfig(FormatFactory(), emptyMap()),
-        val storageDriver: PluginConfig<StorageDriver> = PluginConfig(LocalStorageDriver(), emptyMap())) {
+        val hdfs: HdfsConfig = HdfsConfig(),
+        val paths: PathConfig = PathConfig(),
+        val compression: CompressionConfig = CompressionConfig(),
+        val format: FormatConfig = FormatConfig(),
+        val storage: StorageConfig = StorageConfig()) {
 
-    init {
-        require(inputPaths.isNotEmpty()) { "Missing input paths"}
-        check(numThreads >= 1) { "Number of threads should be at least 1" }
-        check(cacheSize >= 1) { "Maximum files per topic must be strictly positive" }
-        maxFilesPerTopic?.let { check(it >= 1) { "Maximum files per topic must be strictly positive" } }
+    fun validate() {
+        checkNotNull(hdfs.name) { "HDFS name is missing"}
     }
-
-    fun topic(topic: String): TopicConfig = topics[topic] ?: TopicConfig(deduplicate)
-}
-
-data class MutableRestructureConfig(
-        var interval: Long = 3600,
-        var compression: String = "gzip",
-        var format: String = "csv",
-        var cacheSize: Int = CACHE_SIZE_DEFAULT,
-        var inputPaths: List<String> = emptyList(),
-        var tempPath: String? = null,
-        var outputPath: String? = null,
-        var numThreads: Int = 1,
-        var maxFilesPerTopic: Int? = null,
-        var deduplicate: Boolean = false,
-        var topics: Map<String, MutableTopicConfig> = emptyMap(),
-        var hdfs: MutableHdfsConfig = MutableHdfsConfig(),
-        val pathFactory: MutablePluginConfig = MutablePluginConfig(ObservationKeyPathFactory::class.qualifiedName!!),
-        val compressionFactory: MutablePluginConfig = MutablePluginConfig(CompressionFactory::class.qualifiedName!!),
-        val formatFactory: MutablePluginConfig = MutablePluginConfig(FormatFactory::class.qualifiedName!!),
-        val storageDriver: MutablePluginConfig = MutablePluginConfig(LocalStorageDriver::class.qualifiedName!!)) {
-
-    fun toRestructureConfig() = RestructureConfig(
-            interval,
-            compression,
-            format,
-            cacheSize.coerceAtLeast(1),
-            inputPaths.map { Paths.get(it) },
-            tempPath?.let { Paths.get(it) }
-                    ?: Files.createTempDirectory("radar-hdfs-restructure"),
-            Paths.get(checkNotNull(outputPath) { "Missing output path" }),
-            numThreads.coerceAtLeast(1),
-            maxFilesPerTopic?.coerceAtLeast(1),
-            deduplicate,
-            topics.mapValues { (_, conf) -> conf.toTopicConfig(deduplicate) },
-            hdfs.toHdfsConfig(),
-            pathFactory.toPluginConfig(),
-            compressionFactory.toPluginConfig(),
-            formatFactory.toPluginConfig(),
-            storageDriver.toPluginConfig())
 
     companion object {
-        fun load(path: String?): MutableRestructureConfig = YAMLConfigLoader.load(path, RESTRUCTURE_CONFIG_FILE_NAME) {
+        fun load(path: String?): RestructureConfig = YAMLConfigLoader.load(path, RESTRUCTURE_CONFIG_FILE_NAME) {
             logger.info("No config file found. Using default configuration.")
-            MutableRestructureConfig()
+            RestructureConfig()
         }
 
-        private val logger = LoggerFactory.getLogger(MutableRestructureConfig::class.java)
-        const val RESTRUCTURE_CONFIG_FILE_NAME = "restructure.yml"
+        private val logger = LoggerFactory.getLogger(RestructureConfig::class.java)
+        internal const val RESTRUCTURE_CONFIG_FILE_NAME = "restructure.yml"
     }
 }
 
-data class MutablePluginConfig(
-        var factory: String,
-        val properties: MutableMap<String, String> = mutableMapOf()) {
+data class ServiceConfig(val enable: Boolean, val interval: Long = 3600)
 
-    inline fun <reified T: Plugin> toPluginConfig(): PluginConfig<T> {
-        return try {
-            val factoryClass = Class.forName(factory)
-            PluginConfig(
-                    factoryClass.getConstructor().newInstance() as T,
-                    properties.toMap())
-        } catch (ex: ReflectiveOperationException) {
-            throw IllegalStateException("Cannot map class $factory to ${T::class.java.name}")
-        }
-    }
-}
-
-data class PluginConfig<T: Plugin>(
-        val factory: T,
-        val properties: Map<String, String> = emptyMap()
-) {
+data class WorkerConfig(
+        val numThreads: Int = 1,
+        val maxFilesPerTopic: Int? = null,
+        val cacheSize: Int = CACHE_SIZE_DEFAULT) {
     init {
-        factory.init(properties)
+        check(cacheSize >= 1) { "Maximum files per topic must be strictly positive" }
+        maxFilesPerTopic?.let { check(it >= 1) { "Maximum files per topic must be strictly positive" } }
+        check(numThreads >= 1) { "Number of threads should be at least 1" }
     }
 }
 
-data class MutableTopicConfig(
-        var deduplicate: Boolean? = null,
-        val deduplicateFields: MutableList<String> = mutableListOf(),
-        var exclude: Boolean = false) {
-    fun toTopicConfig(defaultDeduplicate: Boolean) = TopicConfig(
-            deduplicate ?: defaultDeduplicate,
-            deduplicateFields.toList(),
-            exclude)
+interface PluginConfig {
+    val factory: String
+    val properties: Map<String, String>
+}
+
+data class PathConfig(
+        override val factory: String = ObservationKeyPathFactory::class.qualifiedName!!,
+        override val properties: Map<String, String> = emptyMap(),
+        val inputs: List<Path> = emptyList(),
+        val temp: Path = Files.createTempDirectory("radar-hdfs-restructure"),
+        val output: Path = Paths.get("output")
+) : PluginConfig {
+    fun createFactory(): RecordPathFactory = factory.toClassInstance()
+}
+
+data class CompressionConfig(
+        override val factory: String = CompressionFactory::class.qualifiedName!!,
+        override val properties: Map<String, String> = emptyMap(),
+        val type: String = "none"
+) : PluginConfig {
+    fun createFactory(): CompressionFactory = factory.toClassInstance()
+    fun createCompression(): Compression = createFactory()[type]
+}
+
+data class FormatConfig(
+        override val factory: String = FormatFactory::class.qualifiedName!!,
+        override val properties: Map<String, String> = emptyMap(),
+        val type: String = "csv",
+        val deduplicate: Boolean = false
+) : PluginConfig {
+    fun createFactory(): FormatFactory = factory.toClassInstance()
+    fun createConverter(): RecordConverterFactory = createFactory()[type]
+}
+
+data class StorageConfig(
+        override val factory: String = LocalStorageDriver::class.qualifiedName!!,
+        override val properties: Map<String, String> = emptyMap()
+): PluginConfig {
+    fun createFactory(): StorageDriver = factory.toClassInstance()
+}
+
+inline fun <reified T: Any> String.toClassInstance(): T {
+    return try {
+        Class.forName(this).getConstructor().newInstance() as T
+    } catch (ex: ReflectiveOperationException) {
+        throw IllegalStateException("Cannot map class $this to ${T::class.java.name}")
+    }
 }
 
 data class TopicConfig(
-        val deduplicate: Boolean,
+        val deduplicate: Boolean? = null,
         val deduplicateFields: List<String> = listOf(),
-        val exclude: Boolean = false)
-
-data class MutableHdfsConfig(
-        var name: String? = null,
-        val nameNodes: MutableList<HdfsNameNode> = mutableListOf(),
-        var lockDirectory: String = "/logs/org.radarbase.hdfs/lock",
-        val properties: MutableMap<String, String> = mutableMapOf()) {
-
-    fun toHdfsConfig() = HdfsConfig(
-            checkNotNull(name) { "HDFS cluster ID or name nodes not provided"},
-            nameNodes.toList(),
-            lockDirectory,
-            properties.toMap())
+        val exclude: Boolean = false) {
+    fun isDeduplicated(defaultValue: Boolean) = deduplicate ?: defaultValue
 }
 
 data class HdfsConfig(
-        val name: String,
+        val name: String? = null,
         val nameNodes: List<HdfsNameNode> = emptyList(),
-        val lockDirectory: String = "/logs/org.radarbase.hdfs/lock",
+        val lockPath: String = "/logs/org.radarbase.hdfs/lock",
         val properties: Map<String, String> = emptyMap()) {
 
     val configuration: Configuration = Configuration()
 
     init {
-        configuration["fs.defaultFS"] = "hdfs://$name"
-        configuration["fs.hdfs.impl.disable.cache"] = "true"
-        if (nameNodes.size >= 2) {
-            configuration["dfs.nameservices"] = name
-            configuration["dfs.ha.namenodes.$name"] = nameNodes.joinToString(",") { it.name }
+        if (name != null) {
+            configuration["fs.defaultFS"] = "hdfs://$name"
+            configuration["fs.hdfs.impl.disable.cache"] = "true"
+            if (nameNodes.size >= 2) {
+                configuration["dfs.nameservices"] = name
+                configuration["dfs.ha.namenodes.$name"] = nameNodes.joinToString(",") { it.name }
 
-            nameNodes.forEach {
-                configuration["dfs.namenode.rpc-address.$name.${it.name}"] = "${it.hostname}:8020"
+                nameNodes.forEach {
+                    configuration["dfs.namenode.rpc-address.$name.${it.name}"] = "${it.hostname}:8020"
+                }
+
+                configuration["dfs.client.failover.proxy.provider.$name"] = "org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider"
             }
-
-            configuration["dfs.client.failover.proxy.provider.$name"] = "org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider"
         }
     }
 }

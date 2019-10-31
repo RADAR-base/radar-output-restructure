@@ -28,12 +28,12 @@ import org.radarbase.hdfs.Application
 import org.radarbase.hdfs.accounting.Accountant
 import org.radarbase.hdfs.accounting.TopicPartition
 import org.radarbase.hdfs.config.HdfsConfig
+import org.radarbase.hdfs.config.PathConfig
 import org.radarbase.hdfs.config.RestructureConfig
 import java.io.IOException
 import java.io.InputStreamReader
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.Paths
 import java.util.zip.GZIPInputStream
 
 /**
@@ -61,10 +61,11 @@ class FileCacheTest {
         this.exampleRecord = GenericRecordBuilder(schema).set("a", "something").build()
 
         config = RestructureConfig(
-                outputPath = path.parent,
-                hdfs = HdfsConfig("test"),
-                inputPaths = listOf(Paths.get("/")),
-                tempPath = tmpDir)
+                paths = PathConfig(
+                        output = path.parent,
+                        temp = tmpPath
+                ),
+                hdfs = HdfsConfig("test"))
 
         setUp(config)
 
@@ -73,14 +74,14 @@ class FileCacheTest {
 
     @Throws(IOException::class)
     private fun setUp(localConfig: RestructureConfig) {
-        this.factory = Application(localConfig, false)
+        this.factory = Application(localConfig)
         this.accountant = Accountant(factory, "t")
     }
 
     @Test
     @Throws(IOException::class)
     fun testGzip() {
-        setUp(config.copy(compression = "gzip"))
+        setUp(config.copy(compression = config.compression.copy(type = "gzip")))
 
         FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant).use { cache ->
             cache.writeRecord(exampleRecord,
@@ -99,7 +100,7 @@ class FileCacheTest {
     @Test
     @Throws(IOException::class)
     fun testGzipAppend() {
-        setUp(config.copy(compression = "gzip"))
+        setUp(config.copy(compression = config.compression.copy(type = "gzip")))
 
         FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant).use { cache ->
             cache.writeRecord(exampleRecord,

@@ -16,28 +16,17 @@
 
 package org.radarbase.hdfs.data
 
-import java.io.BufferedOutputStream
-import java.io.ByteArrayInputStream
-import java.io.Closeable
-import java.io.Flushable
-import java.io.IOException
-import java.io.InputStream
-import java.io.InputStreamReader
-import java.io.OutputStream
-import java.io.OutputStreamWriter
-import java.io.Writer
-import java.nio.file.Files
-import java.nio.file.Path
-import java.util.concurrent.atomic.AtomicBoolean
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.hdfs.FileStoreFactory
 import org.radarbase.hdfs.accounting.Accountant
-import org.radarbase.hdfs.config.TopicConfig
-import org.radarbase.hdfs.util.Timer
 import org.radarbase.hdfs.util.Timer.time
 import org.slf4j.LoggerFactory
+import java.io.*
 import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Keeps path handles of a path.  */
 class FileCache(
@@ -58,13 +47,24 @@ class FileCache(
     private val tmpPath: Path
     private val compression: Compression = factory.compression
     private val converterFactory: RecordConverterFactory = factory.recordConverter
-    private val topic = factory.config.topic(topic)
     private val ledger: Accountant.Ledger = Accountant.Ledger()
     private val fileName: String = path.fileName.toString()
     private var lastUse: Long = 0
     private val hasError: AtomicBoolean = AtomicBoolean(false)
+    private val deduplicate: Boolean
+    private val deduplicateFields: List<String>
 
     init {
+        val topicConfig = factory.config.topics[topic]
+        val defaultDeduplicate = factory.config.format.deduplicate
+        if (topicConfig != null) {
+            deduplicate = topicConfig.isDeduplicated(defaultDeduplicate)
+            deduplicateFields = topicConfig.deduplicateFields
+        } else {
+            deduplicate = defaultDeduplicate
+            deduplicateFields = emptyList()
+        }
+
         val fileIsNew = !storageDriver.exists(path) || storageDriver.size(path) == 0L
         this.tmpPath = Files.createTempFile(tmpDir, fileName, ".tmp" + compression.extension)
 
@@ -129,10 +129,10 @@ class FileCache(
         writer.close()
 
         if (!hasError.get()) {
-            if (topic.deduplicate) {
+            if (deduplicate) {
                 time("close.deduplicate") {
                     val dedupTmp = tmpPath.resolveSibling("${tmpPath.fileName}.dedup")
-                    converterFactory.deduplicate(fileName, tmpPath, dedupTmp, compression, topic.deduplicateFields)
+                    converterFactory.deduplicate(fileName, tmpPath, dedupTmp, compression, deduplicateFields)
                     try {
                         Files.move(dedupTmp, tmpPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
                     } catch (ex: AtomicMoveNotSupportedException) {

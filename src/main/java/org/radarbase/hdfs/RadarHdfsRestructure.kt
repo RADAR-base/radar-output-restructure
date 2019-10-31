@@ -33,7 +33,7 @@ import java.util.stream.Stream
 class RadarHdfsRestructure(private val fileStoreFactory: FileStoreFactory): Closeable {
     private val conf: Configuration = fileStoreFactory.config.hdfs.configuration
     private val pathFactory: RecordPathFactory = fileStoreFactory.pathFactory
-    private val maxFilesPerTopic: Long = fileStoreFactory.config.maxFilesPerTopic?.toLong()
+    private val maxFilesPerTopic: Long = fileStoreFactory.config.worker.maxFilesPerTopic?.toLong()
             ?: java.lang.Long.MAX_VALUE
 
     private val lockManager = fileStoreFactory.remoteLockManager

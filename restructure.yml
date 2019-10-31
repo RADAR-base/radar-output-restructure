@@ -1,17 +1,78 @@
-interval: 30
-compression: gzip
-format: csv
-cacheSize: 300
-inputPaths:
-  - /topicAndroidNew
-tempPath: /output/+tmp
-outputPath: /output
-numThreads: 2
-maxFilesPerTopic: null
-deduplicate: true
-topics:
-  connect_fitbit_source:
-    deduplicateFields: [time]
-pathFactory:
-  factory: org.radarbase.hdfs.MonthlyObservationKeyPathFactory
+service:
+  # Whether to run the application as a polling service.
+  enable: false
+  # Polling interval in seconds.
+  interval: 30
 
+# Compression characteristics
+compression:
+  # Compression type: none, zip or gzip
+  type: gzip
+  # Compression Factory class
+  # factory: org.radarbase.hdfs.data.CompressionFactory
+  # Additional compression properties
+  # properties: {}
+
+# File format
+format:
+  # Format type: CSV or JSON
+  type: csv
+  # Whether to deduplicate the files in each topic by default
+  deduplicate: true
+  # Format factory class
+  # factory: org.radarbase.hdfs.data.FormatFactory
+  # Additional format properties
+  # properties: {}
+
+# Worker settings
+worker:
+  # Maximum number of files and converters to keep open while processing
+  cacheSize: 300
+  # Number of threads to do processing on
+  numThreads: 2
+  # Maximum number of files to process in any given topic.
+  maxFilesPerTopic: null
+
+# Path settings
+paths:
+  # Input directories in HDFS
+  inputs:
+    - /topicAndroidNew
+  # Root temporary directory for local file processing.
+  temp: ./output/+tmp
+  # Output directory
+  output: ./output
+  # Output path construction factory
+  factory: org.radarbase.hdfs.MonthlyObservationKeyPathFactory
+  # Additional properties
+  # properties: {}
+
+# Individual topic configuration
+topics:
+  # topic name
+  connect_fitbit_source:
+    # deduplicate this topic, regardless of the format settings
+    deduplicate: true
+    # deduplicate this topic only using given fields.
+    deduplicateFields: [time]
+  connect_fitbit_bad:
+    # Do not process this topic
+    exclude: true
+  biovotion_acceleration:
+    # Disable deduplication
+    deduplicate: false
+
+# HDFS settings
+hdfs:
+  # HDFS name node in case of a single name node, or HDFS cluster ID in case of high availability.
+  name: hdfs-namenode
+  # High availability settings:
+  # nameNodes:
+  #   - name: hdfs1
+  #     hostname: hdfs-namenode-1
+  #   - name: hdfs2
+  #     hostname: hdfs-namenode-2
+  # Where files will be locked. This value should be the same for all restructure processes.
+  lockPath: /logs/org.radarbase.hdfs/lock
+  # Additional raw HDFS configuration properties
+  # properties: {}

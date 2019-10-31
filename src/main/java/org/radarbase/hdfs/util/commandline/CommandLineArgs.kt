@@ -18,12 +18,12 @@ package org.radarbase.hdfs.util.commandline
 
 import com.beust.jcommander.Parameter
 import com.beust.jcommander.validators.PositiveInteger
-import org.radarbase.hdfs.config.MutableRestructureConfig.Companion.RESTRUCTURE_CONFIG_FILE_NAME
+import org.radarbase.hdfs.config.RestructureConfig.Companion.RESTRUCTURE_CONFIG_FILE_NAME
 import java.util.*
 
 class CommandLineArgs {
-    @Parameter(description = "<input_path_1> [<input_path_2> ...]", variableArity = true, required = true)
-    var inputPaths: List<String> = ArrayList()
+    @Parameter(description = "<input_path_1> [<input_path_2> ...]", variableArity = true)
+    var inputPaths: List<String>? = null
 
     @Parameter(names = ["-F", "--config-file"], description = "Config file. By default, $RESTRUCTURE_CONFIG_FILE_NAME is tried.")
     var configFile: String? = null
@@ -38,10 +38,10 @@ class CommandLineArgs {
     @Parameter(names = ["-d", "--deduplicate"], description = "Boolean to define if to use deduplication or not.")
     var deduplicate: Boolean? = null
 
-    @Parameter(names = ["-n", "--nameservice"], description = "The HDFS name services to connect to. Eg - '<HOST>' for single configurations or <CLUSTER_ID> for high availability web services.", required = true, validateWith = [NonEmptyValidator::class])
+    @Parameter(names = ["-n", "--nameservice"], description = "The HDFS name services to connect to. Eg - '<HOST>' for single configurations or <CLUSTER_ID> for high availability web services.", validateWith = [NonEmptyValidator::class])
     var hdfsName: String? = null
 
-    @Parameter(names = ["-o", "--output-directory"], description = "The output folder where the files are to be extracted.", required = true, validateWith = [NonEmptyValidator::class])
+    @Parameter(names = ["-o", "--output-directory"], description = "The output folder where the files are to be extracted.", validateWith = [NonEmptyValidator::class])
     var outputDirectory: String? = null
 
     @Parameter(names = ["-h", "--help"], help = true, description = "Display the usage of the program with available options.")
@@ -63,7 +63,7 @@ class CommandLineArgs {
     var maxFilesPerTopic: Int? = null
 
     @Parameter(names = ["-S", "--service"], description = "Run the output generation as a service")
-    var asService = false
+    var asService: Boolean? = null
 
     @Parameter(names = ["-i", "--interval"], description = "Polling interval when running as a service (seconds)")
     var pollInterval: Long? = null

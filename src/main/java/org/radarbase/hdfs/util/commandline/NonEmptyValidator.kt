@@ -21,7 +21,7 @@ import com.beust.jcommander.ParameterException
 
 class NonEmptyValidator : IParameterValidator {
     override fun validate(name: String, value: String?) {
-        if (value == null || value.isEmpty()) {
+        if (value?.isEmpty() == true) {
             throw ParameterException("Parameter " + name + " should be supplied. "
                     + "It cannot be empty or null. (found " + value + ")."
                     + "Please run with --help or -h for more information.")

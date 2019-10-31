@@ -45,9 +45,9 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
 
     init {
         val config = factory.config
-        this.maxCacheSize = config.cacheSize
+        this.maxCacheSize = config.worker.cacheSize
         this.caches = HashMap(maxCacheSize * 4 / 3 + 1)
-        this.tmpDir = TemporaryDirectory(config.tempPath, "file-cache-")
+        this.tmpDir = TemporaryDirectory(config.paths.temp, "file-cache-")
         this.schemasAdded = HashMap()
     }
 
