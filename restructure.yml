@@ -9,7 +9,7 @@ compression:
   # Compression type: none, zip or gzip
   type: gzip
   # Compression Factory class
-  # factory: org.radarbase.hdfs.data.CompressionFactory
+  # factory: org.radarbase.hdfs.compression.CompressionFactory
   # Additional compression properties
   # properties: {}
 
@@ -20,7 +20,7 @@ format:
   # Whether to deduplicate the files in each topic by default
   deduplicate: true
   # Format factory class
-  # factory: org.radarbase.hdfs.data.FormatFactory
+  # factory: org.radarbase.hdfs.format.FormatFactory
   # Additional format properties
   # properties: {}
 
@@ -43,7 +43,7 @@ paths:
   # Output directory
   output: ./output
   # Output path construction factory
-  factory: org.radarbase.hdfs.MonthlyObservationKeyPathFactory
+  factory: org.radarbase.hdfs.path.MonthlyObservationKeyPathFactory
   # Additional properties
   # properties: {}
 

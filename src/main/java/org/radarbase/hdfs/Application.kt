@@ -31,6 +31,7 @@ import org.radarbase.hdfs.storage.StorageDriver
 import org.radarbase.hdfs.util.ProgressBar.Companion.format
 import org.radarbase.hdfs.util.Timer
 import org.radarbase.hdfs.worker.FileCacheStore
+import org.radarbase.hdfs.worker.RadarHdfsRestructure
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.nio.file.Files

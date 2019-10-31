@@ -7,7 +7,6 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.avro.mapred.FsInput
 import org.apache.hadoop.fs.FileSystem
 import org.radarbase.hdfs.FileStoreFactory
-import org.radarbase.hdfs.RadarHdfsRestructure
 import org.radarbase.hdfs.accounting.Accountant
 import org.radarbase.hdfs.accounting.OffsetRangeSet
 import org.radarbase.hdfs.accounting.TopicPartition
