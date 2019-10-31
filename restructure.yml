@@ -1,0 +1,17 @@
+interval: 30
+compression: gzip
+format: csv
+cacheSize: 300
+inputPaths:
+  - /topicAndroidNew
+tempPath: /output/+tmp
+outputPath: /output
+numThreads: 2
+maxFilesPerTopic: null
+deduplicate: true
+topics:
+  connect_fitbit_source:
+    deduplicateFields: [time]
+pathFactory:
+  factory: org.radarbase.hdfs.MonthlyObservationKeyPathFactory
+

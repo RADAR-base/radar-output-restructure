@@ -48,12 +48,12 @@ data class MutableRestructureConfig(
         var compression: String = "gzip",
         var format: String = "csv",
         var cacheSize: Int = CACHE_SIZE_DEFAULT,
-        var inputDirs: List<String> = emptyList(),
-        var tempDir: String? = null,
-        var outputDir: String? = null,
+        var inputPaths: List<String> = emptyList(),
+        var tempPath: String? = null,
+        var outputPath: String? = null,
         var numThreads: Int = 1,
         var maxFilesPerTopic: Int? = null,
-        var deduplicate: Boolean = true,
+        var deduplicate: Boolean = false,
         var topics: Map<String, MutableTopicConfig> = emptyMap(),
         var hdfs: MutableHdfsConfig = MutableHdfsConfig(),
         val pathFactory: MutablePluginConfig = MutablePluginConfig(ObservationKeyPathFactory::class.qualifiedName!!),
@@ -66,10 +66,10 @@ data class MutableRestructureConfig(
             compression,
             format,
             cacheSize.coerceAtLeast(1),
-            inputDirs.map { Paths.get(it) },
-            tempDir?.let { Paths.get(it) }
+            inputPaths.map { Paths.get(it) },
+            tempPath?.let { Paths.get(it) }
                     ?: Files.createTempDirectory("radar-hdfs-restructure"),
-            Paths.get(checkNotNull(outputDir) { "Missing output path" }),
+            Paths.get(checkNotNull(outputPath) { "Missing output path" }),
             numThreads.coerceAtLeast(1),
             maxFilesPerTopic?.coerceAtLeast(1),
             deduplicate,
@@ -92,17 +92,17 @@ data class MutableRestructureConfig(
 }
 
 data class MutablePluginConfig(
-        var `class`: String,
+        var factory: String,
         val properties: MutableMap<String, String> = mutableMapOf()) {
 
     inline fun <reified T: Plugin> toPluginConfig(): PluginConfig<T> {
         return try {
-            val factoryClass = Class.forName(`class`)
+            val factoryClass = Class.forName(factory)
             PluginConfig(
                     factoryClass.getConstructor().newInstance() as T,
                     properties.toMap())
         } catch (ex: ReflectiveOperationException) {
-            throw IllegalStateException("Cannot map class $`class` to ${T::class.java.name}")
+            throw IllegalStateException("Cannot map class $factory to ${T::class.java.name}")
         }
     }
 }

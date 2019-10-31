@@ -173,12 +173,12 @@ class Application(
                     commandLineArgs.cacheSize?.let { cacheSize = it }
                     commandLineArgs.format?.let { format = it }
                     commandLineArgs.deduplicate?.let { deduplicate = it }
-                    commandLineArgs.tmpDir?.let { tempDir = it }
+                    commandLineArgs.tmpDir?.let { tempPath = it }
                     commandLineArgs.numThreads?.let { numThreads = it }
                     commandLineArgs.maxFilesPerTopic?.let { maxFilesPerTopic = it }
                     commandLineArgs.pollInterval?.let { interval = it }
-                    inputDirs = commandLineArgs.inputPaths
-                    commandLineArgs.outputDirectory?.let { outputDir = it }
+                    inputPaths = commandLineArgs.inputPaths
+                    commandLineArgs.outputDirectory?.let { outputPath = it }
                     commandLineArgs.hdfsName?.let { hdfs.name = it}
                 }.toRestructureConfig()
 
