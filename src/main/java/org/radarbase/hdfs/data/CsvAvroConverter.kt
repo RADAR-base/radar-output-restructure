@@ -175,7 +175,7 @@ class CsvAvroConverter(
 
             @Throws(IOException::class)
             override fun deduplicate(fileName: String, source: Path, target: Path,
-                            compression: Compression, usingFields: List<String>) {
+                                     compression: Compression, distinctFields: List<String>) {
                 val withHeader = hasHeader
 
                 Files.newInputStream(source).use {
@@ -188,7 +188,7 @@ class CsvAvroConverter(
                     bufOut -> compression.compress(fileName, bufOut).use {
                     zipOut -> OutputStreamWriter(zipOut).use {
                     writer -> CSVWriter(writer).use { csvWriter ->
-                        val lines = readDeduplicatedSequence(csvReader, withHeader, usingFields)
+                        val lines = readDeduplicatedSequence(csvReader, withHeader, distinctFields)
                         csvWriter.writeAll(lines.asIterable(), false)
                     } } } } } } } } } }
             }
@@ -213,15 +213,29 @@ class CsvAvroConverter(
                     ?.filterNotNull()
                     ?: emptyList()
 
-            val readLines = generateSequence { csvReader.readNext() }
+            val lines = generateSequence { csvReader.readNext() }.toMutableList()
+                    .also { readLines ->
+                        if (fieldIndexes.isEmpty()) {
+                            readLines.distinctByLast { it.joinToString() }
+                        } else {
+                            readLines.distinctByLast { line -> fieldIndexes.joinToString { line[it] } }
+                        }
+                    }
 
-            val lines = if (fieldIndexes.isEmpty()) {
-                readLines.distinctBy { it.joinToString() }
-            } else {
-                readLines.distinctBy { line -> fieldIndexes.joinToString { line[it] } }
+            return header?.let { sequenceOf(header) + lines.asSequence() }
+                    ?: lines.asSequence()
+        }
+
+        private fun <T, V> MutableList<T>.distinctByLast(mapping: (T) -> V) {
+            val set = HashSet<V>()
+            val startSize = size
+            for (i in (0 until startSize).reversed()) {
+                val value = this[i]
+                val mappedBy = mapping(value)
+                if (!set.add(mappedBy)) {
+                    removeAt(i)
+                }
             }
-            return header?.let { sequenceOf(header) + lines }
-                    ?: lines
         }
 
         internal fun createHeaders(record: GenericRecord): List<String> {

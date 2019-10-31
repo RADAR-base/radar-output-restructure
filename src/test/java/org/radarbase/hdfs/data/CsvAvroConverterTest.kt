@@ -161,9 +161,20 @@ class CsvAvroConverterTest {
         val toPath = dir.resolve("test.dedup")
         Files.newBufferedWriter(path).use { writer -> writeTestNumbers(writer) }
         CsvAvroConverter.factory.deduplicate("t", path, toPath, IdentityCompression())
-        assertEquals(listOf("a,b", "1,2", "3,4", "1,3", "a,a"), Files.readAllLines(toPath))
+        assertEquals(listOf("a,b", "1,3", "3,4", "1,2", "a,a"), Files.readAllLines(toPath))
     }
 
+
+    @Test
+    @Throws(IOException::class)
+    fun deduplicateFields(@TempDir dir: Path) {
+        val path = dir.resolve("test")
+        val toPath = dir.resolve("test.dedup")
+        Files.newBufferedWriter(path).use { writer -> writeTestNumbers(writer) }
+        CsvAvroConverter.factory.deduplicate("t", path, toPath, IdentityCompression(),
+                distinctFields = listOf("a"))
+        assertEquals(listOf("a,b", "3,4", "1,2", "a,a"), Files.readAllLines(toPath))
+    }
 
     @Test
     @Throws(IOException::class)
@@ -177,7 +188,7 @@ class CsvAvroConverterTest {
             `in` -> GZIPInputStream(`in`).use {
             gzipIn -> InputStreamReader(gzipIn).readLines() } }
 
-        assertEquals(listOf("a,b", "1,2", "3,4", "1,3", "a,a"), storedLines)
+        assertEquals(listOf("a,b", "1,3", "3,4", "1,2", "a,a"), storedLines)
     }
 
     companion object {

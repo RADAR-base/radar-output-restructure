@@ -90,7 +90,7 @@ data class StorageConfig(
     fun createFactory(): StorageDriver = factory.toClassInstance()
 }
 
-inline fun <reified T: Any> String.toClassInstance(): T {
+private inline fun <reified T: Any> String.toClassInstance(): T {
     return try {
         Class.forName(this).getConstructor().newInstance() as T
     } catch (ex: ReflectiveOperationException) {
