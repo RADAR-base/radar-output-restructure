@@ -16,21 +16,42 @@
 
 package org.radarbase.hdfs.util
 
+import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.atomic.LongAdder
+import org.radarbase.hdfs.util.ProgressBar.Companion.appendTime
 
 /** Timer for multi-threaded timings. The timer may be disabled to increase program performance.  */
 object Timer {
-    private val times: ConcurrentMap<String, TimerEntry> = ConcurrentHashMap()
+    private val shutdownHook = Thread({ println(Timer) }, "Timer")
+    private val times: ConcurrentMap<String, MutableTimerEntry> = ConcurrentHashMap()
+
+    /** All currently measured timings. This returns a thread-safe snapshot of the current state. */
+    val timings: Map<String, TimerEntry>
+        get() = times.mapValues { it.value.toTimerEntry() }
 
     /**
      * Whether the timer is enabled. A disabled timer will have much less performance impact on
      * timed code.
      */
-    @Volatile
-    var isEnabled: Boolean = true
+    @get:Synchronized
+    @set:Synchronized
+    var isEnabled: Boolean = false
+        set(value) {
+            if (value != field) {
+                if (value) {
+                    Runtime.getRuntime().addShutdownHook(shutdownHook)
+                } else {
+                    Runtime.getRuntime().removeShutdownHook(shutdownHook)
+                }
+            }
+            field = value
+        }
 
+    /**
+     * Time a given action, labeled by an action type.
+     */
     fun <T> time(type: String, action: () -> T): T {
         return if (isEnabled) {
             val startTime = System.nanoTime()
@@ -38,36 +59,45 @@ object Timer {
                 action()
             } finally {
                 val time = System.nanoTime() - startTime
-                times.computeIfAbsent(type) { TimerEntry() }.add(time)
+                times.computeIfAbsent(type) { MutableTimerEntry() }.add(time)
             }
         } else {
             action()
         }
     }
 
+    /** Remove all registered action types and their timings. */
+    fun reset(): Unit = times.clear()
+
+    /**
+     * String of all currently measured timings, reported per action type.
+     */
     override fun toString(): String {
-        if (!isEnabled) {
-            return "Timings: disabled"
-        }
-        val builder = StringBuilder(100 * times.size)
+        val builder = StringBuilder(100 * (1 + times.size))
         builder.append("Timings:")
 
-        this.times.entries
-                .forEach { entry ->
-                    builder.append("\n\t")
-                    builder.append(entry.key)
-                    builder.append(" - time: ")
-                    formatTime(builder, entry.value.totalTime.sum())
-                    builder.append(" - threads: ")
-                    builder.append(entry.value.threads.size)
-                    builder.append(" - invocations: ")
-                    builder.append(entry.value.invocations)
-                }
+        if (!isEnabled) {
+            builder.append(" disabled")
+        } else if (times.isEmpty()) {
+            builder.append(" none")
+        } else {
+            timings.entries
+                    .forEach { entry ->
+                        builder.append("\n\t")
+                        builder.append(entry.key)
+                        builder.append(" - time: ")
+                        builder.appendTime(entry.value.totalTime)
+                        builder.append(" - threads: ")
+                        builder.append(entry.value.numThreads)
+                        builder.append(" - invocations: ")
+                        builder.append(entry.value.invocations)
+                    }
+        }
 
         return builder.toString()
     }
 
-    private class TimerEntry {
+    private class MutableTimerEntry {
         val invocations = LongAdder()
         val totalTime = LongAdder()
         val threads = ConcurrentHashMap<Long, Long>()
@@ -79,15 +109,9 @@ object Timer {
                 threads[it] = it
             }
         }
+
+        fun toTimerEntry(): TimerEntry = TimerEntry(invocations.sum(), Duration.ofNanos(totalTime.sum()), threads.size)
     }
 
-    private fun formatTime(builder: StringBuilder, nanoTime: Long) {
-        val seconds = (nanoTime / 1_000_000_000L).toInt()
-        val millis = (nanoTime / 1_000_000L).toInt()
-        ProgressBar.formatTime(builder, seconds.toLong())
-        builder.append('.')
-        if (millis < 100) builder.append('0')
-        if (millis < 10) builder.append('0')
-        builder.append(millis)
-    }
+    data class TimerEntry(val invocations: Long, val totalTime: Duration, val numThreads: Int)
 }

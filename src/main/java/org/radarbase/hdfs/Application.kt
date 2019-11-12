@@ -25,7 +25,7 @@ import org.radarbase.hdfs.accounting.RemoteLockManager
 import org.radarbase.hdfs.config.HdfsSettings
 import org.radarbase.hdfs.config.RestructureSettings
 import org.radarbase.hdfs.data.*
-import org.radarbase.hdfs.util.ProgressBar.Companion.formatTime
+import org.radarbase.hdfs.util.ProgressBar.Companion.format
 import org.radarbase.hdfs.util.Timer
 import org.radarbase.hdfs.util.commandline.CommandLineArgs
 import org.slf4j.LoggerFactory
@@ -104,7 +104,7 @@ class Application private constructor(builder: Builder) : FileStoreFactory {
             logger.info("Press Ctrl+C to exit...")
             val executorService = Executors.newSingleThreadScheduledExecutor()
 
-            executorService.scheduleAtFixedRate({ this.runRestructure() },
+            executorService.scheduleAtFixedRate({ runRestructure() },
                     (pollInterval / 4).toLong(), pollInterval.toLong(), TimeUnit.SECONDS)
 
             try {
@@ -138,16 +138,18 @@ class Application private constructor(builder: Builder) : FileStoreFactory {
                 logger.info("Processed {} files and {} records in {}",
                         numberFormat.format(restructure.processedFileCount),
                         numberFormat.format(restructure.processedRecordsCount),
-                        timeStart.durationSince().formatTime())
+                        timeStart.durationSince().format())
             }
         } catch (ex: IOException) {
             logger.error("Processing failed", ex)
         } catch (e: InterruptedException) {
             logger.error("Processing interrupted")
+        } finally {
+            // Print timings and reset the timings for the next iteration.
+            println(Timer)
+            Timer.reset()
         }
     }
-
-    private fun Temporal.durationSince() = Duration.between(this, Instant.now())
 
     class Builder(val settings: RestructureSettings, val hdfsSettings: HdfsSettings) {
         var storageDriver: StorageDriver? = null
@@ -179,6 +181,8 @@ class Application private constructor(builder: Builder) : FileStoreFactory {
         private val logger = LoggerFactory.getLogger(Application::class.java)
         const val CACHE_SIZE_DEFAULT = 100
 
+        private fun Temporal.durationSince() = Duration.between(this, Instant.now())
+
         @JvmStatic
         fun main(args: Array<String>) {
             val commandLineArgs = CommandLineArgs()
@@ -201,16 +205,10 @@ class Application private constructor(builder: Builder) : FileStoreFactory {
             logger.info(SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(Date()))
             logger.info("Starting...")
 
+            // Enable singleton timer statements in the code.
             Timer.isEnabled = commandLineArgs.enableTimer
 
-            if (commandLineArgs.enableTimer) {
-                Runtime.getRuntime().addShutdownHook(Thread(
-                        { println(Timer) }, "Timer"))
-            }
-
-            val application: Application
-
-            try {
+            val application = try {
                 val settings = RestructureSettings.Builder(commandLineArgs.outputDirectory).apply {
                     compression = commandLineArgs.compression
                     cacheSize = commandLineArgs.cacheSize
@@ -227,7 +225,7 @@ class Application private constructor(builder: Builder) : FileStoreFactory {
                             commandLineArgs.hdfsUri1, commandLineArgs.hdfsUri2)
                 }.build()
 
-                application = Builder(settings, hdfsSettings).apply {
+                Builder(settings, hdfsSettings).apply {
                     lockPath = Path(commandLineArgs.lockDirectory)
                     pathFactory = commandLineArgs.pathFactory as RecordPathFactory?
                     compressionFactory = commandLineArgs.compressionFactory as CompressionFactory?

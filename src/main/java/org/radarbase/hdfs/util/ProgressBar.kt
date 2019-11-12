@@ -115,41 +115,40 @@ class ProgressBar(private val label: String, private val total: Long, private va
         builder.append("ETA ")
         if (progress > 0) {
             val duration = (System.nanoTime() - startTime) / 1_000_000_000.0
-            formatTime(builder, (duration * (total - progress) / progress).toLong())
+            builder.appendTime((duration * (total - progress) / progress).toLong())
         } else {
             builder.append("-:--:--")
         }
     }
 
     companion object {
-        fun formatTime(builder: StringBuilder, seconds: Long): StringBuilder {
+        fun StringBuilder.appendTime(seconds: Long): StringBuilder {
             val minutes = seconds / 60 % 60
             val sec = seconds % 60
-            builder.append(seconds / 3600).append(':')
-            if (minutes < 10) {
-                builder.append('0')
-            }
-            builder.append(minutes).append(':')
-            if (sec < 10) {
-                builder.append('0')
-            }
-            builder.append(sec)
-            return builder
+            append(seconds / 3600).append(':')
+
+            if (minutes < 10) append('0')
+            append(minutes).append(':')
+
+            if (sec < 10) append('0')
+            return append(sec)
         }
 
-        fun Duration.formatTime(): String {
-            val millis = toMillis()
-            val builder = StringBuilder(16)
-            formatTime(builder, millis / 1000)
-                    .append('.')
+        fun StringBuilder.appendTime(duration: Duration): StringBuilder {
+            val millis = duration.toMillis()
+            appendTime(millis / 1000).append('.')
             val millisLast = (millis % 1000L).toInt().toLong()
             if (millisLast < 100) {
-                builder.append('0')
+                append('0')
             }
             if (millisLast < 10) {
-                builder.append('0')
+                append('0')
             }
-            return builder.append(millisLast).toString()
+            return append(millisLast)
+        }
+
+        fun Duration.format(): String {
+            return StringBuilder(16).appendTime(this).toString()
         }
 
         private val logger = LoggerFactory.getLogger(ProgressBar::class.java)
