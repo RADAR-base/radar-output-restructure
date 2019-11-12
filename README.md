@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/RADAR-base/Restructure-HDFS-topic.svg?branch=master)](https://travis-ci.org/RADAR-base/Restructure-HDFS-topic)
 
-Data streamed to HDFS using the [RADAR HDFS sink connector](https://github.com/RADAR-CNS/RADAR-HDFS-Sink-Connector) is streamed to files based on sensor only. This package can transform that output to a local directory structure as follows: `userId/topic/date_hour.csv`. The date and hour is extracted from the `time` field of each record, and is formatted in UTC time. This package is included in the [RADAR-Docker](https://github.com/RADAR-CNS/RADAR-Docker) repository, in the `dcompose/radar-cp-hadoop-stack/hdfs_restructure.sh` script.
+Data streamed to HDFS using the [RADAR HDFS sink connector](https://github.com/RADAR-base/RADAR-HDFS-Sink-Connector) is streamed to files based on sensor only. This package can transform that output to a local directory structure as follows: `userId/topic/date_hour.csv`. The date and hour is extracted from the `time` field of each record, and is formatted in UTC time. This package is included in the [RADAR-Docker](https://github.com/RADAR-base/RADAR-Docker) repository, in the `dcompose/radar-cp-hadoop-stack/hdfs_restructure.sh` script.
 
 ## Docker usage
 
@@ -69,9 +69,9 @@ To implement alternative storage paths, storage drivers or storage formats, put 
 
 | Option                  | Class                                       | Behaviour                                  | Default                   |
 | ----------------------- | ------------------------------------------- | ------------------------------------------ | ------------------------- |
-| `--path-factory`        | `org.radarcns.hdfs.RecordPathFactory`       | Factory to create output path names with.  | ObservationKeyPathFactory |
-| `--storage-driver`      | `org.radarcns.hdfs.data.StorageDriver`      | Storage driver to use for storing data.    | LocalStorageDriver        |
-| `--format-factory`      | `org.radarcns.hdfs.data.FormatFactory`      | Factory for output formats.                | FormatFactory             |
-| `--compression-factory` | `org.radarcns.hdfs.data.CompressionFactory` | Factory class to use for data compression. | CompressionFactory        |
+| `--path-factory`        | `org.radarbase.hdfs.RecordPathFactory`       | Factory to create output path names with.  | ObservationKeyPathFactory |
+| `--storage-driver`      | `org.radarbase.hdfs.data.StorageDriver`      | Storage driver to use for storing data.    | LocalStorageDriver        |
+| `--format-factory`      | `org.radarbase.hdfs.data.FormatFactory`      | Factory for output formats.                | FormatFactory             |
+| `--compression-factory` | `org.radarbase.hdfs.data.CompressionFactory` | Factory class to use for data compression. | CompressionFactory        |
 
 To pass arguments to self-assigned plugins, use `-p arg1=value1 -p arg2=value2` command-line flags and read those arguments in the `Plugin#init(Map<String, String>)` method.
