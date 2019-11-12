@@ -16,7 +16,7 @@
 
 package org.radarbase.hdfs.accounting
 
-import org.radarbase.hdfs.data.StorageDriver
+import org.radarbase.hdfs.storage.StorageDriver
 import org.radarbase.hdfs.util.PostponedWriter
 import org.radarbase.hdfs.util.ThrowingConsumer.tryCatch
 import org.radarbase.hdfs.util.Timer.time

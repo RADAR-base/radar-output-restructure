@@ -14,15 +14,19 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs.data
+package org.radarbase.hdfs.compression
 
-import org.radarbase.hdfs.Plugin
+import org.radarbase.hdfs.compression.Compression
+import java.io.InputStream
+import java.io.OutputStream
 
-interface FormatProvider<T : Format> : Plugin {
-    val formats: List<T>
+class IdentityCompression : Compression {
 
-    operator fun get(format: String): T = requireNotNull(formats
-            .firstOrNull { r -> r.formats
-                    .any { s -> s.equals(format, ignoreCase = true) }
-            }) { "Format $format is not supported" }
+    override val formats = setOf("identity", "none")
+
+    override val extension = ""
+
+    override fun compress(fileName: String, out: OutputStream): OutputStream = out
+
+    override fun decompress(`in`: InputStream): InputStream = `in`
 }

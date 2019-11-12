@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs.data
+package org.radarbase.hdfs.storage
 
 import org.slf4j.LoggerFactory
 import software.amazon.awssdk.services.s3.S3Client

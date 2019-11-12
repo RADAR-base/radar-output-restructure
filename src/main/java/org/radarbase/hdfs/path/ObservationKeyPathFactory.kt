@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs
+package org.radarbase.hdfs.path
 
 import java.nio.file.Path
 import java.nio.file.Paths

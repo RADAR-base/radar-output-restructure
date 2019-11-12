@@ -14,42 +14,46 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs.data
+package org.radarbase.hdfs.format
 
-import java.io.BufferedReader
-import java.io.IOException
-import java.io.Reader
-import java.io.Writer
+import com.opencsv.CSVReader
+import com.opencsv.CSVWriter
 import java.nio.ByteBuffer
 import java.util.ArrayList
 import java.util.Base64
-import java.util.Collections
 import java.util.LinkedHashMap
-import java.util.regex.Pattern
 import org.apache.avro.Schema
-import org.apache.avro.Schema.Field
 import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericFixed
 import org.apache.avro.generic.GenericRecord
+import org.radarbase.hdfs.compression.Compression
+import org.radarbase.hdfs.format.CsvAvroConverter.Companion.removeDuplicates
+import java.io.*
+import java.nio.file.Files
+import java.nio.file.Path
 
 /**
  * Converts deep hierarchical Avro records into flat CSV format. It uses a simple dot syntax in the
  * column names to indicate hierarchy. After the first data record is added, all following
  * records need to have exactly the same hierarchy (or at least a subset of it.)
  */
-class CsvAvroConverter @Throws(IOException::class)
-constructor(private val writer: Writer, record: GenericRecord, writeHeader: Boolean,
-            reader: Reader) : RecordConverter {
+class CsvAvroConverter(
+        private val writer: Writer,
+        record: GenericRecord,
+        writeHeader: Boolean,
+        reader: Reader
+) : RecordConverter {
+
+    private val csvWriter = CSVWriter(writer)
     private var headers: List<String>
     private val values: MutableList<String>
 
     init {
         headers = if (writeHeader) {
             createHeaders(record)
-                    .also { writeLine(it) }
+                    .also { csvWriter.writeNext(it.toTypedArray(), false) }
         } else {
-            // If file already exists read the schema from the CSV file
-            BufferedReader(reader, 200).use { parseCsvLine(it) }
+            CSVReader(reader).readNext().toList()
         }
 
         values = ArrayList(headers.size)
@@ -69,27 +73,15 @@ constructor(private val writer: Writer, record: GenericRecord, writeHeader: Bool
                 return false
             }
 
-            writeLine(retValues)
+            csvWriter.writeNext(retValues.toTypedArray(), false)
+            values.clear()
             return true
         } catch (ex: IllegalArgumentException) {
             return false
         } catch (ex: IndexOutOfBoundsException) {
             return false
         }
-
     }
-
-    @Throws(IOException::class)
-    private fun writeLine(objects: List<*>) {
-        objects.forEachIndexed { i, obj ->
-            if (i > 0) {
-                writer.append(',')
-            }
-            writer.append(obj.toString())
-        }
-        writer.append('\n')
-    }
-
 
     override fun convertRecord(record: GenericRecord): Map<String, Any?> {
         values.clear()
@@ -151,7 +143,7 @@ constructor(private val writer: Writer, record: GenericRecord, writeHeader: Bool
             }
             Schema.Type.STRING -> {
                 checkHeader(prefix, values.size)
-                values.add(cleanCsvString(data.toString()))
+                values.add(data.toString())
             }
             Schema.Type.ENUM, Schema.Type.INT, Schema.Type.LONG, Schema.Type.DOUBLE, Schema.Type.FLOAT, Schema.Type.BOOLEAN -> {
                 checkHeader(prefix, values.size)
@@ -176,18 +168,37 @@ constructor(private val writer: Writer, record: GenericRecord, writeHeader: Bool
     override fun flush() = writer.flush()
 
     companion object {
-        private val ESCAPE_PATTERN = Pattern.compile("\\p{C}|[,\"]")
-        private val TAB_PATTERN = Pattern.compile("\t")
-        private val LINE_ENDING_PATTERN = Pattern.compile("[\n\r]+")
-        private val NON_PRINTING_PATTERN = Pattern.compile("\\p{C}")
-        private val QUOTE_OR_COMMA_PATTERN = Pattern.compile("[\",]")
-        private val QUOTE_PATTERN = Pattern.compile("\"")
         private val BASE64_ENCODER = Base64.getEncoder().withoutPadding()
 
         val factory = object : RecordConverterFactory {
             override val extension: String = ".csv"
 
             override val formats: Collection<String> = setOf("csv")
+
+            @Throws(IOException::class)
+            override fun deduplicate(fileName: String, source: Path, target: Path, compression: Compression, distinctFields: Set<String>, ignoreFields: Set<String>) {
+                val (header, lines) = Files.newInputStream(source).use {
+                    inFile -> compression.decompress(inFile).use {
+                    zipIn -> InputStreamReader(zipIn).use {
+                    inReader -> BufferedReader(inReader).use {
+                    reader -> CSVReader(reader).use {
+                    csvReader ->
+                        val header = csvReader.readNext() ?: return
+                        val lines = generateSequence { csvReader.readNext() }.toMutableList()
+                        Pair(header, lines)
+                    } } } } }
+
+                val distinct = lines.removeDuplicates(header, distinctFields, ignoreFields)
+
+                Files.newOutputStream(target).use {
+                    fileOut -> BufferedOutputStream(fileOut).use {
+                    bufOut -> compression.compress(fileName, bufOut).use {
+                    zipOut -> OutputStreamWriter(zipOut).use {
+                    writer -> CSVWriter(writer).use { csvWriter ->
+                        csvWriter.writeNext(header, false)
+                        csvWriter.writeAll(distinct, false)
+                    } } } } }
+            }
 
             @Throws(IOException::class)
             override fun converterFor(writer: Writer, record: GenericRecord,
@@ -198,44 +209,47 @@ constructor(private val writer: Writer, record: GenericRecord, writeHeader: Bool
             override val hasHeader: Boolean = true
         }
 
-        @Throws(IOException::class)
-        fun parseCsvLine(reader: Reader): List<String> {
-            val headers = ArrayList<String>()
-            var builder = StringBuilder(20)
-            var ch = reader.read()
-            var inString = false
-            var hadQuote = false
+        private fun List<Array<String>>.removeDuplicates(header: Array<String>, usingFields: Set<String>, ignoreFields: Set<String>): List<Array<String>> {
+            if (usingFields.isNotEmpty()) {
+                val fieldIndexes = usingFields
+                        .map { f -> header.indexOf(f) }
+                        .takeIf { indexes -> indexes.none { it == -1 } }
+                        ?: emptyList()
 
-            while (ch != '\n'.toInt() && ch != '\r'.toInt() && ch != -1) {
-                when (ch) {
-                    '"'.toInt() -> when {
-                        inString -> {
-                            inString = false
-                            hadQuote = true
-                        }
-                        hadQuote -> {
-                            inString = true
-                            hadQuote = false
-                            builder.append('"')
-                        }
-                        else -> inString = true
-                    }
-                    ','.toInt() -> when {
-                        inString -> builder.append(',')
-                        else -> {
-                            if (hadQuote) {
-                                hadQuote = false
-                            }
-                            headers.add(builder.toString())
-                            builder = StringBuilder(20)
-                        }
-                    }
-                    else -> builder.append(ch.toChar())
+                if (fieldIndexes.isNotEmpty()) {
+                    return distinctByLast { line -> fieldIndexes.joinToString { line[it] } }
                 }
-                ch = reader.read()
             }
-            headers.add(builder.toString())
-            return headers
+
+            if (ignoreFields.isNotEmpty()) {
+                val ignoreIndexes = ignoreFields
+                        .map { f -> header.indexOf(f) }
+                        .takeIf { indexes -> indexes.none { it == -1 } }
+                        ?.toSet()
+                        ?: emptySet()
+
+                if (ignoreIndexes.isNotEmpty()) {
+                    return distinctByLast { line -> line.filterIndexed { i, _ -> i !in ignoreIndexes }.joinToString() }
+                }
+            }
+
+            return distinctByLast { it.joinToString() }
+        }
+
+        private fun <T, V> List<T>.distinctByLast(mapping: (T) -> V): List<T> {
+            val map: MutableMap<V, Int> = HashMap()
+            val mappings = ArrayList<V>(size)
+            forEachIndexed { i, v ->
+                val mapped = mapping(v)
+                map[mapped] = i
+                mappings.add(mapped)
+            }
+            val distinct = ArrayList<T>(map.size)
+            mappings.forEachIndexed { i, mapped ->
+                if (i == map[mapped])
+                    distinct.add(this[i])
+            }
+            return distinct
         }
 
         internal fun createHeaders(record: GenericRecord): List<String> {
@@ -245,21 +259,6 @@ constructor(private val writer: Writer, record: GenericRecord, writeHeader: Bool
                 createHeader(headers, record.get(field.pos()), field.schema(), field.name())
             }
             return headers
-        }
-
-        fun cleanCsvString(orig: String): String {
-            return if (ESCAPE_PATTERN.matcher(orig).find()) {
-                var cleaned = LINE_ENDING_PATTERN.matcher(orig).replaceAll("\\\\n")
-                cleaned = TAB_PATTERN.matcher(cleaned).replaceAll("    ")
-                cleaned = NON_PRINTING_PATTERN.matcher(cleaned).replaceAll("?")
-                if (QUOTE_OR_COMMA_PATTERN.matcher(cleaned).find()) {
-                    '"'.toString() + QUOTE_PATTERN.matcher(cleaned).replaceAll("\"\"") + '"'.toString()
-                } else {
-                    cleaned
-                }
-            } else {
-                orig
-            }
         }
 
         private fun createHeader(headers: MutableList<String>, data: Any?, schema: Schema, prefix: String) {

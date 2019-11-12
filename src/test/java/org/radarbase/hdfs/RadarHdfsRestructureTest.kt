@@ -20,6 +20,8 @@ import org.apache.avro.SchemaBuilder
 import org.apache.avro.generic.GenericRecordBuilder
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.radarbase.hdfs.path.ObservationKeyPathFactory
+import org.radarbase.hdfs.path.RecordPathFactory
 
 class RadarHdfsRestructureTest {
     @Test

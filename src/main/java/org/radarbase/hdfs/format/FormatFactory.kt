@@ -14,16 +14,10 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs.data
+package org.radarbase.hdfs.format
 
-import java.util.Locale
-
-interface Format {
-    val formats: Collection<String>
-
-    val extension: String
-
-    open fun matchesFilename(name: String): Boolean {
-        return name.toLowerCase(Locale.US).endsWith(extension.toLowerCase(Locale.US))
-    }
+class FormatFactory : FormatProvider<RecordConverterFactory> {
+    override val formats: List<RecordConverterFactory> = listOf(
+            CsvAvroConverter.factory,
+            JsonAvroConverter.factory)
 }

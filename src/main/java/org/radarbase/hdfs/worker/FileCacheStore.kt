@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs.data
+package org.radarbase.hdfs.worker
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.hdfs.FileStoreFactory
 import org.radarbase.hdfs.accounting.Accountant
-import org.radarbase.hdfs.data.FileCacheStore.WriteResponse.*
+import org.radarbase.hdfs.worker.FileCacheStore.WriteResponse.*
 import org.radarbase.hdfs.util.TemporaryDirectory
 import org.radarbase.hdfs.util.ThrowingConsumer.tryCatch
 import org.radarbase.hdfs.util.Timer.time
@@ -44,10 +44,10 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
     private val schemasAdded: MutableMap<Path, Path>
 
     init {
-        val settings = factory.settings
-        this.maxCacheSize = settings.cacheSize
+        val config = factory.config
+        this.maxCacheSize = config.worker.cacheSize
         this.caches = HashMap(maxCacheSize * 4 / 3 + 1)
-        this.tmpDir = TemporaryDirectory(settings.tempDir, "file-cache-")
+        this.tmpDir = TemporaryDirectory(config.paths.temp, "file-cache-")
         this.schemasAdded = HashMap()
     }
 
@@ -61,8 +61,7 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
      * @throws IOException when failing to open a file or writing to it.
      */
     @Throws(IOException::class)
-    fun writeRecord(path: Path, record: GenericRecord,
-                    transaction: Accountant.Transaction): WriteResponse {
+    fun writeRecord(path: Path, record: GenericRecord, transaction: Accountant.Transaction): WriteResponse {
         val existingCache: FileCache? = caches[path]
         val fileCache = if (existingCache != null) {
             existingCache
@@ -73,7 +72,7 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
             Files.createDirectories(dir)
 
             try {
-                time("write.open") { FileCache(factory, path, record, tmpDir.path, accountant) }
+                time("write.open") { FileCache(factory, transaction.topicPartition.topic, path, record, tmpDir.path, accountant) }
                         .also {
                             writeSchema(transaction.topicPartition.topic, path, record.schema)
                             caches[path] = it

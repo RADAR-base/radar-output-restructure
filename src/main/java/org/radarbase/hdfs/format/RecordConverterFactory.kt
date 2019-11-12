@@ -14,14 +14,12 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs.data
+package org.radarbase.hdfs.format
 
 import java.io.BufferedOutputStream
 import java.io.BufferedReader
 import java.io.IOException
-import java.io.InputStream
 import java.io.InputStreamReader
-import java.io.OutputStream
 import java.io.OutputStreamWriter
 import java.io.Reader
 import java.io.Writer
@@ -30,6 +28,7 @@ import java.nio.file.Path
 import java.util.LinkedHashSet
 import java.util.regex.Pattern
 import org.apache.avro.generic.GenericRecord
+import org.radarbase.hdfs.compression.Compression
 
 interface RecordConverterFactory : Format {
     /**
@@ -44,27 +43,29 @@ interface RecordConverterFactory : Format {
     @Throws(IOException::class)
     fun converterFor(writer: Writer, record: GenericRecord, writeHeader: Boolean, reader: Reader): RecordConverter
 
-    open val hasHeader: Boolean
-        get() {
-            return false
-        }
+    val hasHeader: Boolean
+        get() = false
 
     @Throws(IOException::class)
     fun deduplicate(fileName: String, source: Path, target: Path,
-                    compression: Compression) {
+                    compression: Compression, distinctFields: Set<String> = emptySet(), ignoreFields: Set<String> = emptySet()) {
         val withHeader = hasHeader
 
         val (header, lines) = Files.newInputStream(source).use {
             inFile -> compression.decompress(inFile).use {
             zipIn -> InputStreamReader(zipIn).use {
             inReader -> BufferedReader(inReader).use {
-            reader -> readFile(reader, withHeader) } } } }
+            reader ->
+            readFile(reader, withHeader)
+        } } } }
 
         Files.newOutputStream(target).use {
             fileOut -> BufferedOutputStream(fileOut).use {
             bufOut -> compression.compress(fileName, bufOut).use {
             zipOut -> OutputStreamWriter(zipOut).use {
-            writer -> writeFile(writer, header, lines) } } } }
+            writer ->
+            writeFile(writer, header, lines)
+        } } } }
     }
 
     override fun matchesFilename(name: String): Boolean {

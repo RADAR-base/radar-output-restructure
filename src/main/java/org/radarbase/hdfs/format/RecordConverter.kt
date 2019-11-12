@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 The Hyve
+ * Copyright 2017 The Hyve
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,17 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs.data
+package org.radarbase.hdfs.format
 
-class CompressionFactory : FormatProvider<Compression> {
-    override val formats: List<Compression> = listOf(
-                GzipCompression(),
-                IdentityCompression(),
-                ZipCompression())
+import java.io.Closeable
+import java.io.Flushable
+import java.io.IOException
+import org.apache.avro.generic.GenericRecord
+
+/** Converts a GenericRecord to Java primitives or writes it to file.  */
+interface RecordConverter : Flushable, Closeable {
+    @Throws(IOException::class)
+    fun writeRecord(record: GenericRecord): Boolean
+
+    fun convertRecord(record: GenericRecord): Map<String, Any?>
 }

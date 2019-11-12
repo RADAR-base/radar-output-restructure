@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs.data
+package org.radarbase.hdfs.compression
 
+import org.radarbase.hdfs.compression.Compression
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
-import java.util.Collections
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 

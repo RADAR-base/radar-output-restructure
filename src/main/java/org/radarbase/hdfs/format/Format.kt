@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs.util.commandline
+package org.radarbase.hdfs.format
 
-import com.beust.jcommander.IParameterValidator
-import com.beust.jcommander.ParameterException
+import java.util.Locale
 
-class NonEmptyValidator : IParameterValidator {
-    override fun validate(name: String, value: String?) {
-        if (value == null || value.isEmpty()) {
-            throw ParameterException("Parameter " + name + " should be supplied. "
-                    + "It cannot be empty or null. (found " + value + ")."
-                    + "Please run with --help or -h for more information.")
-        }
+interface Format {
+    val formats: Collection<String>
+
+    val extension: String
+
+    open fun matchesFilename(name: String): Boolean {
+        return name.toLowerCase(Locale.US).endsWith(extension.toLowerCase(Locale.US))
     }
 }
