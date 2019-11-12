@@ -14,10 +14,13 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs.data
+package org.radarbase.hdfs.compression
 
-class FormatFactory : FormatProvider<RecordConverterFactory> {
-    override val formats: List<RecordConverterFactory> = listOf(
-                CsvAvroConverter.factory,
-                JsonAvroConverter.factory)
+import org.radarbase.hdfs.format.FormatProvider
+
+class CompressionFactory : FormatProvider<Compression> {
+    override val formats: List<Compression> = listOf(
+            GzipCompression(),
+            IdentityCompression(),
+            ZipCompression())
 }

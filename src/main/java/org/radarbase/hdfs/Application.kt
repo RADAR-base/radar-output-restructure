@@ -22,65 +22,49 @@ import org.apache.hadoop.fs.Path
 import org.radarbase.hdfs.accounting.Accountant
 import org.radarbase.hdfs.accounting.HdfsRemoteLockManager
 import org.radarbase.hdfs.accounting.RemoteLockManager
-import org.radarbase.hdfs.config.HdfsSettings
-import org.radarbase.hdfs.config.RestructureSettings
-import org.radarbase.hdfs.data.*
+import org.radarbase.hdfs.config.CommandLineArgs
+import org.radarbase.hdfs.config.RestructureConfig
+import org.radarbase.hdfs.compression.Compression
+import org.radarbase.hdfs.format.RecordConverterFactory
+import org.radarbase.hdfs.path.RecordPathFactory
+import org.radarbase.hdfs.storage.StorageDriver
 import org.radarbase.hdfs.util.ProgressBar.Companion.format
 import org.radarbase.hdfs.util.Timer
-import org.radarbase.hdfs.util.commandline.CommandLineArgs
+import org.radarbase.hdfs.worker.FileCacheStore
+import org.radarbase.hdfs.worker.RadarHdfsRestructure
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.io.UncheckedIOException
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.text.NumberFormat
-import java.text.SimpleDateFormat
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.time.temporal.Temporal
-import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.system.exitProcess
 
 /** Main application.  */
-class Application private constructor(builder: Builder) : FileStoreFactory {
-
-    override val storageDriver: StorageDriver
-    override val recordConverter: RecordConverterFactory
-    override val compression: Compression
-    override val hdfsSettings: HdfsSettings
-    override val pathFactory: RecordPathFactory
-    private val inputPaths: List<String>
-    override val settings: RestructureSettings
-    private val pollInterval: Int
-    private val isService: Boolean
-    private val lockPath: Path?
+class Application(override val config: RestructureConfig) : FileStoreFactory {
+    override val pathFactory: RecordPathFactory = config.paths.createFactory()
+    override val recordConverter: RecordConverterFactory = config.format.createConverter()
+    override val compression: Compression = config.compression.createCompression()
+    override val storageDriver: StorageDriver = config.storage.createFactory()
+    private val lockPath: Path = Path(config.hdfs.lockPath)
 
     override val remoteLockManager: RemoteLockManager
         @Throws(IOException::class)
         get() = HdfsRemoteLockManager(
-                lockPath!!.getFileSystem(hdfsSettings.configuration),
+                lockPath.getFileSystem(config.hdfs.configuration),
                 lockPath)
 
     init {
-        this.storageDriver = builder.storageDriver!!
-        this.settings = builder.settings
-        this.isService = builder.asService
-        this.pollInterval = builder.pollInterval
-
-        recordConverter = builder.formatFactory!![settings.format!!]
-        compression = builder.compressionFactory!![settings.compression!!]
-
-        pathFactory = builder.pathFactory!!
-        val extension = recordConverter.extension + compression.extension
-        this.pathFactory.extension = extension
-        this.pathFactory.root = settings.outputPath
-
-        this.inputPaths = builder.inputPaths
-
-        hdfsSettings = builder.hdfsSettings
-        this.lockPath = builder.lockPath
+        pathFactory.apply {
+            extension = recordConverter.extension + compression.extension
+            root = config.paths.output
+        }
     }
 
     @Throws(IOException::class)
@@ -90,22 +74,22 @@ class Application private constructor(builder: Builder) : FileStoreFactory {
 
     fun start() {
         System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism",
-                (settings.numThreads - 1).toString())
+                (config.worker.numThreads - 1).toString())
 
         try {
-            Files.createDirectories(settings.tempDir)
+            Files.createDirectories(config.paths.temp)
         } catch (ex: IOException) {
             logger.error("Failed to create temporary directory")
             return
         }
 
-        if (isService) {
-            logger.info("Running as a Service with poll interval of {} seconds", pollInterval)
+        if (config.service.enable) {
+            logger.info("Running as a Service with poll interval of {} seconds", config.service.interval)
             logger.info("Press Ctrl+C to exit...")
             val executorService = Executors.newSingleThreadScheduledExecutor()
 
-            executorService.scheduleAtFixedRate({ runRestructure() },
-                    (pollInterval / 4).toLong(), pollInterval.toLong(), TimeUnit.SECONDS)
+            executorService.scheduleAtFixedRate(::runRestructure,
+                    config.service.interval / 4, config.service.interval, TimeUnit.SECONDS)
 
             try {
                 Thread.sleep(java.lang.Long.MAX_VALUE)
@@ -128,10 +112,10 @@ class Application private constructor(builder: Builder) : FileStoreFactory {
         val timeStart = Instant.now()
         try {
             RadarHdfsRestructure(this).use { restructure ->
-                for (input in inputPaths) {
+                for (input in config.paths.inputs) {
                     logger.info("In:  {}", input)
                     logger.info("Out: {}", pathFactory.root)
-                    restructure.process(input)
+                    restructure.process(input.toString())
                 }
 
                 val numberFormat = NumberFormat.getNumberInstance()
@@ -148,32 +132,6 @@ class Application private constructor(builder: Builder) : FileStoreFactory {
             // Print timings and reset the timings for the next iteration.
             println(Timer)
             Timer.reset()
-        }
-    }
-
-    class Builder(val settings: RestructureSettings, val hdfsSettings: HdfsSettings) {
-        var storageDriver: StorageDriver? = null
-        var pathFactory: RecordPathFactory? = null
-        var compressionFactory: CompressionFactory? = null
-        var formatFactory: FormatFactory? = null
-        val properties = HashMap<String, String>()
-        var inputPaths: List<String> = listOf()
-        var asService: Boolean = false
-        var pollInterval: Int = 0
-        var lockPath: Path? = null
-
-        @Throws(IOException::class)
-        fun build(): Application {
-            pathFactory = (pathFactory ?: ObservationKeyPathFactory())
-                    .also { it.init(properties) }
-            storageDriver = (storageDriver ?: LocalStorageDriver())
-                    .also { it.init(properties) }
-            compressionFactory = (compressionFactory ?: CompressionFactory())
-                    .also { it.init(properties) }
-            formatFactory = (formatFactory ?: FormatFactory())
-                    .also { it.init(properties) }
-
-            return Application(this)
         }
     }
 
@@ -202,51 +160,37 @@ class Application private constructor(builder: Builder) : FileStoreFactory {
                 exitProcess(0)
             }
 
-            logger.info(SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(Date()))
-            logger.info("Starting...")
+            logger.info("Starting at {}...",
+                    DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(LocalDateTime.now()))
 
             // Enable singleton timer statements in the code.
             Timer.isEnabled = commandLineArgs.enableTimer
 
             val application = try {
-                val settings = RestructureSettings.Builder(commandLineArgs.outputDirectory).apply {
-                    compression = commandLineArgs.compression
-                    cacheSize = commandLineArgs.cacheSize
-                    format = commandLineArgs.format
-                    doDeduplicate = commandLineArgs.deduplicate
-                    tempDir = commandLineArgs.tmpDir?.let { Paths.get(it) }
-                    numThreads = commandLineArgs.numThreads
-                    maxFilesPerTopic = commandLineArgs.maxFilesPerTopic
-                    excludeTopics = commandLineArgs.excludeTopics
-                }.build()
+                val restructureConfig = RestructureConfig.load(commandLineArgs.configFile)
+                        .run { commandLineArgs.asService?.let { copy(service = service.copy(enable = it)) } ?: this }
+                        .run { commandLineArgs.pollInterval?.let { copy(service = service.copy(interval = it)) } ?: this }
+                        .run { commandLineArgs.cacheSize?.let { copy(worker = worker.copy(cacheSize = it)) } ?: this }
+                        .run { commandLineArgs.numThreads?.let { copy(worker = worker.copy(numThreads = it)) } ?: this }
+                        .run { commandLineArgs.maxFilesPerTopic?.let { copy(worker = worker.copy(maxFilesPerTopic = it)) } ?: this }
+                        .run { commandLineArgs.tmpDir?.let { copy(paths = paths.copy(temp = Paths.get(it))) } ?: this }
+                        .run { commandLineArgs.inputPaths?.let { inputs -> copy(paths = paths.copy(inputs = inputs.map { Paths.get(it) })) } ?: this }
+                        .run { commandLineArgs.outputDirectory?.let { copy(paths = paths.copy(output = Paths.get(it))) } ?: this }
+                        .run { commandLineArgs.hdfsName?.let { copy(hdfs = hdfs.copy(name = it)) } ?: this }
+                        .run { commandLineArgs.format?.let { copy(format = format.copy(type = it)) } ?: this }
+                        .run { commandLineArgs.deduplicate?.let { copy(format = format.copy(deduplication = format.deduplication.copy(enable = it))) } ?: this }
+                        .run { commandLineArgs.compression?.let { copy(compression = compression.copy(type = it)) } ?: this }
+                        .also { it.validate() }
 
-                val hdfsSettings = HdfsSettings.Builder(commandLineArgs.hdfsName).apply {
-                    hdfsHighAvailability(commandLineArgs.hdfsHa,
-                            commandLineArgs.hdfsUri1, commandLineArgs.hdfsUri2)
-                }.build()
-
-                Builder(settings, hdfsSettings).apply {
-                    lockPath = Path(commandLineArgs.lockDirectory)
-                    pathFactory = commandLineArgs.pathFactory as RecordPathFactory?
-                    compressionFactory = commandLineArgs.compressionFactory as CompressionFactory?
-                    formatFactory = commandLineArgs.formatFactory as FormatFactory?
-                    storageDriver = commandLineArgs.storageDriver as StorageDriver?
-                    properties += commandLineArgs.properties
-                    inputPaths = commandLineArgs.inputPaths
-                    asService = commandLineArgs.asService
-                    pollInterval = commandLineArgs.pollInterval
-                }.build()
+                Application(restructureConfig)
             } catch (ex: IllegalArgumentException) {
-                logger.error("HDFS High availability name node configuration is incomplete." + " Configure --namenode-1, --namenode-2 and --namenode-ha")
-                exitProcess(1)
-            } catch (ex: UncheckedIOException) {
-                logger.error("Failed to create temporary directory " + commandLineArgs.tmpDir)
+                logger.error("Illegal argument", ex)
                 exitProcess(1)
             } catch (ex: IOException) {
                 logger.error("Failed to initialize plugins", ex)
                 exitProcess(1)
-            } catch (e: ClassCastException) {
-                logger.error("Cannot find factory", e)
+            } catch (e: IllegalStateException) {
+                logger.error("Cannot process configuration", e)
                 exitProcess(1)
             }
 

@@ -14,18 +14,15 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs
+package org.radarbase.hdfs.format
 
-import java.time.ZoneOffset.UTC
+import org.radarbase.hdfs.Plugin
 
-import java.time.format.DateTimeFormatter
+interface FormatProvider<T : Format> : Plugin {
+    val formats: List<T>
 
-class MonthlyObservationKeyPathFactory : ObservationKeyPathFactory() {
-    override val timeBinFormat: DateTimeFormatter
-        get() = PER_MONTH_HOURLY_TIME_BIN_FORMAT
-
-    companion object {
-        private val PER_MONTH_HOURLY_TIME_BIN_FORMAT = DateTimeFormatter.ofPattern("yyyyMM/yyyyMMdd_HH'00'")
-                .withZone(UTC)
-    }
+    operator fun get(format: String): T = requireNotNull(formats
+            .firstOrNull { r -> r.formats
+                    .any { s -> s.equals(format, ignoreCase = true) }
+            }) { "Format $format is not supported" }
 }

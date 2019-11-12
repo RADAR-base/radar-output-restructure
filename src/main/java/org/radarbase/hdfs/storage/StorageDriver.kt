@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs.data
+package org.radarbase.hdfs.storage
 
 import java.io.BufferedReader
 import java.io.IOException

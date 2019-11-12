@@ -25,7 +25,9 @@ import org.apache.avro.io.DecoderFactory
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.radarbase.hdfs.compression.IdentityCompression
 import org.radarbase.hdfs.data.CsvAvroConverterTest.Companion.writeTestNumbers
+import org.radarbase.hdfs.format.JsonAvroConverter
 import java.io.IOException
 import java.io.InputStreamReader
 import java.io.StringReader
@@ -69,6 +71,6 @@ class JsonAvroConverterTest {
         val path = folder.resolve("test.txt")
         Files.newBufferedWriter(path).use { writer -> writeTestNumbers(writer) }
         JsonAvroConverter.factory.deduplicate("t", path, path, IdentityCompression())
-        assertEquals(listOf("a,b", "1,2", "3,4", "1,3", "a,a"), Files.readAllLines(path))
+        assertEquals(listOf("a,b", "1,2", "3,4", "1,3", "a,a", "3,3"), Files.readAllLines(path))
     }
 }

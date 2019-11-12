@@ -98,3 +98,4 @@ fabric.properties
 ## Pebble 2
 .lock*
 /data/
+/output/

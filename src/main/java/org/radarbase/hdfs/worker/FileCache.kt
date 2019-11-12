@@ -14,37 +14,36 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs.data
+package org.radarbase.hdfs.worker
 
-import java.io.BufferedOutputStream
-import java.io.ByteArrayInputStream
-import java.io.Closeable
-import java.io.Flushable
-import java.io.IOException
-import java.io.InputStream
-import java.io.InputStreamReader
-import java.io.OutputStream
-import java.io.OutputStreamWriter
-import java.io.Writer
-import java.nio.file.Files
-import java.nio.file.Path
-import java.util.concurrent.atomic.AtomicBoolean
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.hdfs.FileStoreFactory
 import org.radarbase.hdfs.accounting.Accountant
-import org.radarbase.hdfs.util.Timer
+import org.radarbase.hdfs.compression.Compression
+import org.radarbase.hdfs.config.DeduplicationConfig
+import org.radarbase.hdfs.format.RecordConverter
+import org.radarbase.hdfs.format.RecordConverterFactory
+import org.radarbase.hdfs.storage.StorageDriver
 import org.radarbase.hdfs.util.Timer.time
 import org.slf4j.LoggerFactory
+import java.io.*
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardCopyOption
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Keeps path handles of a path.  */
 class FileCache(
         factory: FileStoreFactory,
+        topic: String,
         /** File that the cache is maintaining.  */
         val path: Path,
         /** Example record to create converter from, this is not written to path. */
         record: GenericRecord,
         /** Local temporary directory to store files in. */
-        tmpDir: Path, private val accountant: Accountant
+        tmpDir: Path,
+        private val accountant: Accountant
 ) : Closeable, Flushable, Comparable<FileCache> {
 
     private val writer: Writer
@@ -53,13 +52,17 @@ class FileCache(
     private val tmpPath: Path
     private val compression: Compression = factory.compression
     private val converterFactory: RecordConverterFactory = factory.recordConverter
-    private val deduplicate: Boolean = factory.settings.isDeduplicate
     private val ledger: Accountant.Ledger = Accountant.Ledger()
     private val fileName: String = path.fileName.toString()
     private var lastUse: Long = 0
     private val hasError: AtomicBoolean = AtomicBoolean(false)
+    private val deduplicate: DeduplicationConfig
 
     init {
+        val topicConfig = factory.config.topics[topic]
+        val defaultDeduplicate = factory.config.format.deduplication
+        deduplicate = topicConfig?.deduplication(defaultDeduplicate) ?: defaultDeduplicate
+
         val fileIsNew = !storageDriver.exists(path) || storageDriver.size(path) == 0L
         this.tmpPath = Files.createTempFile(tmpDir, fileName, ".tmp" + compression.extension)
 
@@ -124,9 +127,15 @@ class FileCache(
         writer.close()
 
         if (!hasError.get()) {
-            if (deduplicate) {
+            if (deduplicate.enable!!) {
                 time("close.deduplicate") {
-                    converterFactory.deduplicate(fileName, tmpPath, tmpPath, compression)
+                    val dedupTmp = tmpPath.resolveSibling("${tmpPath.fileName}.dedup")
+                    converterFactory.deduplicate(fileName, tmpPath, dedupTmp, compression, deduplicate.distinctFields ?: emptySet(), deduplicate.ignoreFields ?: emptySet())
+                    try {
+                        Files.move(dedupTmp, tmpPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+                    } catch (ex: AtomicMoveNotSupportedException) {
+                        Files.move(dedupTmp, tmpPath, StandardCopyOption.REPLACE_EXISTING)
+                    }
                 }
             }
 

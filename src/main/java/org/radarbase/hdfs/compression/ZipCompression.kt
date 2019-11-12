@@ -1,4 +1,4 @@
-package org.radarbase.hdfs.data
+package org.radarbase.hdfs.compression
 
 import java.io.IOException
 import java.io.InputStream

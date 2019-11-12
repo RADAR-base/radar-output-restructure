@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-package org.radarbase.hdfs
+package org.radarbase.hdfs.path
 
 import org.apache.avro.Schema
 import org.apache.avro.Schema.Type
 import org.apache.avro.generic.GenericRecord
+import org.radarbase.hdfs.Plugin
 import org.slf4j.LoggerFactory
 import java.nio.file.Path
 import java.time.Instant
