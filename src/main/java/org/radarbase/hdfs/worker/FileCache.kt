@@ -128,7 +128,7 @@ class FileCache(
         writer.close()
 
         if (!hasError.get()) {
-            if (deduplicate.enable!!) {
+            if (deduplicate.enable == true) {
                 time("close.deduplicate") {
                     val dedupTmp = tmpPath.resolveSibling("${tmpPath.fileName}.dedup")
                     converterFactory.deduplicate(fileName, tmpPath, dedupTmp, compression, deduplicate.distinctFields ?: emptySet(), deduplicate.ignoreFields ?: emptySet())

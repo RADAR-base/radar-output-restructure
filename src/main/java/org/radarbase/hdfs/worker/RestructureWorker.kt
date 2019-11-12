@@ -130,11 +130,11 @@ internal class RestructureWorker(
     }
 
     @Throws(IOException::class)
-    private fun writeRecord(topicPartition: TopicPartition, record: GenericRecord?,
+    private fun writeRecord(topicPartition: TopicPartition, record: GenericRecord,
                             offset: Long, suffix: Int = 0) {
         var currentSuffix = suffix
         val (path) = pathFactory.getRecordOrganization(
-                topicPartition.topic, record!!, currentSuffix)
+                topicPartition.topic, record, currentSuffix)
 
         val transaction = time("accounting.create") {
             Accountant.Transaction(topicPartition, offset)

@@ -58,17 +58,18 @@ abstract class PostponedWriter
      * not yet taken place, the write will occur earlier.
      */
     fun triggerWrite() {
-        var localWriteFuture: Future<*>? = writeFuture.get()
-        if (localWriteFuture == null) {
-            localWriteFuture = executor.schedule({ this.startWrite() }, timeout, timeoutUnit)
-            if (!writeFuture.compareAndSet(null, localWriteFuture)) {
-                localWriteFuture!!.cancel(false)
-            }
+        if (writeFuture.get() == null) {
+            executor.schedule(::startWrite, timeout, timeoutUnit)
+                    .also { newWriteFuture ->
+                        if (!writeFuture.compareAndSet(null, newWriteFuture)) {
+                            newWriteFuture.cancel(false)
+                        }
+                    }
         }
     }
 
     /** Start the write in the writer thread.  */
-    protected fun startWrite() {
+    private fun startWrite() {
         writeFuture.set(null)
         doWrite()
     }
@@ -89,8 +90,9 @@ abstract class PostponedWriter
 
     @Throws(IOException::class)
     private fun doFlush(shutdown: Boolean) {
-        val localFuture = executor.submit { this.startWrite() }
-        writeFuture.set(localFuture)
+        val localFuture = executor.submit(::startWrite)
+                .also { writeFuture.set(it) }
+
         if (shutdown) {
             executor.shutdown()
         }
