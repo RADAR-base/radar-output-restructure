@@ -19,6 +19,11 @@ package org.radarbase.hdfs
 import java.io.IOException
 
 interface Plugin {
+
+    /**
+     * Initialize plugin. Throws IllegalArgumentException if required properties are not provided
+     * or if they are of the wrong format.
+     */
     @Throws(IOException::class)
     fun init(properties: Map<String, String>) {
         // do nothing

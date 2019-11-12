@@ -63,7 +63,8 @@ class FileCache(
         val defaultDeduplicate = factory.config.format.deduplication
         deduplicate = topicConfig?.deduplication(defaultDeduplicate) ?: defaultDeduplicate
 
-        val fileIsNew = !storageDriver.exists(path) || storageDriver.size(path) == 0L
+        val fileIsNew = storageDriver.status(path)?.takeIf { it.size > 0L } == null
+
         this.tmpPath = Files.createTempFile(tmpDir, fileName, ".tmp" + compression.extension)
 
         var outStream = compression.compress(fileName,
@@ -127,7 +128,7 @@ class FileCache(
         writer.close()
 
         if (!hasError.get()) {
-            if (deduplicate.enable!!) {
+            if (deduplicate.enable == true) {
                 time("close.deduplicate") {
                     val dedupTmp = tmpPath.resolveSibling("${tmpPath.fileName}.dedup")
                     converterFactory.deduplicate(fileName, tmpPath, dedupTmp, compression, deduplicate.distinctFields ?: emptySet(), deduplicate.ignoreFields ?: emptySet())
@@ -174,7 +175,7 @@ class FileCache(
             var i = 0
             while (corruptPath == null && i < 100) {
                 val path = source.resolveSibling(source.fileName.toString() + ".corrupted" + suffix)
-                if (!storageDriver.exists(path)) {
+                if (storageDriver.status(path) == null) {
                     corruptPath = path
                 }
                 suffix = "-$i"

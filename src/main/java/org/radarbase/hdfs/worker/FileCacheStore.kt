@@ -110,10 +110,12 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
         if (schemasAdded.putIfAbsent(schemaPath, schemaPath) == null) {
             val storage = factory.storageDriver
 
-            if (!storage.exists(schemaPath)) {
-                storage.newOutputStream(schemaPath, false).use {
-                    out -> OutputStreamWriter(out).use {
-                    writer -> writer.write(schema.toString(true)) } }
+            if (storage.status(schemaPath) == null) {
+                val tmpSchemaPath = Files.createTempFile(tmpDir.path, "schema-$topic", ".json")
+                Files.newOutputStream(tmpSchemaPath).use { out ->
+                    out.write(schema.toString(true).toByteArray())
+                }
+                storage.store(tmpSchemaPath, schemaPath)
             }
         }
     }

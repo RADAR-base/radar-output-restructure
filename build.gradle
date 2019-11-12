@@ -43,6 +43,7 @@ dependencies {
     implementation group: 'com.beust', name: 'jcommander', version: jCommanderVersion
     implementation group: 'com.almworks.integers', name: 'integers', version: almworksVersion
 
+    implementation 'software.amazon.awssdk:s3:2.10.3'
     implementation 'com.opencsv:opencsv:5.0'
 
     implementation group: 'org.apache.avro', name: 'avro-mapred', version: avroVersion
@@ -106,8 +107,8 @@ test {
     useJUnitPlatform()
     testLogging {
         events "passed", "skipped", "failed"
-        setExceptionFormat("full")
         showStandardStreams = true
+        setExceptionFormat("full")
     }
 }
 
