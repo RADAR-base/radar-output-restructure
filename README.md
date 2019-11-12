@@ -50,7 +50,30 @@ radar-hdfs-restructure --compression gzip  --nameservice <hdfs_node> --output-di
 
 ### Storage
 
-When using local storage, to set the output user ID and group ID, specify the `-p local-uid=123` and `-p local-gid=12` properties.
+There are two storage drivers implemented: `org.radarbase.hdfs.storage.LocalStorageDriver` for an output directory on the local file system or `org.radarbase.hdfs.storage.S3StorageDriver` for storage on an object store.
+
+`LocalStorageDriver` takes the following properties:
+```yaml
+storage:
+  factory: org.radarbase.hdfs.storage.LocalStorageDriver
+  properties:
+    # User ID to write data as
+    localUid: 123
+    # Group ID to write data as
+    localGid: 123
+```
+
+With the `S3StorageDriver`, use the following configuration instead:
+```yaml
+storage:
+  factory: org.radarbase.hdfs.storage.S3StorageDriver
+  properties:
+    # Object store URL
+    s3EndpointUrl: s3://my-region.s3.aws.amazon.com
+    # Bucket to use
+    s3Bucket: myBucketName
+```
+Ensure that the environment variables contain the authorized AWS keys that allow the service to list, download and upload files to the respective bucket.
 
 ### Service
 

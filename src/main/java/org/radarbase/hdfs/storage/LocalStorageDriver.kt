@@ -30,8 +30,8 @@ class LocalStorageDriver : StorageDriver {
     private var gid = -1
 
     override fun init(properties: Map<String, String>) {
-        uid = properties["local-uid"]?.toIntOrNull() ?: -1
-        gid = properties["local-gid"]?.toIntOrNull() ?: -1
+        uid = properties["localUid"]?.toIntOrNull() ?: -1
+        gid = properties["localGid"]?.toIntOrNull() ?: -1
     }
 
     @Throws(IOException::class)
