@@ -130,8 +130,10 @@ class Application(override val config: RestructureConfig) : FileStoreFactory {
             logger.error("Processing interrupted")
         } finally {
             // Print timings and reset the timings for the next iteration.
-            println(Timer)
-            Timer.reset()
+            if (Timer.isEnabled) {
+                logger.info("{}", Timer)
+                Timer.reset()
+            }
         }
     }
 

@@ -44,6 +44,7 @@ object Timer {
                     Runtime.getRuntime().addShutdownHook(shutdownHook)
                 } else {
                     Runtime.getRuntime().removeShutdownHook(shutdownHook)
+                    times.clear()
                 }
             }
             field = value
