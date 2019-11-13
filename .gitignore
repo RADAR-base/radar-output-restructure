@@ -15,7 +15,6 @@ obj/
 *.ap_
 
 # Generated files
-bin/
 gen/
 out/
 build/
