@@ -69,7 +69,7 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
             ensureCapacity()
 
             val dir = path.parent
-            Files.createDirectories(dir)
+            factory.storageDriver.createDirectories(dir)
 
             try {
                 time("write.open") { FileCache(factory, transaction.topicPartition.topic, path, record, tmpDir.path, accountant) }

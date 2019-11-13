@@ -39,7 +39,7 @@ constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
         val offsetsDirectory = factory.config.paths.output
                 .resolve(OFFSETS_FILE_NAME)
 
-        Files.createDirectories(offsetsDirectory)
+        factory.storageDriver.createDirectories(offsetsDirectory)
 
         val offsetPath = offsetsDirectory.resolve("$topic.csv")
         this.offsetFile = OffsetRangeFile.read(factory.storageDriver, offsetPath)

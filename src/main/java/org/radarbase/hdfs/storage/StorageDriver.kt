@@ -45,5 +45,8 @@ interface StorageDriver : Plugin {
         return BufferedReader(reader)
     }
 
+    @Throws(IOException::class)
+    fun createDirectories(directory: Path)
+
     data class PathStatus(val size: Long)
 }

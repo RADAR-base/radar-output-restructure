@@ -16,6 +16,7 @@
 
 package org.radarbase.hdfs.storage
 
+import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.io.InputStream
 import java.nio.file.AtomicMoveNotSupportedException
@@ -23,6 +24,8 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
+import java.nio.file.attribute.FileAttribute
+import java.nio.file.attribute.PosixFileAttributes
 import java.nio.file.attribute.PosixFilePermissions
 
 class LocalStorageDriver : StorageDriver {
@@ -32,6 +35,10 @@ class LocalStorageDriver : StorageDriver {
     override fun init(properties: Map<String, String>) {
         uid = properties["localUid"]?.toIntOrNull() ?: -1
         gid = properties["localGid"]?.toIntOrNull() ?: -1
+
+        logger.info("Local storage configured with user id {}:{} (-1 if not configured)",
+                uid,
+                gid)
     }
 
     @Throws(IOException::class)
@@ -57,16 +64,31 @@ class LocalStorageDriver : StorageDriver {
 
     @Throws(IOException::class)
     override fun store(localPath: Path, newPath: Path) {
-        if (uid >= 0) {
-            Files.setAttribute(localPath, "unix:uid", uid)
-        }
-        if (gid >= 0) {
-            Files.setAttribute(localPath, "unix:gid", gid)
-        }
+        localPath.updateUser()
         Files.setPosixFilePermissions(localPath, PosixFilePermissions.fromString("rw-r--r--"))
         move(localPath, newPath)
     }
 
+    override fun createDirectories(directory: Path) {
+        Files.createDirectories(directory, PosixFilePermissions.asFileAttribute(
+                PosixFilePermissions.fromString("rwxr-xr-x")))
+
+        directory.updateUser()
+    }
+
+    private fun Path.updateUser() {
+        if (uid >= 0) {
+            Files.setAttribute(this, "unix:uid", uid)
+        }
+        if (gid >= 0) {
+            Files.setAttribute(this, "unix:gid", gid)
+        }
+    }
+
     @Throws(IOException::class)
     override fun delete(path: Path) = Files.delete(path)
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(LocalStorageDriver::class.java)
+    }
 }
