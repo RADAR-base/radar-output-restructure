@@ -8,7 +8,7 @@ Data streamed to HDFS using the [RADAR HDFS sink connector](https://github.com/R
 
 This package is available as docker image [`radarbase/radar-hdfs-restructure`](https://hub.docker.com/r/radarbase/radar-hdfs-restructure). The entrypoint of the image is the current application. So in all of the commands listed in usage, replace `radar-hdfs-restructure` with for example:
 ```shell
-docker run --rm -t --network hadoop -v "$PWD/output:/output" radarbase/radar-hdfs-restructure:0.5.7 -n hdfs-namenode -o /output /myTopic
+docker run --rm -t --network hadoop -v "$PWD/output:/output" radarbase/radar-hdfs-restructure:0.6.0 -n hdfs-namenode -o /output /myTopic
 ```
 if your docker cluster is running in the `hadoop` network and your output directory should be `./output`.
 
@@ -39,11 +39,11 @@ By default, this will output the data in CSV format. If JSON format is preferred
 radar-hdfs-restructure --format json --nameservice <hdfs_node> --output-directory <output_folder>  <input_path_1> [<input_path_2> ...]
 ```
 
-By default, files records are not deduplicated after writing. To enable this behaviour, specify the option `--deduplicate` or `-d`. This set to false by default because of an issue with Biovotion data. Please see - [issue #16](https://github.com/RADAR-base/Restructure-HDFS-topic/issues/16) before enabling it. Deduplication can also be enabled or disabled per topic using the config file. If lines should be deduplicated using a subset of fields, e.g. only `sourceId` and `time` define a unique record and only the last record with duplicate values should be kept, then specify `topics: <topicName>: deduplicateFields: [sourceId, time]`.
+By default, files records are not deduplicated after writing. To enable this behaviour, specify the option `--deduplicate` or `-d`. This set to false by default because of an issue with Biovotion data. Please see - [issue #16](https://github.com/RADAR-base/Restructure-HDFS-topic/issues/16) before enabling it. Deduplication can also be enabled or disabled per topic using the config file. If lines should be deduplicated using a subset of fields, e.g. only `sourceId` and `time` define a unique record and only the last record with duplicate values should be kept, then specify `topics: <topicName>: deduplication: distinctFields: [key.sourceId, value.time]`.
 
 ### Compression
 
-Another option is to output the data in compressed form. All files will get the `gz` suffix, and can be decompressed with a GZIP decoder. Note that for a very small number of records, this may actually increase the file size.
+Another option is to output the data in compressed form. All files will get the `gz` suffix, and can be decompressed with a GZIP decoder. Note that for a very small number of records, this may actually increase the file size. Zip compression is also available.
 ```
 radar-hdfs-restructure --compression gzip  --nameservice <hdfs_node> --output-directory <output_folder> <input_path_1> [<input_path_2> ...]
 ```
@@ -90,7 +90,7 @@ This package requires at least Java JDK 8. Build the distribution with
 and install the package into `/usr/local` with for example
 ```shell
 sudo mkdir -p /usr/local
-sudo tar -xzf build/distributions/radar-hdfs-restructure-0.5.7.tar.gz -C /usr/local --strip-components=1
+sudo tar -xzf build/distributions/radar-hdfs-restructure-0.6.0.tar.gz -C /usr/local --strip-components=1
 ```
 
 Now the `radar-hdfs-restructure` command should be available.
