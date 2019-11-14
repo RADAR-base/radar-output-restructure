@@ -21,15 +21,19 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.atomic.LongAdder
 import org.radarbase.hdfs.util.ProgressBar.Companion.appendTime
+import java.util.*
 
 /** Timer for multi-threaded timings. The timer may be disabled to increase program performance.  */
 object Timer {
     private val shutdownHook = Thread({ println(Timer) }, "Timer")
     private val times: ConcurrentMap<String, MutableTimerEntry> = ConcurrentHashMap()
 
-    /** All currently measured timings. This returns a thread-safe snapshot of the current state. */
+    /**
+     * All currently measured timings.
+     * This returns a thread-safe sorted snapshot of the current state.
+     */
     val timings: Map<String, TimerEntry>
-        get() = times.mapValues { it.value.toTimerEntry() }
+        get() = times.mapValuesTo(TreeMap()) { it.value.toTimerEntry() }
 
     /**
      * Whether the timer is enabled. A disabled timer will have much less performance impact on
