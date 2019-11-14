@@ -19,18 +19,18 @@ package org.radarbase.hdfs.format
 import com.opencsv.CSVReader
 import com.opencsv.CSVWriter
 import java.nio.ByteBuffer
-import java.util.ArrayList
-import java.util.Base64
-import java.util.LinkedHashMap
 import org.apache.avro.Schema
+import org.apache.avro.Schema.Type.*
 import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericFixed
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.hdfs.compression.Compression
-import org.radarbase.hdfs.format.CsvAvroConverter.Companion.removeDuplicates
 import java.io.*
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.*
+import java.util.regex.Pattern
+import kotlin.collections.HashMap
 
 /**
  * Converts deep hierarchical Avro records into flat CSV format. It uses a simple dot syntax in the
@@ -53,7 +53,8 @@ class CsvAvroConverter(
             createHeaders(record)
                     .also { csvWriter.writeNext(it.toTypedArray(), false) }
         } else {
-            CSVReader(reader).readNext().toList()
+            CSVReader(reader).use { requireNotNull(it.readNext()) { "No header found" } }
+                    .toList()
         }
 
         values = ArrayList(headers.size)
@@ -108,7 +109,7 @@ class CsvAvroConverter(
 
     private fun convertAvro(values: MutableList<String>, data: Any?, schema: Schema, prefix: String) {
         when (schema.type) {
-            Schema.Type.RECORD -> {
+            RECORD -> {
                 val record = data as GenericRecord
                 val subSchema = record.schema
                 for (field in subSchema.fields) {
@@ -116,40 +117,36 @@ class CsvAvroConverter(
                     convertAvro(values, subData, field.schema(), prefix + '.'.toString() + field.name())
                 }
             }
-            Schema.Type.MAP -> {
+            MAP -> {
                 val valueType = schema.valueType
                 for ((key, value) in data as Map<*, *>) {
                     val name = "$prefix.$key"
                     convertAvro(values, value, valueType, name)
                 }
             }
-            Schema.Type.ARRAY -> {
+            ARRAY -> {
                 val itemType = schema.elementType
                 for ((i, orig) in (data as List<*>).withIndex()) {
                     convertAvro(values, orig, itemType, "$prefix.$i")
                 }
             }
-            Schema.Type.UNION -> {
+            UNION -> {
                 val type = GenericData().resolveUnion(schema, data)
                 convertAvro(values, data, schema.types[type], prefix)
             }
-            Schema.Type.BYTES -> {
+            BYTES -> {
                 checkHeader(prefix, values.size)
                 values.add(BASE64_ENCODER.encodeToString((data as ByteBuffer).array()))
             }
-            Schema.Type.FIXED -> {
+            FIXED -> {
                 checkHeader(prefix, values.size)
                 values.add(BASE64_ENCODER.encodeToString((data as GenericFixed).bytes()))
             }
-            Schema.Type.STRING -> {
+            STRING, ENUM, INT, LONG, DOUBLE, FLOAT, BOOLEAN -> {
                 checkHeader(prefix, values.size)
                 values.add(data.toString())
             }
-            Schema.Type.ENUM, Schema.Type.INT, Schema.Type.LONG, Schema.Type.DOUBLE, Schema.Type.FLOAT, Schema.Type.BOOLEAN -> {
-                checkHeader(prefix, values.size)
-                values.add(data.toString())
-            }
-            Schema.Type.NULL -> {
+            NULL -> {
                 checkHeader(prefix, values.size)
                 values.add("")
             }
@@ -184,7 +181,7 @@ class CsvAvroConverter(
                     reader -> CSVReader(reader).use {
                     csvReader ->
                         val header = csvReader.readNext() ?: return
-                        val lines = generateSequence { csvReader.readNext() }.toMutableList()
+                        val lines = generateSequence { csvReader.readNext() }.toList()
                         Pair(header, lines)
                     } } } } }
 
@@ -209,47 +206,43 @@ class CsvAvroConverter(
             override val hasHeader: Boolean = true
         }
 
-        private fun List<Array<String>>.removeDuplicates(header: Array<String>, usingFields: Set<String>, ignoreFields: Set<String>): List<Array<String>> {
+        private fun List<Array<String>>.removeDuplicates(
+                header: Array<String>,
+                usingFields: Set<String>,
+                ignoreFields: Set<String>
+        ): List<Array<String>> {
             if (usingFields.isNotEmpty()) {
-                val fieldIndexes = usingFields
-                        .map { f -> header.indexOf(f) }
-                        .takeIf { indexes -> indexes.none { it == -1 } }
-                        ?: emptyList()
+                val fieldIndexes = usingFields.map { f -> header.indexOf(f) }.toIntArray()
 
-                if (fieldIndexes.isNotEmpty()) {
-                    return distinctByLast { line -> fieldIndexes.joinToString { line[it] } }
+                if (fieldIndexes.none { it == -1 }) {
+                    return distinctByLast { line -> line.mapToArrayWrapper(fieldIndexes) }
                 }
             }
 
             if (ignoreFields.isNotEmpty()) {
-                val ignoreIndexes = ignoreFields
-                        .map { f -> header.indexOf(f) }
-                        .takeIf { indexes -> indexes.none { it == -1 } }
-                        ?.toSet()
-                        ?: emptySet()
+                val ignoreIndexes = ignoreFields.map { f -> header.indexOf(f) }
 
-                if (ignoreIndexes.isNotEmpty()) {
-                    return distinctByLast { line -> line.filterIndexed { i, _ -> i !in ignoreIndexes }.joinToString() }
+                if (ignoreIndexes.any { it != -1 }) {
+                    val fieldIndexes = (header.indices - ignoreIndexes).toIntArray()
+                    return distinctByLast { line -> line.mapToArrayWrapper(fieldIndexes) }
                 }
             }
 
-            return distinctByLast { it.joinToString() }
+            return distinctByLast { ArrayWrapper(it) }
         }
 
-        private fun <T, V> List<T>.distinctByLast(mapping: (T) -> V): List<T> {
+        private inline fun <reified T> Array<T>.mapToArrayWrapper(indices: IntArray): ArrayWrapper<T> {
+            return ArrayWrapper(Array(indices.size) { i -> this[indices[i]] })
+        }
+
+        private inline fun <T, V> List<T>.distinctByLast(mapping: (T) -> V): List<T> {
             val map: MutableMap<V, Int> = HashMap()
-            val mappings = ArrayList<V>(size)
             forEachIndexed { i, v ->
-                val mapped = mapping(v)
-                map[mapped] = i
-                mappings.add(mapped)
+                map[mapping(v)] = i
             }
-            val distinct = ArrayList<T>(map.size)
-            mappings.forEachIndexed { i, mapped ->
-                if (i == map[mapped])
-                    distinct.add(this[i])
-            }
-            return distinct
+            return map.values.toIntArray()
+                    .apply { sort() }
+                    .map { i -> this[i] }
         }
 
         internal fun createHeaders(record: GenericRecord): List<String> {
@@ -263,7 +256,7 @@ class CsvAvroConverter(
 
         private fun createHeader(headers: MutableList<String>, data: Any?, schema: Schema, prefix: String) {
             when (schema.type) {
-                Schema.Type.RECORD -> {
+                RECORD -> {
                     val record = data as GenericRecord
                     val subSchema = record.schema
                     for (field in subSchema.fields) {
@@ -271,26 +264,41 @@ class CsvAvroConverter(
                         createHeader(headers, subData, field.schema(), prefix + '.'.toString() + field.name())
                     }
                 }
-                Schema.Type.MAP -> {
+                MAP -> {
                     val valueType = schema.valueType
                     for ((key, value) in data as Map<*, *>) {
                         val name = "$prefix.$key"
                         createHeader(headers, value, valueType, name)
                     }
                 }
-                Schema.Type.ARRAY -> {
+                ARRAY -> {
                     val itemType = schema.elementType
                     for ((i, orig) in (data as List<*>).withIndex()) {
                         createHeader(headers, orig, itemType, "$prefix.$i")
                     }
                 }
-                Schema.Type.UNION -> {
+                UNION -> {
                     val type = GenericData().resolveUnion(schema, data)
                     createHeader(headers, data, schema.types[type], prefix)
                 }
-                Schema.Type.BYTES, Schema.Type.FIXED, Schema.Type.ENUM, Schema.Type.STRING, Schema.Type.INT, Schema.Type.LONG, Schema.Type.DOUBLE, Schema.Type.FLOAT, Schema.Type.BOOLEAN, Schema.Type.NULL -> headers.add(prefix)
+                BYTES, FIXED, ENUM, STRING, INT, LONG, DOUBLE, FLOAT, BOOLEAN, NULL -> headers.add(prefix)
                 else -> throw IllegalArgumentException("Cannot parse field type " + schema.type)
             }
         }
+    }
+
+    private class ArrayWrapper<T>(val values: Array<T>) {
+        private val hashCode = values.contentHashCode()
+
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+
+            other as ArrayWrapper<*>
+
+            return values.contentEquals(other.values)
+        }
+
+        override fun hashCode(): Int = hashCode
     }
 }
