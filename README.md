@@ -4,6 +4,10 @@
 
 Data streamed to HDFS using the [RADAR HDFS sink connector](https://github.com/RADAR-base/RADAR-HDFS-Sink-Connector) is streamed to files based on sensor only. This package can transform that output to a local directory structure as follows: `userId/topic/date_hour.csv`. The date and hour is extracted from the `time` field of each record, and is formatted in UTC time. This package is included in the [RADAR-Docker](https://github.com/RADAR-base/RADAR-Docker) repository, in the `dcompose/radar-cp-hadoop-stack/hdfs_restructure.sh` script.
 
+_Note_: when upgrading to version 0.6.0, please follow the following instructions:
+  - Write configuration file `restructure.yml` to match settings used with 0.5.x.
+  - If needed, move all entries of `offsets.csv` to their per-topic file in `offsets/<topic>.csv`. First go to the output directory, then run the `bin/migrate-offsets-to-0.6.0.sh` script.
+
 ## Docker usage
 
 This package is available as docker image [`radarbase/radar-hdfs-restructure`](https://hub.docker.com/r/radarbase/radar-hdfs-restructure). The entrypoint of the image is the current application. So in all of the commands listed in usage, replace `radar-hdfs-restructure` with for example:
