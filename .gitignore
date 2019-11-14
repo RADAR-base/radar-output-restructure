@@ -15,7 +15,6 @@ obj/
 *.ap_
 
 # Generated files
-bin/
 gen/
 out/
 build/
@@ -98,3 +97,4 @@ fabric.properties
 ## Pebble 2
 .lock*
 /data/
+/output/

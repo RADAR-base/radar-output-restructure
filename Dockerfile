@@ -29,13 +29,14 @@ COPY ./src /code/src
 
 RUN ./gradlew jar
 
-FROM smizy/hadoop-base:3.0.3-alpine
+FROM gradiant/hadoop-base:3.1.2
 
 MAINTAINER Joris Borgdorff <joris@thehyve.nl>, Yatharth Ranjan<yatharth.ranjan@kcl.ac.uk>
 
 LABEL description="RADAR-base HDFS data restructuring"
 
-ENV JAVA_OPTS -Djava.library.path=${HADOOP_HOME}/lib/native
+ENV JAVA_OPTS="-Djava.library.path=${HADOOP_HOME}/lib/native -Djava.security.egd=file:/dev/./urandom -XX:+UseG1GC -XX:MaxHeapFreeRatio=10 -XX:MinHeapFreeRatio=10" \
+    LD_LIBRARY_PATH=/lib64
 
 RUN apk add --no-cache libc6-compat
 

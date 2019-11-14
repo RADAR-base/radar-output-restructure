@@ -4,11 +4,12 @@ plugins {
     id 'application'
     id 'com.jfrog.bintray' version '1.8.4'
     id 'maven-publish'
+    id 'org.jetbrains.kotlin.jvm' version '1.3.50'
 }
 
-group 'org.radarcns'
-version '0.5.7'
-mainClassName = 'org.radarcns.hdfs.Application'
+group 'org.radarbase'
+version '0.6.0'
+mainClassName = 'org.radarbase.hdfs.Application'
 
 sourceCompatibility = '1.8'
 targetCompatibility = '1.8'
@@ -21,11 +22,11 @@ ext {
     issueUrl = "${githubUrl}/issues"
 
     avroVersion = '1.8.2'
-    jacksonVersion = '2.9.6'
-    hadoopVersion = '3.0.3'
-    jCommanderVersion = '1.72'
+    jacksonVersion = '2.10.0'
+    hadoopVersion = '3.1.2'
+    jCommanderVersion = '1.78'
     almworksVersion = '1.1.1'
-    junitVersion = '5.4.0-M1'
+    junitVersion = '5.5.2'
 }
 
 repositories {
@@ -35,18 +36,37 @@ repositories {
 dependencies {
     api group: 'org.apache.avro', name: 'avro', version: avroVersion
     implementation group: 'com.fasterxml.jackson.core' , name: 'jackson-databind', version: jacksonVersion
+    implementation group: 'com.fasterxml.jackson.dataformat' , name: 'jackson-dataformat-yaml', version: jacksonVersion
     implementation group: 'com.fasterxml.jackson.dataformat' , name: 'jackson-dataformat-csv', version: jacksonVersion
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion")
+
     implementation group: 'com.beust', name: 'jcommander', version: jCommanderVersion
     implementation group: 'com.almworks.integers', name: 'integers', version: almworksVersion
 
+    implementation 'software.amazon.awssdk:s3:2.10.3'
+    implementation 'com.opencsv:opencsv:5.0'
+
     implementation group: 'org.apache.avro', name: 'avro-mapred', version: avroVersion
     implementation group: 'org.apache.hadoop', name: 'hadoop-common', version: hadoopVersion
+
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
 
     runtimeOnly group: 'org.apache.hadoop', name: 'hadoop-hdfs-client', version: hadoopVersion
 
     testCompile group: 'org.junit.jupiter', name: 'junit-jupiter-api', version: junitVersion
     testCompile group: 'org.junit.jupiter', name: 'junit-jupiter-params', version: junitVersion
     testRuntime group: 'org.junit.jupiter', name: 'junit-jupiter-engine', version: junitVersion
+}
+
+compileKotlin {
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+}
+compileTestKotlin {
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
 }
 
 ext.sharedManifest = manifest {
@@ -87,6 +107,8 @@ test {
     useJUnitPlatform()
     testLogging {
         events "passed", "skipped", "failed"
+        showStandardStreams = true
+        setExceptionFormat("full")
     }
 }
 
@@ -172,7 +194,7 @@ bintray {
     pkg {
         repo = project.group
         name = rootProject.name
-        userOrg = 'radar-cns'
+        userOrg = 'radar-base'
         desc = moduleDescription
         licenses = ['Apache-2.0']
         websiteUrl = website
@@ -190,5 +212,5 @@ bintray {
 }
 
 wrapper {
-    gradleVersion '5.4.1'
+    gradleVersion '5.6.3'
 }
