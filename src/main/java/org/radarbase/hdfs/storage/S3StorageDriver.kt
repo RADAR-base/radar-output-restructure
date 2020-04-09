@@ -16,73 +16,76 @@
 
 package org.radarbase.hdfs.storage
 
+import io.minio.ErrorCode
+import io.minio.MinioClient
+import io.minio.PutObjectOptions
+import io.minio.errors.ErrorResponseException
 import org.slf4j.LoggerFactory
-import software.amazon.awssdk.services.s3.S3Client
-import software.amazon.awssdk.services.s3.model.NoSuchKeyException
 import java.io.IOException
 import java.io.InputStream
-import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 
 class S3StorageDriver : StorageDriver {
     private lateinit var bucket: String
-    private lateinit var awsClient: S3Client
+    private lateinit var s3Client: MinioClient
 
     override fun init(properties: Map<String, String>) {
-        awsClient = S3Client.builder().also { s3Builder ->
-            properties["s3EndpointUrl"]?.let {
-                val endpoint = try {
-                    URI.create(it)
-                } catch (ex: IllegalArgumentException) {
-                    logger.warn("Invalid S3 URL", ex)
-                    throw ex
-                }
+        s3Client = try {
+            MinioClient(properties["s3EndpointUrl"], properties["s3AccessToken"], properties["s3SecretKey"])
+        } catch (ex: IllegalArgumentException) {
+            logger.warn("Invalid S3 configuration", ex)
+            throw ex
+        }
 
-                s3Builder.endpointOverride(endpoint)
-            }
-        }.build()
-
-        bucket = requireNotNull(properties["s3Bucket"]) { "No AWS bucket provided" }
+        bucket = requireNotNull(properties["s3Bucket"]) { "No S3 bucket provided" }
 
         logger.info("Object storage configured with endpoint {} in bucket {}",
                 properties["s3EndpointUrl"],
                 properties["s3Bucket"])
+
+        // Check if the bucket already exists.
+        val isExist: Boolean = s3Client.bucketExists(bucket)
+        if (isExist) {
+            println("Bucket $bucket already exists.")
+        } else {
+            s3Client.makeBucket(bucket)
+        }
     }
 
     override fun status(path: Path): StorageDriver.PathStatus? {
         return try {
-            awsClient.headObject { it.bucket(bucket).key(path.toKey()) }
-                    .let { StorageDriver.PathStatus(it.contentLength()) }
-        } catch (ex: NoSuchKeyException) {
-            null
+            s3Client.statObject(bucket, path.toKey())
+                    .let { StorageDriver.PathStatus(it.length()) }
+        } catch (ex: ErrorResponseException) {
+            if (ex.errorResponse().errorCode() == ErrorCode.NO_SUCH_KEY || ex.errorResponse().errorCode() == ErrorCode.NO_SUCH_OBJECT) {
+                null
+            } else {
+                throw ex
+            }
         }
     }
 
     @Throws(IOException::class)
-    override fun newInputStream(path: Path): InputStream = awsClient.getObject {
-        it.bucket(bucket).key(path.toKey())
-    }
+    override fun newInputStream(path: Path): InputStream = s3Client.getObject(bucket, path.toKey())
 
     @Throws(IOException::class)
     override fun move(oldPath: Path, newPath: Path) {
-        awsClient.copyObject {
-            it.bucket(bucket).key(newPath.toKey())
-                    .copySource("$bucket/$oldPath")
-        }
+        s3Client.copyObject(bucket, newPath.toKey(), null, null, bucket, oldPath.toKey(), null, null)
         delete(oldPath)
     }
 
     @Throws(IOException::class)
     override fun store(localPath: Path, newPath: Path) {
-        awsClient.putObject({ it.bucket(bucket).key(newPath.toKey()) }, localPath)
+        s3Client.putObject(bucket, newPath.toKey(), localPath.toAbsolutePath().toString(),
+                PutObjectOptions(Files.size(localPath), -1))
         Files.delete(localPath)
     }
 
     @Throws(IOException::class)
     override fun delete(path: Path) {
-        awsClient.deleteObject { it.bucket(bucket).key(path.toKey()) }
+        s3Client.removeObject(bucket, path.toKey())
     }
 
     override fun createDirectories(directory: Path) {

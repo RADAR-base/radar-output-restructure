@@ -65,6 +65,10 @@ class OffsetRangeSet {
         set.stream().forEach { this.add(it) }
     }
 
+    fun addAll(list: OffsetRangeList) {
+        list.ranges.forEach { this.add(it) }
+    }
+
     /** Whether this range value completely contains the given range.  */
     operator fun contains(range: OffsetRange): Boolean {
         return ranges.getOrDefault(range.topicPartition, EMPTY_VALUE)
@@ -106,6 +110,8 @@ class OffsetRangeSet {
                             .map { r -> OffsetRange(e.key, r.first, r.second) }
                 }
     }
+
+    fun asOffsetRangeList(): OffsetRangeList = OffsetRangeList(stream().collect(Collectors.toList()))
 
     override fun equals(other: Any?): Boolean {
         return other === this || (
@@ -235,6 +241,8 @@ class OffsetRangeSet {
     data class LongTuple(internal val first: Long, internal val second: Long) {
         override fun toString(): String = "($first - $second)"
     }
+
+    data class OffsetRangeList(val ranges: List<OffsetRange>)
 
     companion object {
         private val EMPTY_VALUE = ReadOnlyFunctionalValue(OffsetRangeLists())

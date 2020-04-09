@@ -17,7 +17,11 @@
 package org.radarbase.hdfs.accounting
 
 /** POJO class for storing offsets.  */
-data class OffsetRange(val topicPartition: TopicPartition, val offsetFrom: Long, val offsetTo: Long) {
+data class OffsetRange(
+        val topicPartition: TopicPartition,
+        val offsetFrom: Long,
+        val offsetTo: Long) {
+
     val topic: String = topicPartition.topic
 
     val partition: Int = topicPartition.partition

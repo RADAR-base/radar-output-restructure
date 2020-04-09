@@ -22,6 +22,7 @@ data class RestructureConfig(
         val worker: WorkerConfig = WorkerConfig(),
         val topics: Map<String, TopicConfig> = emptyMap(),
         val hdfs: HdfsConfig = HdfsConfig(),
+        val s3: S3Config? = null,
         val paths: PathConfig = PathConfig(),
         val compression: CompressionConfig = CompressionConfig(),
         val format: FormatConfig = FormatConfig(),
@@ -147,5 +148,11 @@ data class HdfsConfig(
         }
     }
 }
+
+data class S3Config(
+        val endpoint: String,
+        val accessToken: String,
+        val secretKey: String,
+        val bucket: String)
 
 data class HdfsNameNode(val name: String, val hostname: String)

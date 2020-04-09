@@ -16,91 +16,61 @@
 
 package org.radarbase.hdfs.accounting
 
-import org.radarbase.hdfs.storage.StorageDriver
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.radarbase.hdfs.util.PostponedWriter
-import org.radarbase.hdfs.util.ThrowingConsumer.tryCatch
 import org.radarbase.hdfs.util.Timer.time
 import org.slf4j.LoggerFactory
+import redis.clients.jedis.JedisPool
 import java.io.IOException
-import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
-import java.util.regex.Pattern
 
 /**
  * Accesses a OffsetRange file using the CSV format. On construction, this will create the file if
  * not present.
  */
-class OffsetRangeFile(private val storage: StorageDriver, private val path: Path, startSet: OffsetRangeSet?) : PostponedWriter("offsets", 1, TimeUnit.SECONDS) {
+class OffsetRangeFile(
+        private val jedisPool: JedisPool,
+        private val path: Path,
+        startSet: OffsetRangeSet?) : PostponedWriter("offsets", 1, TimeUnit.SECONDS) {
+
     val offsets: OffsetRangeSet = startSet ?: OffsetRangeSet()
 
     fun add(range: OffsetRange) = offsets.add(range)
 
     fun addAll(rangeSet: OffsetRangeSet) = offsets.addAll(rangeSet)
 
-    override fun doWrite() = time("accounting.offsets") {
+    override fun doWrite(): Unit = time("accounting.offsets") {
         try {
-            val tmpPath = createTempFile("offsets", ".csv")
-
-            Files.newBufferedWriter(tmpPath).use { write ->
-                write.append("offsetFrom,offsetTo,partition,topic\n")
-                offsets.stream()
-                        .forEach(tryCatch({ r ->
-                            write.write(r.offsetFrom.toString())
-                            write.write(','.toInt())
-                            write.write(r.offsetTo.toString())
-                            write.write(','.toInt())
-                            write.write(r.partition.toString())
-                            write.write(','.toInt())
-                            write.write(r.topic)
-                            write.write('\n'.toInt())
-                        }, "Failed to write value"))
+            jedisPool.resource.use { jedis ->
+                jedis.set(path.toString(), offsetWriter.writeValueAsString(offsets.asOffsetRangeList()))
             }
-
-            storage.store(tmpPath, path)
         } catch (e: IOException) {
             logger.error("Failed to write offsets: {}", e.toString())
         }
     }
 
     companion object {
-        private val COMMA_PATTERN: Pattern = Pattern.compile(",")
         private val logger = LoggerFactory.getLogger(OffsetRangeFile::class.java)
 
-        fun read(storage: StorageDriver, path: Path): OffsetRangeFile {
-            try {
-                if (storage.status(path) != null) {
-                    val set = OffsetRangeSet()
-                    storage.newBufferedReader(path).use { br ->
-                        // ignore header
-                        br.readLine() ?: return@use
-
-                        generateSequence { br.readLine() }
-                                .forEach { line ->
-                                    val cols = COMMA_PATTERN.split(line)
-                                    var topic = cols[3]
-                                    while (topic[0] == '"') {
-                                        topic = topic.substring(1)
-                                    }
-                                    while (topic[topic.length - 1] == '"') {
-                                        topic = topic.substring(0, topic.length - 1)
-                                    }
-                                    set.add(OffsetRange(
-                                            topic,
-                                            Integer.parseInt(cols[2]),
-                                            java.lang.Long.parseLong(cols[0]),
-                                            java.lang.Long.parseLong(cols[1])))
-                                }
+        fun read(jedisPool: JedisPool, path: Path): OffsetRangeFile {
+            val startSet = try {
+                jedisPool.resource.use { jedis ->
+                    jedis[path.toString()]?.let { value ->
+                        OffsetRangeSet().apply {
+                            addAll(offsetReader.readValue<OffsetRangeSet.OffsetRangeList>(value))
+                        }
                     }
-                    return OffsetRangeFile(storage, path, set)
-                } else {
-                    return OffsetRangeFile(storage, path, null)
                 }
             } catch (ex: IOException) {
                 logger.error("Error reading offsets file. Processing all offsets.")
-                return OffsetRangeFile(storage, path, null)
+                null
             }
-
+            return OffsetRangeFile(jedisPool, path, startSet)
         }
+
+        private val mapper = jacksonObjectMapper()
+        private val offsetWriter = mapper.writerFor(OffsetRangeSet.OffsetRangeList::class.java)
+        private val offsetReader = mapper.readerFor(OffsetRangeSet.OffsetRangeList::class.java)
     }
 }

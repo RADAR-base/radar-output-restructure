@@ -45,12 +45,12 @@ abstract class PostponedWriter
 (private val name: String, private val timeout: Long, private val timeoutUnit: TimeUnit) : Closeable, Flushable {
 
     private val executor: ScheduledExecutorService
-    private val writeFuture: AtomicReference<Future<*>>
+    private val writeFuture: AtomicReference<Future<*>?>
     internal var tempDir: Path? = null
 
     init {
         executor = Executors.newScheduledThreadPool(1) { r -> Thread(r, name) }
-        writeFuture = AtomicReference<Future<*>>(null)
+        writeFuture = AtomicReference<Future<*>?>(null)
     }
 
     /**

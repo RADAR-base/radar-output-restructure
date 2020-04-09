@@ -2,9 +2,9 @@ plugins {
     id 'java'
     id 'java-library'
     id 'application'
-    id 'com.jfrog.bintray' version '1.8.4'
+    id 'com.jfrog.bintray' version '1.8.5'
     id 'maven-publish'
-    id 'org.jetbrains.kotlin.jvm' version '1.3.50'
+    id 'org.jetbrains.kotlin.jvm' version '1.3.71'
 }
 
 group 'org.radarbase'
@@ -21,12 +21,14 @@ ext {
     githubUrl = "https://github.com/${githubRepoName}"
     issueUrl = "${githubUrl}/issues"
 
-    avroVersion = '1.8.2'
-    jacksonVersion = '2.10.0'
+    avroVersion = '1.9.2'
+    jacksonVersion = '2.10.3'
     hadoopVersion = '3.1.2'
     jCommanderVersion = '1.78'
     almworksVersion = '1.1.1'
-    junitVersion = '5.5.2'
+    junitVersion = '5.6.1'
+    minioVersion = '7.0.1'
+    jedisVersion = '3.2.0'
 }
 
 repositories {
@@ -39,11 +41,13 @@ dependencies {
     implementation group: 'com.fasterxml.jackson.dataformat' , name: 'jackson-dataformat-yaml', version: jacksonVersion
     implementation group: 'com.fasterxml.jackson.dataformat' , name: 'jackson-dataformat-csv', version: jacksonVersion
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion")
+    implementation "redis.clients:jedis:$jedisVersion"
 
     implementation group: 'com.beust', name: 'jcommander', version: jCommanderVersion
     implementation group: 'com.almworks.integers', name: 'integers', version: almworksVersion
 
-    implementation 'software.amazon.awssdk:s3:2.10.3'
+    implementation "io.minio:minio:$minioVersion"
+//    implementation 'software.amazon.awssdk:s3:2.10.3'
     implementation 'com.opencsv:opencsv:5.0'
 
     implementation group: 'org.apache.avro', name: 'avro-mapred', version: avroVersion
@@ -52,10 +56,10 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
 
     runtimeOnly group: 'org.apache.hadoop', name: 'hadoop-hdfs-client', version: hadoopVersion
-
     testCompile group: 'org.junit.jupiter', name: 'junit-jupiter-api', version: junitVersion
     testCompile group: 'org.junit.jupiter', name: 'junit-jupiter-params', version: junitVersion
     testRuntime group: 'org.junit.jupiter', name: 'junit-jupiter-engine', version: junitVersion
+    testImplementation group: 'org.hamcrest', name: 'hamcrest-all', version: '1.3'
 }
 
 compileKotlin {
@@ -212,5 +216,5 @@ bintray {
 }
 
 wrapper {
-    gradleVersion '5.6.3'
+    gradleVersion '6.3'
 }
