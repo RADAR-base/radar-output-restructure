@@ -128,9 +128,7 @@ data class DeduplicationConfig(
 data class HdfsConfig(
         val name: String? = null,
         val nameNodes: List<HdfsNameNode> = emptyList(),
-        val lockPath: String = "/logs/org.radarbase.hdfs/lock",
-        val properties: Map<String, String> = emptyMap(),
-        val path: Path = Paths.get("/")) {
+        val properties: Map<String, String> = emptyMap()) {
 
     val configuration: Configuration = Configuration()
 
@@ -197,8 +195,7 @@ data class S3Config(
         val endpoint: String,
         val accessToken: String,
         val secretKey: String,
-        val bucket: String,
-        val path: Path = Paths.get("")) {
+        val bucket: String) {
     fun createS3Client() = MinioClient(endpoint, accessToken, secretKey)
 }
 

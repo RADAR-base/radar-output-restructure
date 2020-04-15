@@ -19,7 +19,7 @@ package org.radarbase.output
 import com.beust.jcommander.JCommander
 import com.beust.jcommander.ParameterException
 import io.minio.MinioClient
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.FileSystem
 import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.RedisRemoteLockManager
 import org.radarbase.output.accounting.RemoteLockManager
@@ -83,8 +83,7 @@ class Application(
             }
             ResourceType.HDFS -> {
                 val hdfsConfig = requireNotNull(config.source.hdfs)
-                val lockPath = Path(hdfsConfig.lockPath)
-                val fileSystem = lockPath.getFileSystem(hdfsConfig.configuration)
+                val fileSystem = FileSystem.get(hdfsConfig.configuration)
                 HdfsKafkaStorage(fileSystem)
             }
             else -> throw IllegalStateException("Cannot create kafka storage for type ${config.source.sourceType}")
