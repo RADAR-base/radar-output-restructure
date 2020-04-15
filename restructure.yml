@@ -42,13 +42,13 @@ worker:
 paths:
   # Input directories in HDFS
   inputs:
-    - /topicAndroidNew
+    - /testIn
   # Root temporary directory for local file processing.
   temp: ./output/+tmp
   # Output directory
-  output: ./output
+  output: /output
   # Output path construction factory
-  factory: org.radarbase.hdfs.path.MonthlyObservationKeyPathFactory
+  factory: org.radarbase.output.path.MonthlyObservationKeyPathFactory
   # Additional properties
   # properties: {}
 
@@ -76,17 +76,19 @@ topics:
     deduplication:
       enable: false
 
-# HDFS settings
-hdfs:
-  # HDFS name node in case of a single name node, or HDFS cluster ID in case of high availability.
-  name: hdfs-namenode
-  # High availability settings:
-  # nameNodes:
-  #   - name: hdfs1
-  #     hostname: hdfs-namenode-1
-  #   - name: hdfs2
-  #     hostname: hdfs-namenode-2
-  # Where files will be locked. This value should be the same for all restructure processes.
-  lockPath: /logs/org.radarbase.hdfs/lock
-  # Additional raw HDFS configuration properties
-  # properties: {}
+source:
+  type: s3
+  s3:
+    endpoint: http://localhost:9000
+    bucket: radar
+    accessToken: minioadmin
+    secretKey: minioadmin
+
+target:
+  type: s3
+  s3:
+    endpoint: http://localhost:9000
+    bucket: out
+    accessToken: minioadmin
+    secretKey: minioadmin
+

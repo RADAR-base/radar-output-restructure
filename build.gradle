@@ -8,14 +8,14 @@ plugins {
 }
 
 group 'org.radarbase'
-version '0.6.0'
-mainClassName = 'org.radarbase.hdfs.Application'
+version '0.7.0-SNAPSHOT'
+mainClassName = 'org.radarbase.output.Application'
 
 sourceCompatibility = '1.8'
 targetCompatibility = '1.8'
 
 ext {
-    moduleDescription = 'RADAR HDFS restructuring'
+    moduleDescription = 'RADAR-base output restructuring'
     website = 'https://radar-base.org'
     githubRepoName = 'RADAR-base/Restructure-HDFS-topic'
     githubUrl = "https://github.com/${githubRepoName}"
@@ -102,8 +102,8 @@ startScripts {
     doLast {
         def windowsScriptFile = file getWindowsScript()
         def unixScriptFile    = file getUnixScript()
-        windowsScriptFile.text = windowsScriptFile.text.replace('PlaceHolderForPluginPath', 'radar-hdfs-plugins\\*')
-        unixScriptFile.text = unixScriptFile.text.replace('PlaceHolderForPluginPath', 'radar-hdfs-plugins/*')
+        windowsScriptFile.text = windowsScriptFile.text.replace('PlaceHolderForPluginPath', 'radar-output-plugins\\*')
+        unixScriptFile.text = unixScriptFile.text.replace('PlaceHolderForPluginPath', 'radar-output-plugins/*')
     }
 }
 

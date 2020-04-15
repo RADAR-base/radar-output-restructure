@@ -54,12 +54,12 @@ radar-hdfs-restructure --compression gzip  --nameservice <hdfs_node> --output-di
 
 ### Storage
 
-There are two storage drivers implemented: `org.radarbase.hdfs.storage.LocalStorageDriver` for an output directory on the local file system or `org.radarbase.hdfs.storage.S3StorageDriver` for storage on an object store.
+There are two storage drivers implemented: `org.radarbase.output.storage.LocalStorageDriver` for an output directory on the local file system or `org.radarbase.output.storage.S3StorageDriver` for storage on an object store.
 
 `LocalStorageDriver` takes the following properties:
 ```yaml
 storage:
-  factory: org.radarbase.hdfs.storage.LocalStorageDriver
+  factory: org.radarbase.output.storage.LocalStorageDriver
   properties:
     # User ID to write data as
     localUid: 123
@@ -70,7 +70,7 @@ storage:
 With the `S3StorageDriver`, use the following configuration instead:
 ```yaml
 storage:
-  factory: org.radarbase.hdfs.storage.S3StorageDriver
+  factory: org.radarbase.output.storage.S3StorageDriver
   properties:
     # Object store URL
     s3EndpointUrl: s3://my-region.s3.aws.amazon.com
@@ -106,9 +106,9 @@ To implement alternative storage paths, storage drivers or storage formats, put 
 
 | Parameter                   | Base class                                          | Behaviour                                  | Default                   |
 | --------------------------- | --------------------------------------------------- | ------------------------------------------ | ------------------------- |
-| `paths: factory: ...`       | `org.radarbase.hdfs.path.RecordPathFactory`         | Factory to create output path names with.  | ObservationKeyPathFactory |
-| `storage: factory: ...`     | `org.radarbase.hdfs.storage.StorageDriver`          | Storage driver to use for storing data.    | LocalStorageDriver        |
-| `format: factory: ...`      | `org.radarbase.hdfs.format.FormatFactory`           | Factory for output formats.                | FormatFactory             |
-| `compression: factory: ...` | `org.radarbase.hdfs.compression.CompressionFactory` | Factory class to use for data compression. | CompressionFactory        |
+| `paths: factory: ...`       | `org.radarbase.output.path.RecordPathFactory`         | Factory to create output path names with.  | ObservationKeyPathFactory |
+| `storage: factory: ...`     | `org.radarbase.output.storage.StorageDriver`          | Storage driver to use for storing data.    | LocalStorageDriver        |
+| `format: factory: ...`      | `org.radarbase.output.format.FormatFactory`           | Factory for output formats.                | FormatFactory             |
+| `compression: factory: ...` | `org.radarbase.output.compression.CompressionFactory` | Factory class to use for data compression. | CompressionFactory        |
 
 The respective `<type>: properties: {}` configuration parameters can be used to provide custom configuration of the factory. This configuration will be passed to the `Plugin#init(Map<String, String>)` method.
