@@ -103,14 +103,15 @@ internal class RestructureWorker(
                 logger.warn("File {} has zero length, skipping.", file.path)
                 return
             }
+            val transaction = Accountant.Transaction(file.range.topicPartition, offset)
             extractRecords(input) { relativeOffset, record ->
-                val currentOffset = offset + relativeOffset
+                transaction.offset = offset + relativeOffset
                 val alreadyContains = time("accounting.check") {
-                    seenOffsets.contains(file.range.topicPartition, currentOffset)
+                    seenOffsets.contains(file.range.topicPartition, transaction.offset)
                 }
                 if (!alreadyContains) {
                     // Get the fields
-                    this.writeRecord(file.range.topicPartition, record, currentOffset)
+                    this.writeRecord(transaction, record)
                 }
                 processedRecordsCount++
                 progressBar.update(processedRecordsCount)
@@ -121,25 +122,25 @@ internal class RestructureWorker(
     private fun extractRecords(input: SeekableInput, processing: (Int, GenericRecord) -> Unit) {
         var tmpRecord: GenericRecord? = null
 
-        DataFileReader(input, GenericDatumReader<GenericRecord>()).use {
-                reader -> generateSequence {
+        DataFileReader(input, GenericDatumReader<GenericRecord>()).use { reader ->
+            generateSequence {
                 time("read") {
                     if (reader.hasNext()) reader.next(tmpRecord) else null
                 }
-            }.onEach { tmpRecord = it }.forEachIndexed(processing)
+            }
+            .onEach { tmpRecord = it }
+            .forEachIndexed(processing)
         }
     }
 
     @Throws(IOException::class)
-    private fun writeRecord(topicPartition: TopicPartition, record: GenericRecord,
-                            offset: Long, suffix: Int = 0) {
+    private fun writeRecord(
+            transaction: Accountant.Transaction,
+            record: GenericRecord,
+            suffix: Int = 0) {
         var currentSuffix = suffix
         val (path) = pathFactory.getRecordOrganization(
-                topicPartition.topic, record, currentSuffix)
-
-        val transaction = time("accounting.create") {
-            Accountant.Transaction(topicPartition, offset)
-        }
+                transaction.topicPartition.topic, record, currentSuffix)
 
         // Write data
         val response = time("write") {
@@ -149,7 +150,7 @@ internal class RestructureWorker(
         if (!response.isSuccessful) {
             // Write was unsuccessful due to different number of columns,
             // try again with new file name
-            writeRecord(topicPartition, record, offset, ++currentSuffix)
+            writeRecord(transaction, record, ++currentSuffix)
         }
     }
 

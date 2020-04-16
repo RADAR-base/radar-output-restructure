@@ -31,6 +31,7 @@ import org.radarbase.output.config.RestructureConfig
 import org.radarbase.output.format.RecordConverterFactory
 import org.radarbase.output.kafka.HdfsKafkaStorage
 import org.radarbase.output.kafka.KafkaStorage
+import org.radarbase.output.kafka.KafkaStorageFactory
 import org.radarbase.output.kafka.S3KafkaStorage
 import org.radarbase.output.path.RecordPathFactory
 import org.radarbase.output.storage.StorageDriver
@@ -70,29 +71,13 @@ class Application(
     override val remoteLockManager: RemoteLockManager = RedisRemoteLockManager(
             redisPool, config.redis.lockPrefix)
 
-    private val s3SourceClient: MinioClient? = if (config.source.sourceType == ResourceType.S3) {
-        requireNotNull(config.source.s3).createS3Client()
-    } else null
+    private val kafkaStorageFactory = KafkaStorageFactory(config.source, config.paths.temp)
 
     override val kafkaStorage: KafkaStorage
-        get() = when(config.source.sourceType) {
-            ResourceType.S3 -> {
-                val s3Config = requireNotNull(config.source.s3)
-                val minioClient = requireNotNull(s3SourceClient)
-                S3KafkaStorage(minioClient, s3Config.bucket, config.paths.temp)
-            }
-            ResourceType.HDFS -> {
-                val hdfsConfig = requireNotNull(config.source.hdfs)
-                val fileSystem = FileSystem.get(hdfsConfig.configuration)
-                HdfsKafkaStorage(fileSystem)
-            }
-            else -> throw IllegalStateException("Cannot create kafka storage for type ${config.source.sourceType}")
-        }
+        get() = kafkaStorageFactory.createKafkaStorage()
 
     @Throws(IOException::class)
-    override fun newFileCacheStore(accountant: Accountant): FileCacheStore {
-        return FileCacheStore(this, accountant)
-    }
+    override fun newFileCacheStore(accountant: Accountant) = FileCacheStore(this, accountant)
 
     fun start() {
         System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism",
@@ -106,27 +91,31 @@ class Application(
         }
 
         if (config.service.enable) {
-            logger.info("Running as a Service with poll interval of {} seconds", config.service.interval)
-            logger.info("Press Ctrl+C to exit...")
-            val executorService = Executors.newSingleThreadScheduledExecutor()
-
-            executorService.scheduleAtFixedRate(::runRestructure,
-                    config.service.interval / 4, config.service.interval, TimeUnit.SECONDS)
-
-            try {
-                Thread.sleep(java.lang.Long.MAX_VALUE)
-            } catch (e: InterruptedException) {
-                logger.info("Interrupted, shutting down...")
-                executorService.shutdownNow()
-                try {
-                    executorService.awaitTermination(java.lang.Long.MAX_VALUE, TimeUnit.SECONDS)
-                    Thread.currentThread().interrupt()
-                } catch (ex: InterruptedException) {
-                    logger.info("Interrupted again...")
-                }
-            }
+            runService()
         } else {
             runRestructure()
+        }
+    }
+
+    private fun runService() {
+        logger.info("Running as a Service with poll interval of {} seconds", config.service.interval)
+        logger.info("Press Ctrl+C to exit...")
+        val executorService = Executors.newSingleThreadScheduledExecutor()
+
+        executorService.scheduleAtFixedRate(::runRestructure,
+                config.service.interval / 4, config.service.interval, TimeUnit.SECONDS)
+
+        try {
+            Thread.sleep(java.lang.Long.MAX_VALUE)
+        } catch (e: InterruptedException) {
+            logger.info("Interrupted, shutting down...")
+            executorService.shutdownNow()
+            try {
+                executorService.awaitTermination(java.lang.Long.MAX_VALUE, TimeUnit.SECONDS)
+                Thread.currentThread().interrupt()
+            } catch (ex: InterruptedException) {
+                logger.info("Interrupted again...")
+            }
         }
     }
 
@@ -170,7 +159,7 @@ class Application(
             val commandLineArgs = CommandLineArgs()
             val parser = JCommander.newBuilder().addObject(commandLineArgs).build()
 
-            parser.programName = "radar-hdfs-restructure"
+            parser.programName = "radar-output-restructure"
             try {
                 parser.parse(*args)
             } catch (ex: ParameterException) {
@@ -192,19 +181,10 @@ class Application(
 
             val application = try {
                 val restructureConfig = RestructureConfig.load(commandLineArgs.configFile)
-                        .run { commandLineArgs.asService?.let { copy(service = service.copy(enable = it)) } ?: this }
-                        .run { commandLineArgs.pollInterval?.let { copy(service = service.copy(interval = it)) } ?: this }
-                        .run { commandLineArgs.cacheSize?.let { copy(worker = worker.copy(cacheSize = it)) } ?: this }
-                        .run { commandLineArgs.numThreads?.let { copy(worker = worker.copy(numThreads = it)) } ?: this }
-                        .run { commandLineArgs.maxFilesPerTopic?.let { copy(worker = worker.copy(maxFilesPerTopic = it)) } ?: this }
-                        .run { commandLineArgs.tmpDir?.let { copy(paths = paths.copy(temp = Paths.get(it))) } ?: this }
-                        .run { commandLineArgs.inputPaths?.let { inputs -> copy(paths = paths.copy(inputs = inputs.map { Paths.get(it) })) } ?: this }
-                        .run { commandLineArgs.outputDirectory?.let { copy(paths = paths.copy(output = Paths.get(it))) } ?: this }
-                        .run { commandLineArgs.hdfsName?.let { copy(source = source.copy(hdfs = source.hdfs?.copy(name = it) ?: HdfsConfig(name = it))) } ?: this }
-                        .run { commandLineArgs.format?.let { copy(format = format.copy(type = it)) } ?: this }
-                        .run { commandLineArgs.deduplicate?.let { copy(format = format.copy(deduplication = format.deduplication.copy(enable = it))) } ?: this }
-                        .run { commandLineArgs.compression?.let { copy(compression = compression.copy(type = it)) } ?: this }
-                        .also { it.validate() }
+                restructureConfig.apply {
+                    addArgs(commandLineArgs)
+                    validate()
+                }
 
                 Application(restructureConfig)
             } catch (ex: IllegalArgumentException) {

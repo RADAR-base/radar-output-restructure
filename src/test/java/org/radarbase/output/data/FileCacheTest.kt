@@ -67,7 +67,7 @@ class FileCacheTest {
                         output = path.parent,
                         temp = tmpPath
                 ),
-                source = ResourceConfig("hdfs", hdfs = HdfsConfig("test")))
+                source = ResourceConfig("hdfs", hdfs = HdfsConfig(listOf("test"))))
 
         setUp(config)
 

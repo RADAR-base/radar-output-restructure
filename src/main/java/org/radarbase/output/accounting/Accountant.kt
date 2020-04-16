@@ -23,11 +23,12 @@ import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.Flushable
 import java.io.IOException
+import java.nio.file.Files
 import java.nio.file.Paths
 
 class Accountant @Throws(IOException::class)
 constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
-    private val offsetFile: OffsetRangeFile
+    private val offsetFile: OffsetRangeSerialization
 
     val offsets: OffsetRangeSet
         get() = offsetFile.offsets
@@ -35,7 +36,26 @@ constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
     init {
         val offsetsKey = Paths.get("offsets", "$topic.json")
 
-        this.offsetFile = OffsetRangeFile.read(factory.redisPool, offsetsKey)
+        offsetFile = OffsetRangeRedis.RedisReader(factory.redisPool).read(offsetsKey)
+        readDeprecatedOffsets(factory, topic)
+                ?.takeIf { !it.isEmpty }
+                ?.let { offsetFile.addAll(it) }
+    }
+
+    private fun readDeprecatedOffsets(factory: FileStoreFactory, topic: String): OffsetRangeSet? {
+        val offsetsDirectory = factory.config.paths.output.resolve(OFFSETS_FILE_NAME)
+        val offsetsPath = offsetsDirectory.resolve("$topic.csv")
+
+        val result: OffsetRangeSet?
+        if (Files.exists(offsetsPath)) {
+            result = OffsetRangeFile.OffsetFileReader(factory.storageDriver)
+                    .read(offsetsPath)
+                    .use { it.offsets }
+            Files.deleteIfExists(offsetsPath)
+        } else {
+            result = null
+        }
+        return result
     }
 
     fun process(ledger: Ledger) = time("accounting.process") {
@@ -72,9 +92,10 @@ constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
         }
     }
 
-    class Transaction(val topicPartition: TopicPartition, internal val offset: Long)
+    class Transaction(val topicPartition: TopicPartition, internal var offset: Long)
 
     companion object {
         private val logger = LoggerFactory.getLogger(Accountant::class.java)
+        private val OFFSETS_FILE_NAME = Paths.get("offsets")
     }
 }

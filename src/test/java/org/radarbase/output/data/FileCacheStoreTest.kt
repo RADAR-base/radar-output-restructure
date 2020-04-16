@@ -69,7 +69,7 @@ class FileCacheStoreTest {
                                 temp = tmpDir
                         ),
                         worker = WorkerConfig(cacheSize = 2),
-                        source = ResourceConfig("hdfs", hdfs = HdfsConfig("test"))))
+                        source = ResourceConfig("hdfs", hdfs = HdfsConfig(listOf("test")))))
         val accountant = Accountant(factory, "t")
 
         factory.newFileCacheStore(accountant).use { cache ->
