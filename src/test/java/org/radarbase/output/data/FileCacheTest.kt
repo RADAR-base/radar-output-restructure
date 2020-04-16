@@ -16,6 +16,7 @@
 
 package org.radarbase.output.data
 
+import com.nhaarman.mockitokotlin2.mock
 import org.apache.avro.SchemaBuilder
 import org.apache.avro.generic.GenericData.Record
 import org.apache.avro.generic.GenericRecordBuilder
@@ -77,7 +78,7 @@ class FileCacheTest {
     @Throws(IOException::class)
     private fun setUp(localConfig: RestructureConfig) {
         this.factory = Application(localConfig)
-        this.accountant = Accountant(factory, "t")
+        this.accountant = mock()
     }
 
     @Test

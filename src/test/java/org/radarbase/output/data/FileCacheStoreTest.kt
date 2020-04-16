@@ -16,6 +16,10 @@
 
 package org.radarbase.output.data
 
+import com.nhaarman.mockitokotlin2.mock
+import com.nhaarman.mockitokotlin2.check
+import com.nhaarman.mockitokotlin2.times
+import com.nhaarman.mockitokotlin2.verify
 import org.apache.avro.SchemaBuilder
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.generic.GenericRecordBuilder
@@ -26,6 +30,7 @@ import org.junit.jupiter.api.io.TempDir
 import org.radarbase.output.Application
 import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.OffsetRange
+import org.radarbase.output.accounting.OffsetRangeSet
 import org.radarbase.output.accounting.TopicPartition
 import org.radarbase.output.config.*
 import org.radarbase.output.worker.FileCacheStore
@@ -70,7 +75,8 @@ class FileCacheStoreTest {
                         ),
                         worker = WorkerConfig(cacheSize = 2),
                         source = ResourceConfig("hdfs", hdfs = HdfsConfig(listOf("test")))))
-        val accountant = Accountant(factory, "t")
+
+        val accountant = mock<Accountant>()
 
         factory.newFileCacheStore(accountant).use { cache ->
             var i0 = 0
@@ -126,8 +132,14 @@ class FileCacheStoreTest {
                     cache.writeRecord(newFile, record, transaction))
         }
 
-        assertTrue(accountant.offsets.contains(offsetRange0))
-        assertTrue(accountant.offsets.contains(offsetRange1))
+        val offsets = OffsetRangeSet()
+
+        verify(accountant, times(7)).process(check {
+            offsets.addAll(it.offsets)
+        })
+
+        assertTrue(offsets.contains(offsetRange0))
+        assertTrue(offsets.contains(offsetRange1))
 
         assertEquals("a\nsomething\nsomethingElse\nthird\n", String(Files.readAllBytes(f1)))
         assertEquals("a\nsomething\nf2\n", String(Files.readAllBytes(f2)))

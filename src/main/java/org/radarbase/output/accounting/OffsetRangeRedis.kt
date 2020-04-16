@@ -21,6 +21,7 @@ import org.radarbase.output.util.PostponedWriter
 import org.radarbase.output.util.Timer.time
 import org.slf4j.LoggerFactory
 import redis.clients.jedis.JedisPool
+import redis.clients.jedis.exceptions.JedisException
 import java.io.IOException
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
@@ -30,7 +31,7 @@ import java.util.concurrent.TimeUnit
  * not present.
  */
 class OffsetRangeRedis(
-        private val jedisPool: JedisPool,
+        private val redisPool: JedisPool,
         private val path: Path,
         startSet: OffsetRangeSet?
 ) : PostponedWriter("offsets", 1, TimeUnit.SECONDS),
@@ -40,7 +41,7 @@ class OffsetRangeRedis(
 
     override fun doWrite(): Unit = time("accounting.offsets") {
         try {
-            jedisPool.resource.use { jedis ->
+            redisPool.resource.use { jedis ->
                 jedis.set(path.toString(), offsetWriter.writeValueAsString(offsets.toOffsetRangeList()))
             }
         } catch (e: IOException) {
@@ -49,22 +50,23 @@ class OffsetRangeRedis(
     }
 
     class RedisReader(
-            private val jedisPool: JedisPool): OffsetRangeSerialization.Reader {
+            private val redisPool: JedisPool
+    ): OffsetRangeSerialization.Reader {
 
         override fun read(path: Path): OffsetRangeSerialization {
             val startSet = try {
-                jedisPool.resource.use { jedis ->
+                redisPool.resource.use { jedis ->
                     jedis[path.toString()]?.let { value ->
                         OffsetRangeSet().apply {
                             addAll(offsetReader.readValue<OffsetRangeSet.OffsetRangeList>(value))
                         }
                     }
                 }
-            } catch (ex: IOException) {
+            } catch (ex: JedisException) {
                 logger.error("Error reading offsets file. Processing all offsets.")
                 null
             }
-            return OffsetRangeRedis(jedisPool, path, startSet)
+            return OffsetRangeRedis(redisPool, path, startSet)
         }
     }
 

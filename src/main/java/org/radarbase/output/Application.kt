@@ -18,21 +18,15 @@ package org.radarbase.output
 
 import com.beust.jcommander.JCommander
 import com.beust.jcommander.ParameterException
-import io.minio.MinioClient
-import org.apache.hadoop.fs.FileSystem
 import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.RedisRemoteLockManager
 import org.radarbase.output.accounting.RemoteLockManager
 import org.radarbase.output.compression.Compression
 import org.radarbase.output.config.CommandLineArgs
-import org.radarbase.output.config.HdfsConfig
-import org.radarbase.output.config.ResourceType
 import org.radarbase.output.config.RestructureConfig
 import org.radarbase.output.format.RecordConverterFactory
-import org.radarbase.output.kafka.HdfsKafkaStorage
 import org.radarbase.output.kafka.KafkaStorage
 import org.radarbase.output.kafka.KafkaStorageFactory
-import org.radarbase.output.kafka.S3KafkaStorage
 import org.radarbase.output.path.RecordPathFactory
 import org.radarbase.output.storage.StorageDriver
 import org.radarbase.output.util.ProgressBar.Companion.format
@@ -43,7 +37,6 @@ import org.slf4j.LoggerFactory
 import redis.clients.jedis.JedisPool
 import java.io.IOException
 import java.nio.file.Files
-import java.nio.file.Paths
 import java.text.NumberFormat
 import java.time.Duration
 import java.time.Instant

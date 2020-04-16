@@ -26,7 +26,7 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Paths
 
-class Accountant @Throws(IOException::class)
+open class Accountant @Throws(IOException::class)
 constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
     private val offsetFile: OffsetRangeSerialization
 
@@ -58,7 +58,7 @@ constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
         return result
     }
 
-    fun process(ledger: Ledger) = time("accounting.process") {
+    open fun process(ledger: Ledger) = time("accounting.process") {
         offsetFile.addAll(ledger.offsets)
         offsetFile.triggerWrite()
     }

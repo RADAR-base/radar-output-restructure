@@ -7,7 +7,7 @@ import java.time.Duration
 import java.util.*
 
 class RedisRemoteLockManager(
-        private val jedisPool: JedisPool,
+        private val redisPool: JedisPool,
         private val keyPrefix: String
 ) : RemoteLockManager {
     private val uuid: String = UUID.randomUUID().toString()
@@ -18,8 +18,8 @@ class RedisRemoteLockManager(
 
     override fun acquireTopicLock(topic: String): RemoteLockManager.RemoteLock? {
         val lockKey = "$keyPrefix/$topic.lock"
-        jedisPool.resource.use { jedis ->
-            return jedis.set(lockKey, uuid, setParams)?.let {
+        redisPool.resource.use { redis ->
+            return redis.set(lockKey, uuid, setParams)?.let {
                 RemoteLock(lockKey)
             }
         }
@@ -29,9 +29,9 @@ class RedisRemoteLockManager(
             private val lockKey: String
     ) : RemoteLockManager.RemoteLock {
         override fun close() {
-            jedisPool.resource.use { jedis ->
-                if (jedis.get(lockKey) == uuid) {
-                    jedis.del(lockKey)
+            redisPool.resource.use { redis ->
+                if (redis.get(lockKey) == uuid) {
+                    redis.del(lockKey)
                 }
             }
         }
