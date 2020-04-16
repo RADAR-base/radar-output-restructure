@@ -17,15 +17,9 @@
 package org.radarbase.output.accounting
 
 import org.radarbase.output.storage.StorageDriver
-import org.radarbase.output.util.PostponedWriter
-import org.radarbase.output.util.ThrowingConsumer.tryCatch
-import org.radarbase.output.util.Timer.time
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.io.UncheckedIOException
-import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 
 /**
@@ -33,80 +27,42 @@ import java.util.regex.Pattern
  * not present.
  */
 class OffsetRangeFile(
-        private val storage: StorageDriver,
-        private val path: Path,
-        startSet: OffsetRangeSet?
-) : PostponedWriter("offsets", 1, TimeUnit.SECONDS),
-        OffsetRangeSerialization {
-    override val offsets: OffsetRangeSet = startSet ?: OffsetRangeSet()
+        private val storage: StorageDriver
+) {
+    fun read(path: Path): OffsetRangeSet? {
+        return try {
+            if (storage.status(path) != null) {
+                OffsetRangeSet().also { set ->
+                    storage.newBufferedReader(path).use { br ->
+                        // ignore header
+                        br.readLine() ?: return@use
 
-    override fun doWrite() = time("accounting.offsets") {
-        try {
-            val tmpPath = createTempFile("offsets", ".csv").toPath()
-
-            Files.newBufferedWriter(tmpPath).use { writer ->
-                writer.append("offsetFrom,offsetTo,partition,topic\n")
-                offsets.stream()
-                        .forEach(tryCatch({ r ->
-                            writer.write(r.offsetFrom.toString())
-                            writer.write(','.toInt())
-                            writer.write(r.offsetTo.toString())
-                            writer.write(','.toInt())
-                            writer.write(r.partition.toString())
-                            writer.write(','.toInt())
-                            writer.write(r.topic)
-                            writer.write('\n'.toInt())
-                        }, "Failed to write value"))
-            }
-
-            storage.store(tmpPath, path)
-        } catch (e: UncheckedIOException) {
-            logger.error("Failed to write offsets: {}", e.toString())
-        } catch (e: IOException) {
-            logger.error("Failed to write offsets: {}", e.toString())
+                        generateSequence { br.readLine() }
+                                .map(::readLine)
+                                .forEach(set::add)
+                    }
+                }
+            } else null
+        } catch (ex: IOException) {
+            logger.error("Error reading offsets file. Processing all offsets.")
+            null
         }
     }
 
-    class OffsetFileReader(
-            private val storage: StorageDriver
-    ) : OffsetRangeSerialization.Reader {
-
-        override fun read(path: Path): OffsetRangeFile {
-            val startSet = try {
-                if (storage.status(path) != null) {
-                    OffsetRangeSet().also { set ->
-                        storage.newBufferedReader(path).use { br ->
-                            // ignore header
-                            br.readLine() ?: return@use
-
-                            generateSequence { br.readLine() }
-                                    .map(::readLine)
-                                    .forEach(set::add)
-                        }
-                    }
-                } else null
-            } catch (ex: IOException) {
-                logger.error("Error reading offsets file. Processing all offsets.")
-                null
-            }
-            return OffsetRangeFile(storage, path, startSet)
+    private fun readLine(line: String): OffsetRange {
+        val cols = COMMA_PATTERN.split(line)
+        var topic = cols[3]
+        while (topic[0] == '"') {
+            topic = topic.substring(1)
         }
-
-        private fun readLine(line: String): OffsetRange {
-            val cols = COMMA_PATTERN.split(line)
-            var topic = cols[3]
-            while (topic[0] == '"') {
-                topic = topic.substring(1)
-            }
-            while (topic[topic.length - 1] == '"') {
-                topic = topic.substring(0, topic.length - 1)
-            }
-            return OffsetRange(
-                    topic,
-                    cols[2].toInt(),
-                    cols[0].toLong(),
-                    cols[1].toLong())
+        while (topic[topic.length - 1] == '"') {
+            topic = topic.substring(0, topic.length - 1)
         }
+        return OffsetRange(
+                topic,
+                cols[2].toInt(),
+                cols[0].toLong(),
+                cols[1].toLong())
     }
 
     companion object {

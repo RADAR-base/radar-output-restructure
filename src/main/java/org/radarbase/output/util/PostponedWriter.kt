@@ -16,18 +16,12 @@
 
 package org.radarbase.output.util
 
+import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.Flushable
 import java.io.IOException
-import java.util.concurrent.CancellationException
-import java.util.concurrent.ExecutionException
-import java.util.concurrent.Executors
-import java.util.concurrent.Future
-import java.util.concurrent.ScheduledExecutorService
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
+import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicReference
-import org.slf4j.LoggerFactory
 
 /**
  * File writer where data is written in a separate thread with a timeout.
@@ -41,13 +35,8 @@ abstract class PostponedWriter
  */
 (private val name: String, private val timeout: Long, private val timeoutUnit: TimeUnit) : Closeable, Flushable {
 
-    private val executor: ScheduledExecutorService
-    private val writeFuture: AtomicReference<Future<*>?>
-
-    init {
-        executor = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, name) }
-        writeFuture = AtomicReference<Future<*>?>(null)
-    }
+    private val writeFuture = AtomicReference<Future<*>?>(null)
+    private val executor = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, name) }
 
     /**
      * Trigger a write to occur within set timeout. If a write was already triggered earlier but has
@@ -87,7 +76,7 @@ abstract class PostponedWriter
     @Throws(IOException::class)
     private fun doFlush(shutdown: Boolean) {
         val localFuture = executor.submit(::startWrite)
-                .also { writeFuture.set(it) }
+                .also { writeFuture.getAndSet(it)?.cancel(false) }
 
         if (shutdown) {
             executor.shutdown()
@@ -105,7 +94,6 @@ abstract class PostponedWriter
         } catch (e: TimeoutException) {
             logger.error("Failed to write {} data: timeout", name)
         }
-
     }
 
     @Throws(IOException::class)

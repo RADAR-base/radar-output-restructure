@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.radarbase.output.accounting.OffsetRange
 import org.radarbase.output.accounting.OffsetRangeFile
+import org.radarbase.output.accounting.OffsetRangeSerialization
 import org.radarbase.output.accounting.TopicPartition
 import org.radarbase.output.config.LocalConfig
 import org.radarbase.output.storage.LocalStorageDriver
@@ -33,6 +34,7 @@ import java.nio.file.Path
 class OffsetRangeFileTest {
     private lateinit var testFile: Path
     private lateinit var storage: StorageDriver
+    private lateinit var offsetReader: OffsetRangeSerialization.Reader
 
     @BeforeEach
     @Throws(IOException::class)
@@ -40,51 +42,52 @@ class OffsetRangeFileTest {
         testFile = dir.resolve("test")
         Files.createFile(testFile)
         storage = LocalStorageDriver(LocalConfig())
+        offsetReader = OffsetRangeFile.OffsetFileReader(storage)
     }
 
     @Test
     @Throws(IOException::class)
     fun readEmpty() {
-//        assertTrue(OffsetRangeFile.read(storage, testFile).offsets.isEmpty)
-//
-//        storage.delete(testFile)
-//
-//        // will create on write
-//        assertTrue(OffsetRangeFile.read(storage, testFile).offsets.isEmpty)
+        assertTrue(offsetReader.read(testFile).offsets.isEmpty)
+
+        storage.delete(testFile)
+
+        // will create on write
+        assertTrue(offsetReader.read(testFile).offsets.isEmpty)
     }
 
     @Test
     @Throws(IOException::class)
     fun write() {
-//        OffsetRangeFile(storage, testFile, null).use { rangeFile ->
-//            rangeFile.add(OffsetRange.parseFilename("a+0+0+1"))
-//            rangeFile.add(OffsetRange.parseFilename("a+0+1+2"))
-//        }
-//
-//        val set = OffsetRangeFile.read(storage, testFile).offsets
-//        assertTrue(set.contains(OffsetRange.parseFilename("a+0+0+1")))
-//        assertTrue(set.contains(OffsetRange.parseFilename("a+0+1+2")))
-//        assertTrue(set.contains(OffsetRange.parseFilename("a+0+0+2")))
-//        assertFalse(set.contains(OffsetRange.parseFilename("a+0+0+3")))
-//        assertFalse(set.contains(OffsetRange.parseFilename("a+0+2+3")))
-//        assertFalse(set.contains(OffsetRange.parseFilename("a+1+0+1")))
-//        assertFalse(set.contains(OffsetRange.parseFilename("b+0+0+1")))
+        offsetReader.read(testFile).use { rangeFile ->
+            rangeFile.add(OffsetRange.parseFilename("a+0+0+1"))
+            rangeFile.add(OffsetRange.parseFilename("a+0+1+2"))
+        }
+
+        val set = offsetReader.read(testFile).use { it.offsets }
+        assertTrue(set.contains(OffsetRange.parseFilename("a+0+0+1")))
+        assertTrue(set.contains(OffsetRange.parseFilename("a+0+1+2")))
+        assertTrue(set.contains(OffsetRange.parseFilename("a+0+0+2")))
+        assertFalse(set.contains(OffsetRange.parseFilename("a+0+0+3")))
+        assertFalse(set.contains(OffsetRange.parseFilename("a+0+2+3")))
+        assertFalse(set.contains(OffsetRange.parseFilename("a+1+0+1")))
+        assertFalse(set.contains(OffsetRange.parseFilename("b+0+0+1")))
     }
 
     @Test
     @Throws(IOException::class)
     fun cleanUp() {
-//        OffsetRangeFile(storage, testFile, null).use { rangeFile ->
-//            rangeFile.add(OffsetRange.parseFilename("a+0+0+1"))
-//            rangeFile.add(OffsetRange.parseFilename("a+0+1+2"))
-//            rangeFile.add(OffsetRange.parseFilename("a+0+4+4"))
-//        }
-//
-//        storage.newBufferedReader(testFile).use { br ->
-//            assertEquals(3, br.lines().count())
-//        }
-//
-//        val rangeSet = OffsetRangeFile.read(storage, testFile).offsets
-//        assertEquals(2, rangeSet.size(TopicPartition("a", 0)))
+        offsetReader.read(testFile).use { rangeFile ->
+            rangeFile.add(OffsetRange.parseFilename("a+0+0+1"))
+            rangeFile.add(OffsetRange.parseFilename("a+0+1+2"))
+            rangeFile.add(OffsetRange.parseFilename("a+0+4+4"))
+        }
+
+        storage.newBufferedReader(testFile).use { br ->
+            assertEquals(3, br.lines().count())
+        }
+
+        val rangeSet = offsetReader.read(testFile).use { it.offsets }
+        assertEquals(2, rangeSet.size(TopicPartition("a", 0)))
     }
 }

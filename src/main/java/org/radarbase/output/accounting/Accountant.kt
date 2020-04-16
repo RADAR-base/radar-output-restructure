@@ -46,16 +46,10 @@ constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
         val offsetsDirectory = factory.config.paths.output.resolve(OFFSETS_FILE_NAME)
         val offsetsPath = offsetsDirectory.resolve("$topic.csv")
 
-        val result: OffsetRangeSet?
-        if (Files.exists(offsetsPath)) {
-            result = OffsetRangeFile.OffsetFileReader(factory.storageDriver)
-                    .read(offsetsPath)
-                    .use { it.offsets }
-            Files.deleteIfExists(offsetsPath)
-        } else {
-            result = null
-        }
-        return result
+        return if (Files.exists(offsetsPath)) {
+            OffsetRangeFile(factory.storageDriver).read(offsetsPath)
+                    .also { Files.deleteIfExists(offsetsPath) }
+        } else null
     }
 
     open fun process(ledger: Ledger) = time("accounting.process") {

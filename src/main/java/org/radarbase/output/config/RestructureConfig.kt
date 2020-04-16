@@ -23,7 +23,7 @@ import java.nio.file.Paths
 
 data class RestructureConfig(
         /** Whether and how to run as a service. */
-        val service: ServiceConfig = ServiceConfig(false),
+        val service: ServiceConfig = ServiceConfig(enable = false),
         /** Work limits. */
         val worker: WorkerConfig = WorkerConfig(),
         /** Topic exceptional handling. */
