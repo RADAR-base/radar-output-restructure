@@ -18,9 +18,7 @@ package org.radarbase.output
 
 import com.beust.jcommander.JCommander
 import com.beust.jcommander.ParameterException
-import org.radarbase.output.accounting.Accountant
-import org.radarbase.output.accounting.RedisRemoteLockManager
-import org.radarbase.output.accounting.RemoteLockManager
+import org.radarbase.output.accounting.*
 import org.radarbase.output.compression.Compression
 import org.radarbase.output.config.CommandLineArgs
 import org.radarbase.output.config.RestructureConfig
@@ -68,6 +66,8 @@ class Application(
 
     override val kafkaStorage: KafkaStorage
         get() = kafkaStorageFactory.createKafkaStorage()
+
+    override val offsetPersistenceFactory: OffsetPersistenceFactory = OffsetRedisPersistence(redisPool)
 
     @Throws(IOException::class)
     override fun newFileCacheStore(accountant: Accountant) = FileCacheStore(this, accountant)

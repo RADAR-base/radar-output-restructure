@@ -2,8 +2,7 @@ package org.radarbase.output.accounting
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import redis.clients.jedis.JedisPool
@@ -14,14 +13,14 @@ import java.nio.file.Paths
 class OffsetRangeRedisTest {
     private lateinit var testFile: Path
     private lateinit var redisPool: JedisPool
-    private lateinit var offsetReader: OffsetRangeSerialization.Reader
+    private lateinit var offsetPersistence: OffsetPersistenceFactory
 
     @BeforeEach
     @Throws(IOException::class)
     fun setUp() {
         testFile = Paths.get("test/topic")
         redisPool = JedisPool()
-        offsetReader = OffsetRangeRedis.RedisReader(redisPool)
+        offsetPersistence = OffsetRedisPersistence(redisPool)
     }
 
     @AfterEach
@@ -32,36 +31,42 @@ class OffsetRangeRedisTest {
     @Test
     @Throws(IOException::class)
     fun readEmpty() {
-        Assertions.assertTrue(offsetReader.read(testFile).offsets.isEmpty)
+        assertNull(offsetPersistence.read(testFile))
+
+        // will create on write
+        offsetPersistence.writer(testFile).close()
+
+        assertEquals(true, offsetPersistence.read(testFile)?.isEmpty)
 
         redisPool.resource.use { it.del(testFile.toString()) }
 
-        // will create on write
-        Assertions.assertTrue(offsetReader.read(testFile).offsets.isEmpty)
+        assertNull(offsetPersistence.read(testFile))
     }
 
     @Test
     @Throws(IOException::class)
     fun write() {
-        offsetReader.read(testFile).use { rangeFile ->
+        offsetPersistence.writer(testFile).use { rangeFile ->
             rangeFile.add(OffsetRange.parseFilename("a+0+0+1"))
             rangeFile.add(OffsetRange.parseFilename("a+0+1+2"))
         }
 
-        val set = offsetReader.read(testFile).use { it.offsets }
-        Assertions.assertTrue(set.contains(OffsetRange.parseFilename("a+0+0+1")))
-        Assertions.assertTrue(set.contains(OffsetRange.parseFilename("a+0+1+2")))
-        Assertions.assertTrue(set.contains(OffsetRange.parseFilename("a+0+0+2")))
-        Assertions.assertFalse(set.contains(OffsetRange.parseFilename("a+0+0+3")))
-        Assertions.assertFalse(set.contains(OffsetRange.parseFilename("a+0+2+3")))
-        Assertions.assertFalse(set.contains(OffsetRange.parseFilename("a+1+0+1")))
-        Assertions.assertFalse(set.contains(OffsetRange.parseFilename("b+0+0+1")))
+        val set = offsetPersistence.read(testFile)
+        assertNotNull(set)
+        requireNotNull(set)
+        assertTrue(set.contains(OffsetRange.parseFilename("a+0+0+1")))
+        assertTrue(set.contains(OffsetRange.parseFilename("a+0+1+2")))
+        assertTrue(set.contains(OffsetRange.parseFilename("a+0+0+2")))
+        assertFalse(set.contains(OffsetRange.parseFilename("a+0+0+3")))
+        assertFalse(set.contains(OffsetRange.parseFilename("a+0+2+3")))
+        assertFalse(set.contains(OffsetRange.parseFilename("a+1+0+1")))
+        assertFalse(set.contains(OffsetRange.parseFilename("b+0+0+1")))
     }
 
     @Test
     @Throws(IOException::class)
     fun cleanUp() {
-        offsetReader.read(testFile).use { rangeFile ->
+        offsetPersistence.writer(testFile).use { rangeFile ->
             rangeFile.add(OffsetRange.parseFilename("a+0+0+1"))
             rangeFile.add(OffsetRange.parseFilename("a+0+1+2"))
             rangeFile.add(OffsetRange.parseFilename("a+0+4+4"))
@@ -76,7 +81,7 @@ class OffsetRangeRedisTest {
             )), range)
         }
 
-        val rangeSet = offsetReader.read(testFile).use { it.offsets }
-        assertEquals(2, rangeSet.size(TopicPartition("a", 0)))
+        val rangeSet = offsetPersistence.read(testFile)
+        assertEquals(2, rangeSet?.size(TopicPartition("a", 0)))
     }
 }

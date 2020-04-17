@@ -5,6 +5,7 @@ plugins {
     id 'com.jfrog.bintray' version '1.8.5'
     id 'maven-publish'
     id 'org.jetbrains.kotlin.jvm' version '1.3.72'
+    id 'com.avast.gradle.docker-compose' version "0.10.10"
 }
 
 group 'org.radarbase'
@@ -129,6 +130,18 @@ test {
     }
 }
 
+task integrationTest(type: Test) {
+    description = 'Runs integration tests.'
+    group = 'verification'
+
+    useJUnitPlatform()
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    shouldRunAfter test
+}
+
+check.dependsOn(integrationTest)
+dockerCompose.isRequiredBy(integrationTest)
 
 tasks.withType(Tar){
     compression = Compression.GZIP
@@ -200,16 +213,6 @@ publishing {
             }
         }
     }
-}
-
-task integrationTest(type: Test) {
-    description = 'Runs integration tests.'
-    group = 'verification'
-
-    useJUnitPlatform()
-    testClassesDirs = sourceSets.integrationTest.output.classesDirs
-    classpath = sourceSets.integrationTest.runtimeClasspath
-    shouldRunAfter test
 }
 
 bintray {

@@ -18,6 +18,7 @@ package org.radarbase.output
 
 import java.io.IOException
 import org.radarbase.output.accounting.Accountant
+import org.radarbase.output.accounting.OffsetPersistenceFactory
 import org.radarbase.output.accounting.RemoteLockManager
 import org.radarbase.output.config.RestructureConfig
 import org.radarbase.output.compression.Compression
@@ -38,6 +39,7 @@ interface FileStoreFactory {
     val remoteLockManager: RemoteLockManager
     val redisPool: JedisPool
     val kafkaStorage: KafkaStorage
+    val offsetPersistenceFactory: OffsetPersistenceFactory
 
     @Throws(IOException::class)
     fun newFileCacheStore(accountant: Accountant): FileCacheStore

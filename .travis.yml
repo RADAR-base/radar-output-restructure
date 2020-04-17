@@ -22,16 +22,6 @@ before_install:
   - sudo mv docker-compose /usr/local/bin
   - ./gradlew downloadDependencies
 
-before_script:
-  - docker-compose up -d
-
-script:
-  - ./gradlew check
-  - ./gradlew integrationTest
-
-after_script:
-  - docker-compose down
-
 deploy:
   - provider: releases
     api_key: ${GH_TOKEN}

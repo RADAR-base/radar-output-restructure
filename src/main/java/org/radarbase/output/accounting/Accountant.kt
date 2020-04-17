@@ -28,7 +28,7 @@ import java.nio.file.Paths
 
 open class Accountant @Throws(IOException::class)
 constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
-    private val offsetFile: OffsetRangeSerialization
+    private val offsetFile: OffsetPersistenceFactory.Writer
 
     val offsets: OffsetRangeSet
         get() = offsetFile.offsets
@@ -36,19 +36,24 @@ constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
     init {
         val offsetsKey = Paths.get("offsets", "$topic.json")
 
-        offsetFile = OffsetRangeRedis.RedisReader(factory.redisPool).read(offsetsKey)
+        val offsetPersistence = factory.offsetPersistenceFactory
+        val offsets = offsetPersistence.read(offsetsKey)
+        offsetFile = offsetPersistence.writer(offsetsKey, offsets)
         readDeprecatedOffsets(factory, topic)
-                ?.takeIf { !it.isEmpty }
-                ?.let { offsetFile.addAll(it) }
+                ?.takeUnless { it.isEmpty }
+                ?.let {
+                    offsetFile.addAll(it)
+                    offsetFile.triggerWrite()
+                }
     }
 
     private fun readDeprecatedOffsets(factory: FileStoreFactory, topic: String): OffsetRangeSet? {
-        val offsetsDirectory = factory.config.paths.output.resolve(OFFSETS_FILE_NAME)
-        val offsetsPath = offsetsDirectory.resolve("$topic.csv")
+        val offsetsPath = factory.config.paths.output
+                .resolve(OFFSETS_FILE_NAME)
+                .resolve("$topic.csv")
 
         return if (Files.exists(offsetsPath)) {
-            OffsetRangeFile(factory.storageDriver).read(offsetsPath)
-                    .also { Files.deleteIfExists(offsetsPath) }
+            OffsetFilePersistence(factory.storageDriver).read(offsetsPath)
         } else null
     }
 
