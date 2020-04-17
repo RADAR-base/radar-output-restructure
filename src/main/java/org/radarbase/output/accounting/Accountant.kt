@@ -54,6 +54,7 @@ constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
 
         return if (Files.exists(offsetsPath)) {
             OffsetFilePersistence(factory.storageDriver).read(offsetsPath)
+                    .also { Files.delete(offsetsPath) }
         } else null
     }
 

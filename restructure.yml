@@ -4,6 +4,41 @@ service:
   # Polling interval in seconds.
   interval: 30
 
+# Source data resource
+# @since: 0.7.0
+source:
+  type: s3  # hdfs or s3
+  s3:
+    endpoint: http://localhost:9000  # using AWS S3 endpoint is also possible.
+    bucket: radar
+    accessToken: minioadmin
+    secretKey: minioadmin
+  # only actually needed if source type is hdfs
+  hdfs:
+    nameNodes: [hdfs-namenode-1, hdfs-namenode-2]
+
+# Target data resource
+# @since: 0.7.0
+target:
+  type: s3  # s3 or local
+  s3:
+    endpoint: http://localhost:9000
+    bucket: out
+    accessToken: minioadmin
+    secretKey: minioadmin
+  # only actually needed if target type is local
+  local:
+    userId: 1000  # write as regular user, use -1 to use current user (default).
+    groupId: 100  # write as regular group, use -1 to use current user (default).
+
+# Redis configuration
+# @since: 0.7.0
+redis:
+  # Redis URI
+  uri: redis://localhost:6379
+  # Key prefix for locks
+  lockPrefix: radar-output/lock/
+
 # Compression characteristics
 compression:
   # Compression type: none, zip or gzip
@@ -40,12 +75,12 @@ worker:
 
 # Path settings
 paths:
-  # Input directories in HDFS
+  # Input directories in source
   inputs:
     - /testIn
   # Root temporary directory for local file processing.
   temp: ./output/+tmp
-  # Output directory
+  # Output directory in target
   output: /output
   # Output path construction factory
   factory: org.radarbase.output.path.MonthlyObservationKeyPathFactory
@@ -75,20 +110,3 @@ topics:
     # Disable deduplication
     deduplication:
       enable: false
-
-source:
-  type: s3
-  s3:
-    endpoint: http://localhost:9000
-    bucket: radar
-    accessToken: minioadmin
-    secretKey: minioadmin
-
-target:
-  type: s3
-  s3:
-    endpoint: http://localhost:9000
-    bucket: out
-    accessToken: minioadmin
-    secretKey: minioadmin
-
