@@ -13,16 +13,15 @@ class HdfsKafkaStorage(
     override fun reader(): KafkaStorage.KafkaStorageReader = HDFSKafkaStorageReader()
 
     override fun list(path: Path): Sequence<SimpleFileStatus> {
-        val hdfsPath = org.apache.hadoop.fs.Path(path.toUri())
+        val hdfsPath = org.apache.hadoop.fs.Path(path.toString())
         return fileSystem.listStatus(hdfsPath)
                 .asSequence()
-                .map { SimpleFileStatus(Paths.get(it.path.toUri()), it.isDirectory) }
+                .map { SimpleFileStatus(Paths.get(it.path.toUri().path), it.isDirectory) }
     }
-
 
     inner class HDFSKafkaStorageReader : KafkaStorage.KafkaStorageReader {
         override fun newInput(file: TopicFile): SeekableInput {
-            val hdfsPath = org.apache.hadoop.fs.Path(file.path.toUri())
+            val hdfsPath = org.apache.hadoop.fs.Path(file.path.toString())
             return FsInput(hdfsPath, fileSystem)
         }
 

@@ -201,7 +201,7 @@ data class HdfsConfig(
     init {
         configuration["fs.hdfs.impl.disable.cache"] = "true"
         if (nameNodes.size == 1) {
-            configuration["fs.defaultFS"] = "hdfs://$${nameNodes.first()}"
+            configuration["fs.defaultFS"] = "hdfs://${nameNodes.first()}:8020"
         }
         if (nameNodes.size >= 2) {
             val clusterId = "radarCluster"

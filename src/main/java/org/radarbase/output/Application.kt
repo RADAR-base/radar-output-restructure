@@ -128,6 +128,8 @@ class Application(
                         numberFormat.format(restructure.processedRecordsCount),
                         timeStart.durationSince().format())
             }
+        } catch (ex: Exception) {
+            logger.error("Failed to process records", ex)
         } catch (ex: IOException) {
             logger.error("Processing failed", ex)
         } catch (e: InterruptedException) {

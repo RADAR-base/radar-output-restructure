@@ -35,5 +35,5 @@ internal object YAMLConfigLoader {
         }
     }
 
-    val logger: Logger = LoggerFactory.getLogger(YAMLConfigLoader::class.java)
+    private val logger = LoggerFactory.getLogger(YAMLConfigLoader::class.java)
 }

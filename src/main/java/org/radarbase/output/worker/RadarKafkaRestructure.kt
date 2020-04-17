@@ -116,7 +116,7 @@ class RadarKafkaRestructure(
         } ?: ProcessingStatistics(0L, 0L)
     }
 
-    fun findTopicPaths(path: Path): Stream<Path> {
+    private fun findTopicPaths(path: Path): Stream<Path> {
         val fileStatuses = kafkaStorage.list(path)
         val avroFile = fileStatuses.find {  !it.isDirectory && it.path.fileName.toString().endsWith(".avro", true) }
 
@@ -129,7 +129,7 @@ class RadarKafkaRestructure(
         }
     }
 
-    fun findRecordPaths(topic: String, path: Path): Sequence<TopicFile> = kafkaStorage.list(path)
+    private fun findRecordPaths(topic: String, path: Path): Sequence<TopicFile> = kafkaStorage.list(path)
             .flatMap { status ->
                 val filename = status.path.fileName.toString()
                 when {
