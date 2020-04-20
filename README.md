@@ -109,6 +109,37 @@ This package assumes a Redis service running. See the example `restructure.yml` 
 
 ### Source and target
 
+The `source` and `target` properties contain resource descriptions. The source can have two types, `hdfs` and `s3`:
+
+```yaml
+source:
+  type: s3  # hdfs or s3
+  s3:
+    endpoint: http://localhost:9000  # using AWS S3 endpoint is also possible.
+    bucket: radar
+    accessToken: minioadmin
+    secretKey: minioadmin
+  # only actually needed if source type is hdfs
+  hdfs:
+    nameNodes: [hdfs-namenode-1, hdfs-namenode-2]
+```
+
+The target is similar, but it does not support HDFS, but the local file system (`local`) or `s3`.
+
+```yaml
+target:
+  type: s3  # s3 or local
+  s3:
+    endpoint: http://localhost:9000
+    bucket: out
+    accessToken: minioadmin
+    secretKey: minioadmin
+  # only actually needed if target type is local
+  local:
+    userId: 1000  # write as regular user, use -1 to use current user (default).
+    groupId: 100  # write as regular group, use -1 to use current user (default).
+```
+
 ### Service
 
 To run the output generator as a service that will regularly poll the HDFS directory, add the `--service` flag and optionally the `--interval` flag to adjust the polling interval or use the corresponding configuration file parameters.
