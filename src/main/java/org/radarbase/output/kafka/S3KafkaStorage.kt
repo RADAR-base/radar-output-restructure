@@ -21,6 +21,10 @@ class S3KafkaStorage(
                 SimpleFileStatus(Paths.get(item.objectName()), item.isDir, item.lastModified().toInstant())
             }
 
+    override fun delete(path: Path) {
+        s3Client.removeObject(bucket, path.toString())
+    }
+
     override fun reader(): KafkaStorage.KafkaStorageReader = S3KafkaStorageReader()
 
     private inner class S3KafkaStorageReader: KafkaStorage.KafkaStorageReader {
