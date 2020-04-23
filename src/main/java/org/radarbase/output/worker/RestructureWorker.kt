@@ -8,7 +8,6 @@ import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.OffsetRangeSet
-import org.radarbase.output.accounting.TopicPartition
 import org.radarbase.output.kafka.KafkaStorage
 import org.radarbase.output.kafka.TopicFile
 import org.radarbase.output.kafka.TopicFileList
@@ -27,7 +26,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToLong
 
 internal class RestructureWorker(
-        private val pathFactory: RecordPathFactory,
         storage: KafkaStorage,
         private val accountant: Accountant,
         fileStoreFactory: FileStoreFactory,
@@ -36,6 +34,7 @@ internal class RestructureWorker(
     var processedFileCount: Long = 0
     var processedRecordsCount: Long = 0
     private val reader = storage.reader()
+    private val pathFactory: RecordPathFactory = fileStoreFactory.pathFactory
 
     private val cacheStore = fileStoreFactory.newFileCacheStore(accountant)
 

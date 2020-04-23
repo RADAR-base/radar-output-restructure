@@ -2,6 +2,7 @@ package org.radarbase.output.kafka
 
 import org.radarbase.output.accounting.OffsetRange
 import java.nio.file.Path
+import java.time.Instant
 
 data class TopicFileList(val topic: String, val files: List<TopicFile>) {
     val numberOfOffsets: Long = this.files.stream()
@@ -11,9 +12,9 @@ data class TopicFileList(val topic: String, val files: List<TopicFile>) {
     val numberOfFiles: Int = this.files.size
 }
 
-data class TopicFile(val topic: String, val path: Path) {
+data class TopicFile(val topic: String, val path: Path, val lastModified: Instant) {
     val range: OffsetRange = OffsetRange.parseFilename(path.fileName.toString())
     val size: Long = 1 + range.offsetTo - range.offsetFrom
 }
 
-data class SimpleFileStatus(val path: Path, val isDirectory: Boolean)
+data class SimpleFileStatus(val path: Path, val isDirectory: Boolean, val lastModified: Instant)

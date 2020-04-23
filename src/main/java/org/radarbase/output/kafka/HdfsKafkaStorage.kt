@@ -5,6 +5,7 @@ import org.apache.avro.mapred.FsInput
 import org.apache.hadoop.fs.FileSystem
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.time.Instant
 
 
 class HdfsKafkaStorage(
@@ -13,18 +14,28 @@ class HdfsKafkaStorage(
     override fun reader(): KafkaStorage.KafkaStorageReader = HDFSKafkaStorageReader()
 
     override fun list(path: Path): Sequence<SimpleFileStatus> {
-        val hdfsPath = org.apache.hadoop.fs.Path(path.toString())
-        return fileSystem.listStatus(hdfsPath)
+        return fileSystem.listStatus(path.toHdfsPath())
                 .asSequence()
-                .map { SimpleFileStatus(Paths.get(it.path.toUri().path), it.isDirectory) }
+                .map { SimpleFileStatus(
+                        Paths.get(it.path.toUri().path),
+                        it.isDirectory,
+                        Instant.ofEpochMilli(it.modificationTime))
+                }
+    }
+
+    override fun delete(path: Path) {
+        fileSystem.delete(path.toHdfsPath(), false)
     }
 
     inner class HDFSKafkaStorageReader : KafkaStorage.KafkaStorageReader {
         override fun newInput(file: TopicFile): SeekableInput {
-            val hdfsPath = org.apache.hadoop.fs.Path(file.path.toString())
-            return FsInput(hdfsPath, fileSystem)
+            return FsInput(file.path.toHdfsPath(), fileSystem)
         }
 
         override fun close() = Unit
+    }
+
+    companion object {
+        private fun Path.toHdfsPath() = org.apache.hadoop.fs.Path(toString())
     }
 }
