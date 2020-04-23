@@ -107,7 +107,7 @@ class RadarKafkaRestructure(
 
                     val statistics = startWorker(topic, topicPath, accountant, seenFiles)
                     if (deleteThreshold != null && topic !in excludeDeleteTopics) {
-                        deleteOldFiles(topic, topicPath, seenFiles)
+                        statistics.deleteCount = deleteOldFiles(topic, topicPath, seenFiles)
                     }
                     statistics
                 }
