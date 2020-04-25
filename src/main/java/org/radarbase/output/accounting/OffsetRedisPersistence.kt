@@ -38,7 +38,11 @@ class OffsetRedisPersistence(
             redisPool.resource.use { jedis ->
                 jedis[path.toString()]?.let { value ->
                     OffsetRangeSet().apply {
-                        addAll(offsetReader.readValue<OffsetRangeSet.OffsetRangeList>(value))
+                        offsetReader.readValue<RedisOffsetRangeSet>(value)
+                                .partitions
+                                .forEach { (topic, partition, ranges) ->
+                                    addAll(TopicPartition(topic, partition), ranges)
+                                }
                     }
                 }
             }
@@ -53,13 +57,6 @@ class OffsetRedisPersistence(
             startSet: OffsetRangeSet?
     ): OffsetPersistenceFactory.Writer = RedisWriter(path, startSet)
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(OffsetRedisPersistence::class.java)
-        private val mapper = jacksonObjectMapper()
-        private val offsetWriter = mapper.writerFor(OffsetRangeSet.OffsetRangeList::class.java)
-        private val offsetReader = mapper.readerFor(OffsetRangeSet.OffsetRangeList::class.java)
-    }
-
     private inner class RedisWriter(
             private val path: Path,
             startSet: OffsetRangeSet?
@@ -70,11 +67,33 @@ class OffsetRedisPersistence(
         override fun doWrite(): Unit = time("accounting.offsets") {
             try {
                 redisPool.resource.use { jedis ->
-                    jedis.set(path.toString(), offsetWriter.writeValueAsString(offsets.toOffsetRangeList()))
+                    val offsets = RedisOffsetRangeSet(offsets.map { topicPartition, offsetIntervals ->
+                        RedisOffsetIntervals(
+                                topicPartition.topic,
+                                topicPartition.partition,
+                                offsetIntervals.toList())
+                    })
+
+                    jedis.set(path.toString(), offsetWriter.writeValueAsString(offsets))
                 }
             } catch (e: IOException) {
                 logger.error("Failed to write offsets: {}", e.toString())
             }
         }
+    }
+
+    companion object {
+        data class RedisOffsetRangeSet(
+                val partitions: List<RedisOffsetIntervals>)
+
+        data class RedisOffsetIntervals(
+                val topic: String,
+                val partition: Int,
+                val ranges: List<OffsetRangeSet.Range>)
+
+        private val logger = LoggerFactory.getLogger(OffsetRedisPersistence::class.java)
+        private val mapper = jacksonObjectMapper()
+        private val offsetWriter = mapper.writerFor(RedisOffsetRangeSet::class.java)
+        private val offsetReader = mapper.readerFor(RedisOffsetRangeSet::class.java)
     }
 }

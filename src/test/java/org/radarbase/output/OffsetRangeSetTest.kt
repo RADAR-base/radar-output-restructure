@@ -5,20 +5,23 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 
 import org.junit.jupiter.api.Test
-import org.radarbase.output.accounting.OffsetRange
+import org.radarbase.output.accounting.TopicPartitionOffsetRange
 import org.radarbase.output.accounting.OffsetRangeSet
 import org.radarbase.output.accounting.TopicPartition
+import java.time.Instant
 
 class OffsetRangeSetTest {
+    private val lastModified = Instant.now()
+    private val topicPartition = TopicPartition("", 0)
+
     @Test
     fun containsGap() {
-        val topicPartition = TopicPartition("", 0)
-        val am = OffsetRange(topicPartition, -1, 0)
-        val az = OffsetRange(topicPartition, 0, 0)
-        val a = OffsetRange(topicPartition, 0, 1)
-        val c = OffsetRange(topicPartition, 3, 4)
-        val ac = OffsetRange(topicPartition, 0, 3)
-        val ap = OffsetRange(topicPartition, 0, 5)
+        val am = TopicPartitionOffsetRange(topicPartition, OffsetRangeSet.Range(-1, 0, lastModified))
+        val az = TopicPartitionOffsetRange(topicPartition, OffsetRangeSet.Range(0, 0, lastModified))
+        val a = TopicPartitionOffsetRange(topicPartition, OffsetRangeSet.Range(0, 1, lastModified))
+        val c = TopicPartitionOffsetRange(topicPartition, OffsetRangeSet.Range(3, 4, lastModified))
+        val ac = TopicPartitionOffsetRange(topicPartition, OffsetRangeSet.Range(0, 3, lastModified))
+        val ap = TopicPartitionOffsetRange(topicPartition, OffsetRangeSet.Range(0, 5, lastModified))
         val set = OffsetRangeSet()
         assertFalse(set.contains(a))
         assertEquals(0, set.size(topicPartition))
@@ -44,21 +47,5 @@ class OffsetRangeSetTest {
         assertFalse(set.contains(ap))
         set.add(ap)
         assertEquals(1, set.size(topicPartition))
-    }
-
-    @Test
-    fun testGap() {
-        OffsetRangeSet.OffsetRangeLists().run {
-            add(0, 2)
-            add(4, 5)
-            assertEquals(2, size())
-            assertTrue(contains(0, 1))
-            assertFalse(contains(3))
-            assertFalse(contains(0, 5))
-            add(3)
-            assertEquals(1, size())
-            assertTrue(contains(3))
-            assertTrue(contains(0, 5))
-        }
     }
 }

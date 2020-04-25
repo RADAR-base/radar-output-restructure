@@ -25,6 +25,7 @@ import java.io.Flushable
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.time.Instant
 
 open class Accountant @Throws(IOException::class)
 constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
@@ -88,11 +89,11 @@ constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
         internal val offsets: OffsetRangeSet = OffsetRangeSet { DirectFunctionalValue(it) }
 
         fun add(transaction: Transaction) = time("accounting.add") {
-            offsets.add(transaction.topicPartition, transaction.offset)
+            offsets.add(transaction.topicPartition, transaction.offset, transaction.lastModified)
         }
     }
 
-    class Transaction(val topicPartition: TopicPartition, internal var offset: Long)
+    class Transaction(val topicPartition: TopicPartition, internal var offset: Long, internal val lastModified: Instant)
 
     companion object {
         private val logger = LoggerFactory.getLogger(Accountant::class.java)

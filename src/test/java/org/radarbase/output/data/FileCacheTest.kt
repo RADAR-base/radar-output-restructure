@@ -37,6 +37,7 @@ import java.io.IOException
 import java.io.InputStreamReader
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
 import java.util.zip.GZIPInputStream
 
 /**
@@ -49,6 +50,8 @@ class FileCacheTest {
     private lateinit var factory: Application
     private lateinit var accountant: Accountant
     private lateinit var topicPartition: TopicPartition
+
+    private val lastModified = Instant.now()
 
     private lateinit var config: RestructureConfig
 
@@ -88,7 +91,7 @@ class FileCacheTest {
 
         FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant).use { cache ->
             cache.writeRecord(exampleRecord,
-                    Accountant.Transaction(topicPartition, 0L))
+                    Accountant.Transaction(topicPartition, 0L, lastModified))
         }
 
         println("Gzip: " + Files.size(path))
@@ -107,12 +110,12 @@ class FileCacheTest {
 
         FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant).use { cache ->
             cache.writeRecord(exampleRecord,
-                    Accountant.Transaction(topicPartition, 0))
+                    Accountant.Transaction(topicPartition, 0, lastModified))
         }
 
         FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant).use { cache ->
             cache.writeRecord(exampleRecord,
-                    Accountant.Transaction(topicPartition, 0))
+                    Accountant.Transaction(topicPartition, 0, lastModified))
         }
 
         println("Gzip appended: " + Files.size(path))
@@ -129,7 +132,7 @@ class FileCacheTest {
     fun testPlain() {
         FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant).use { cache ->
             cache.writeRecord(exampleRecord,
-                    Accountant.Transaction(topicPartition, 0))
+                    Accountant.Transaction(topicPartition, 0, lastModified))
         }
 
         println("Plain: " + Files.size(path))
@@ -143,12 +146,12 @@ class FileCacheTest {
     fun testPlainAppend() {
         FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant).use { cache ->
             cache.writeRecord(exampleRecord,
-                    Accountant.Transaction(topicPartition, 0))
+                    Accountant.Transaction(topicPartition, 0, lastModified))
         }
 
         FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant).use { cache ->
             cache.writeRecord(exampleRecord,
-                    Accountant.Transaction(topicPartition, 1))
+                    Accountant.Transaction(topicPartition, 1, lastModified))
         }
 
         println("Plain appended: " + Files.size(path))
@@ -164,18 +167,21 @@ class FileCacheTest {
         FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant).use { cache1 ->
             FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant).use { cache2 ->
                 FileCache(factory, "topic", file3, exampleRecord, tmpDir, accountant).use { cache3 ->
+                    val transaction = Accountant.Transaction(topicPartition, 0, lastModified)
                     assertEquals(0, cache1.compareTo(cache2))
                     // filenames are not equal
                     assertTrue(cache1 < cache3)
-                    cache1.writeRecord(exampleRecord, Accountant.Transaction(topicPartition, 0))
+                    cache1.writeRecord(exampleRecord, transaction)
                     // last used
                     assertTrue(cache1 > cache2)
                     // last used takes precedence over filename
                     assertTrue(cache1 > cache3)
 
                     // last used reversal
-                    cache2.writeRecord(exampleRecord, Accountant.Transaction(topicPartition, 1))
-                    cache3.writeRecord(exampleRecord, Accountant.Transaction(topicPartition, 2))
+                    transaction.offset = 1
+                    cache2.writeRecord(exampleRecord, transaction)
+                    transaction.offset = 2
+                    cache3.writeRecord(exampleRecord, transaction)
                     assertTrue(cache1 < cache2)
                     assertTrue(cache1 < cache3)
                 }

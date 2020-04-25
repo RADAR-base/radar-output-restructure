@@ -17,12 +17,12 @@
 package org.radarbase.output.accounting
 
 import com.fasterxml.jackson.annotation.JsonIgnore
+import java.time.Instant
 
-/** POJO class for storing offsets.  */
-data class OffsetRange(
+/** Offset range for a topic partition.  */
+data class TopicPartitionOffsetRange(
         val topicPartition: TopicPartition,
-        val offsetFrom: Long,
-        val offsetTo: Long) {
+        val range: OffsetRangeSet.Range) {
 
     @JsonIgnore
     val topic: String = topicPartition.topic
@@ -30,20 +30,23 @@ data class OffsetRange(
     val partition: Int = topicPartition.partition
 
     /** Full constructor.  */
-    constructor(topic: String, partition: Int, offsetFrom: Long, offsetTo: Long) : this(TopicPartition(topic, partition), offsetFrom, offsetTo) {}
+    constructor(topic: String, partition: Int, offsetFrom: Long, offsetTo: Long, lastModified: Instant = Instant.now()) : this(
+            TopicPartition(topic, partition),
+            OffsetRangeSet.Range(offsetFrom, offsetTo, lastModified))
 
-    override fun toString(): String = "$topic+$partition+$offsetFrom+$offsetTo"
+    override fun toString(): String = "$topic+$partition+${range.from}+${range.to} (${range.lastProcessed})"
 
     companion object {
         @Throws(NumberFormatException::class, IndexOutOfBoundsException::class)
-        fun parseFilename(filename: String): OffsetRange {
+        fun parseFilename(filename: String, lastModified: Instant): TopicPartitionOffsetRange {
             val fileNameParts = filename.split("[+.]".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
 
-            return OffsetRange(
+            return TopicPartitionOffsetRange(
                     fileNameParts[0],
                     Integer.parseInt(fileNameParts[1]),
                     java.lang.Long.parseLong(fileNameParts[2]),
-                    java.lang.Long.parseLong(fileNameParts[3]))
+                    java.lang.Long.parseLong(fileNameParts[3]),
+                    lastModified)
         }
     }
 }

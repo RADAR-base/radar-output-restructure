@@ -30,9 +30,6 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.LongAdder
-import java.util.stream.Collectors
-import java.util.stream.Stream
-import kotlin.streams.asStream
 
 /**
  * Performs the following actions
@@ -149,7 +146,7 @@ class RadarKafkaRestructure(
             .filter { f -> f.lastModified.isBefore(deleteThreshold) &&
                     // ensure that there is a file with a larger offset also
                     // processed, so the largest offset is never removed.
-                    seenFiles.contains(f.range.copy(offsetTo = f.range.offsetTo + 1)) }
+                    seenFiles.contains(f.range.copy(range = f.range.range.copy(to = f.range.range.to + 1))) }
             .take(maxFilesPerTopic)
             .map { kafkaStorage.delete(it.path) }
             .count()

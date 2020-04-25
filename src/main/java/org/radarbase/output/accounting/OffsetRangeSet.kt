@@ -16,251 +16,144 @@
 
 package org.radarbase.output.accounting
 
-import com.almworks.integers.LongArray
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentMap
-import java.util.stream.Collectors
-import java.util.stream.IntStream
-import java.util.stream.Stream
 import org.radarbase.output.util.FunctionalValue
 import org.radarbase.output.util.LockedFunctionalValue
 import org.radarbase.output.util.ReadOnlyFunctionalValue
-import java.util.*
+import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentMap
 
-/** Encompasses a range of offsets.  */
+/**
+ * Encompasses a range of offsets. Offsets bookkeeping takes two dimensions: offset number and last
+ * modification time of an offset. To keep offset bookkeeping efficient, offset ranges are merged
+ * when they overlap or are adjacent. When merging offsets, last processing time is taken as the
+ * maximum of all the merged processing times.
+ */
 class OffsetRangeSet {
-    private val factory: (OffsetRangeLists) -> FunctionalValue<OffsetRangeLists>
-    private val ranges: ConcurrentMap<TopicPartition, FunctionalValue<OffsetRangeLists>>
+    private val factory: (OffsetIntervals) -> FunctionalValue<OffsetIntervals>
+    private val ranges: ConcurrentMap<TopicPartition, FunctionalValue<OffsetIntervals>>
 
     /** Whether the stored offsets is empty.  */
     val isEmpty: Boolean
         get() = ranges.isEmpty()
 
     @JvmOverloads
-    constructor(factory: (OffsetRangeLists) -> FunctionalValue<OffsetRangeLists> = { LockedFunctionalValue(it) }) {
+    constructor(
+            factory: (OffsetIntervals) -> FunctionalValue<OffsetIntervals> = { LockedFunctionalValue(it) }
+    ) {
         this.ranges = ConcurrentHashMap()
         this.factory = factory
     }
 
-    private constructor(ranges: ConcurrentMap<TopicPartition, FunctionalValue<OffsetRangeLists>>,
-                        factory: (OffsetRangeLists) -> FunctionalValue<OffsetRangeLists>) {
+    private constructor(
+            ranges: ConcurrentMap<TopicPartition, FunctionalValue<OffsetIntervals>>,
+            factory: (OffsetIntervals) -> FunctionalValue<OffsetIntervals>
+    ) {
         this.ranges = ranges
         this.factory = factory
     }
 
     /** Add given offset range to seen offsets.  */
-    fun add(range: OffsetRange) {
-        ranges.computeIfAbsent(range.topicPartition) { factory(OffsetRangeLists()) }
-                .modify { rangeList -> rangeList.add(range.offsetFrom, range.offsetTo) }
+    fun add(range: TopicPartitionOffsetRange) {
+        range.topicPartition.modifyIntervals { it.add(range.range) }
     }
 
-    /** Add given offset range to seen offsets.  */
-    fun add(topicPartition: TopicPartition, offset: Long) {
-        ranges.computeIfAbsent(topicPartition) { factory(OffsetRangeLists()) }
-                .modify { rangeList -> rangeList.add(offset) }
+    /** Add given single offset to seen offsets.  */
+    fun add(topicPartition: TopicPartition, offset: Long, lastModified: Instant) {
+        topicPartition.modifyIntervals { it.add(offset, lastModified) }
     }
 
     /** Add all offset stream of given set to the current set.  */
     fun addAll(set: OffsetRangeSet) {
-        set.stream().forEach { this.add(it) }
-    }
-
-    fun addAll(list: OffsetRangeList) {
-        list.partitions.forEach { partition ->
-            val topicPartition = TopicPartition(partition.topic, partition.partition)
-            partition.ranges.forEach {
-                add(OffsetRange(topicPartition, it.from, it.to))
+        set.ranges.entries.forEach { (otherPartition, otherRanges) ->
+            otherPartition.modifyIntervals { rangeList ->
+                otherRanges.read { it.toList() }
+                        .forEach { rangeList.add(it) }
             }
         }
     }
 
-    /** Whether this range value completely contains the given range.  */
-    operator fun contains(range: OffsetRange): Boolean {
-        return ranges.getOrDefault(range.topicPartition, EMPTY_VALUE)
-                .read { rangeList -> rangeList.contains(range.offsetFrom, range.offsetTo) }
+    fun addAll(topicPartition: TopicPartition, ranges: List<Range>) {
+        topicPartition.modifyIntervals { intervals ->
+            ranges.forEach { intervals.add(it) }
+        }
     }
 
     /** Whether this range value completely contains the given range.  */
-    fun contains(partition: TopicPartition, offset: Long): Boolean {
-        return ranges.getOrDefault(partition, EMPTY_VALUE)
-                .read { rangeList -> rangeList.contains(offset) }
+    operator fun contains(range: TopicPartitionOffsetRange): Boolean {
+        return range.topicPartition.readIntervals { it.contains(range.range) }
+    }
+
+    /** Whether this range value completely contains the given range.  */
+    fun contains(partition: TopicPartition, offset: Long, lastModified: Instant): Boolean {
+        return partition.readIntervals { it.contains(offset, lastModified) }
     }
 
     /** Number of distinct offsets in given topic/partition.  */
     fun size(topicPartition: TopicPartition): Int {
-        return ranges.getOrDefault(topicPartition, EMPTY_VALUE)
-                .read { it.size() }
+        return topicPartition.readIntervals { it.size() }
     }
 
-    fun withFactory(factory: (OffsetRangeLists) -> FunctionalValue<OffsetRangeLists>): OffsetRangeSet {
-        return OffsetRangeSet(
-                ranges.entries.stream()
-                        .collect(Collectors.toConcurrentMap(
-                                { it.key },
-                                { e -> e.value.read { range -> factory(OffsetRangeLists(range)) } })),
-                factory)
-    }
+    fun withFactory(
+            factory: (OffsetIntervals) -> FunctionalValue<OffsetIntervals>
+    ) = OffsetRangeSet(
+            ranges.entries.associateByTo(
+                    ConcurrentHashMap(),
+                    { it.key },
+                    { (_, intervals) ->
+                        intervals.read { factory(OffsetIntervals(it)) }
+                    }),
+            factory)
 
     override fun toString(): String = "OffsetRangeSet$ranges"
 
+    fun <T> map(
+            mapping: (TopicPartition, OffsetIntervals) -> T
+    ): List<T> = ranges.entries
+            .sortedBy { it.key }
+            .map { (key, value) ->
+                value.read { mapping(key, it) }
+            }
+
     /**
-     * All offset stream as a stream. For any given topic/partition, this yields an
+     * Process all offset stream as a list. For any given topic/partition, this yields a
      * consistent result but values from different topic/partitions may not be consistent.
      */
-    fun stream(): Stream<OffsetRange> {
-        return ranges.entries.stream()
-                .sorted(Comparator.comparing<Map.Entry<TopicPartition, FunctionalValue<OffsetRangeLists>>, TopicPartition> { it.key })
-                .flatMap { e ->
-                    e.value.read { OffsetRangeLists(it) }.stream()
-                            .map { r -> OffsetRange(e.key, r.from, r.to) }
-                }
-    }
-
-    fun toOffsetRangeList(): OffsetRangeList {
-        return OffsetRangeList(ranges.entries.stream()
-                .sorted(Comparator.comparing<Map.Entry<TopicPartition, FunctionalValue<OffsetRangeLists>>, TopicPartition> { it.key })
-                .map { e ->
-                    OffsetRangeList.TopicPartitionRange(e.key.topic, e.key.partition, e.value.read { OffsetRangeLists(it) }.stream()
-                            .map { Range(it.from, it.to) }
-                            .collect(Collectors.toList()))
-                }
-                .collect(Collectors.toList()))
-    }
+    fun forEach(
+            action: (TopicPartition, OffsetIntervals) -> Unit
+    ) = ranges.entries
+            .sortedBy { it.key }
+            .forEach { (key, value) ->
+                value.read { action(key, it) }
+            }
 
     override fun equals(other: Any?): Boolean {
-        return other === this || (
-                javaClass == other?.javaClass && ranges == (other as OffsetRangeSet).ranges)
+        if (other === this) {
+            return true
+        }
+        if (javaClass != other?.javaClass) {
+            return false
+        }
+        other as OffsetRangeSet
+        return ranges == other.ranges
     }
 
     override fun hashCode(): Int = ranges.hashCode()
 
-    class OffsetRangeLists {
-        private val offsetsFrom: LongArray
-        private val offsetsTo: LongArray
+    private fun TopicPartition.modifyIntervals(consumer: (OffsetIntervals) -> Unit) = ranges
+            .computeIfAbsent(this) { factory(OffsetIntervals()) }
+            .modify(consumer)
 
-        constructor() {
-            offsetsFrom = LongArray(8)
-            offsetsTo = LongArray(8)
-        }
+    private fun <V> TopicPartition.readIntervals(function: (OffsetIntervals) -> V) = ranges
+            .getOrDefault(this, EMPTY_VALUE)
+            .read(function)
 
-        constructor(other: OffsetRangeLists) {
-            offsetsFrom = LongArray(other.offsetsFrom)
-            offsetsTo = LongArray(other.offsetsTo)
-        }
-
-        fun contains(from: Long, to: Long): Boolean {
-            //  -index-1 if not found
-            val index = offsetsFrom.binarySearch(from)
-            return if (index >= 0) {
-                offsetsTo.get(index) >= to
-            } else {
-                val indexBefore = -index - 2
-                indexBefore >= 0 && offsetsTo.get(indexBefore) >= to
-            }
-        }
-
-        operator fun contains(offset: Long): Boolean {
-            //  -index-1 if not found
-            val index = offsetsFrom.binarySearch(offset)
-            return if (index >= 0) {
-                true
-            } else {
-                val indexBefore = -index - 2
-                indexBefore >= 0 && offsetsTo.get(indexBefore) >= offset
-            }
-        }
-
-        fun add(offset: Long) {
-            var index = offsetsFrom.binarySearch(offset)
-            if (index >= 0) {
-                return
-            }
-            // index where this range would be entered
-            index = -index - 1
-
-            if (index > 0 && offset == offsetsTo.get(index - 1) + 1) {
-                // concat with range before it and possibly stream afterwards
-                offsetsTo.set(index - 1, offset)
-                if (index < offsetsFrom.size() && offset == offsetsFrom.get(index) - 1) {
-                    offsetsTo.set(index - 1, offsetsTo.get(index))
-                    offsetsFrom.removeAt(index)
-                    offsetsTo.removeAt(index)
-                }
-            } else if (index >= offsetsFrom.size() || offset < offsetsFrom.get(index) - 1) {
-                // cannot concat, enter new range
-                offsetsFrom.insert(index, offset)
-                offsetsTo.insert(index, offset)
-            } else {
-                // concat with the stream after it
-                offsetsFrom.set(index, offset)
-            }
-        }
-
-        fun add(from: Long, to: Long) {
-            var index = offsetsFrom.binarySearch(from)
-            if (index < 0) {
-                // index where this range would be entered
-                index = -index - 1
-
-                if (index > 0 && from <= offsetsTo.get(index - 1) + 1) {
-                    // concat with range before it and possibly stream afterwards
-                    index--
-                } else if (index >= offsetsFrom.size() || to < offsetsFrom.get(index) - 1) {
-                    // cannot concat, enter new range
-                    offsetsFrom.insert(index, from)
-                    offsetsTo.insert(index, to)
-                    return
-                } else {
-                    // concat with the stream after it
-                    offsetsFrom.set(index, from)
-                }
-            }
-
-            if (to <= offsetsTo.get(index)) {
-                return
-            }
-
-            offsetsTo.set(index, to)
-
-            var overlapIndex = index + 1
-            val startIndex = overlapIndex
-
-            while (overlapIndex < offsetsTo.size() && to >= offsetsTo.get(overlapIndex)) {
-                overlapIndex++
-            }
-            if (overlapIndex < offsetsFrom.size() && to >= offsetsFrom.get(overlapIndex) - 1) {
-                offsetsTo.set(index, offsetsTo.get(overlapIndex))
-                overlapIndex++
-            }
-            if (overlapIndex != startIndex) {
-                offsetsFrom.removeRange(startIndex, overlapIndex)
-                offsetsTo.removeRange(startIndex, overlapIndex)
-            }
-        }
-
-        fun stream(): Stream<Range> {
-            return IntStream.range(0, offsetsFrom.size())
-                    .mapToObj { i -> Range(offsetsFrom.get(i), offsetsTo.get(i)) }
-        }
-
-        fun size(): Int = offsetsFrom.size()
-
-        override fun toString(): String {
-            return "[" + stream()
-                    .map { it.toString() }
-                    .collect(Collectors.joining(", ")) + "]"
-        }
-    }
-
-    data class Range(val from: Long, val to: Long) {
-        override fun toString() = "($from - $to)"
-    }
-
-    data class OffsetRangeList(val partitions: List<TopicPartitionRange>) {
-        data class TopicPartitionRange(val topic: String, val partition: Int, val ranges: List<Range>)
+    data class Range(val from: Long, val to: Long, val lastProcessed: Instant) {
+        val size: Long = to - from + 1
+        override fun toString() = "($from - $to, $lastProcessed)"
     }
 
     companion object {
-        private val EMPTY_VALUE = ReadOnlyFunctionalValue(OffsetRangeLists())
+        private val EMPTY_VALUE = ReadOnlyFunctionalValue(OffsetIntervals())
     }
 }
