@@ -1,10 +1,10 @@
 package org.radarbase.output.accounting
 
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.radarbase.output.accounting.OffsetRedisPersistence.Companion.redisOffsetReader
 import redis.clients.jedis.JedisPool
 import java.io.IOException
 import java.nio.file.Path
@@ -75,7 +75,7 @@ class OffsetRangeRedisTest {
         }
 
         redisPool.resource.use { redis ->
-            val range = jacksonObjectMapper().readValue(redis.get(testFile.toString()), OffsetRedisPersistence.Companion.RedisOffsetRangeSet::class.java)
+            val range = redisOffsetReader.readValue<OffsetRedisPersistence.Companion.RedisOffsetRangeSet>(redis.get(testFile.toString()))
             assertEquals(OffsetRedisPersistence.Companion.RedisOffsetRangeSet(listOf(
                     OffsetRedisPersistence.Companion.RedisOffsetIntervals("a", 0, listOf(
                             OffsetRangeSet.Range(0, 2, lastModified),

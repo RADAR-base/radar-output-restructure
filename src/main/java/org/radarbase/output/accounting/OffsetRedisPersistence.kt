@@ -16,6 +16,9 @@
 
 package org.radarbase.output.accounting
 
+import com.fasterxml.jackson.databind.ObjectReader
+import com.fasterxml.jackson.databind.ObjectWriter
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.radarbase.output.util.PostponedWriter
 import org.radarbase.output.util.Timer.time
@@ -38,7 +41,7 @@ class OffsetRedisPersistence(
             redisPool.resource.use { jedis ->
                 jedis[path.toString()]?.let { value ->
                     OffsetRangeSet().apply {
-                        offsetReader.readValue<RedisOffsetRangeSet>(value)
+                        redisOffsetReader.readValue<RedisOffsetRangeSet>(value)
                                 .partitions
                                 .forEach { (topic, partition, ranges) ->
                                     addAll(TopicPartition(topic, partition), ranges)
@@ -74,7 +77,7 @@ class OffsetRedisPersistence(
                                 offsetIntervals.toList())
                     })
 
-                    jedis.set(path.toString(), offsetWriter.writeValueAsString(offsets))
+                    jedis.set(path.toString(), redisOffsetWriter.writeValueAsString(offsets))
                 }
             } catch (e: IOException) {
                 logger.error("Failed to write offsets: {}", e.toString())
@@ -93,7 +96,8 @@ class OffsetRedisPersistence(
 
         private val logger = LoggerFactory.getLogger(OffsetRedisPersistence::class.java)
         private val mapper = jacksonObjectMapper()
-        private val offsetWriter = mapper.writerFor(RedisOffsetRangeSet::class.java)
-        private val offsetReader = mapper.readerFor(RedisOffsetRangeSet::class.java)
+                .registerModule(JavaTimeModule())
+        val redisOffsetWriter: ObjectWriter = mapper.writerFor(RedisOffsetRangeSet::class.java)
+        val redisOffsetReader: ObjectReader = mapper.readerFor(RedisOffsetRangeSet::class.java)
     }
 }
