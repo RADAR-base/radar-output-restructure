@@ -117,7 +117,7 @@ class Application(
         try {
             RadarKafkaRestructure(this).use { restructure ->
                 for (input in config.paths.inputs) {
-                    logger.info("In:  {}", config.paths.inputs)
+                    logger.info("In:  {}", input)
                     logger.info("Out: {}", pathFactory.root)
                     restructure.process(input.toString())
                 }
