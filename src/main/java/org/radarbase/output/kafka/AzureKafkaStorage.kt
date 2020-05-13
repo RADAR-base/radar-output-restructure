@@ -19,7 +19,12 @@ class AzureKafkaStorage(
 
     override fun list(path: Path): Sequence<SimpleFileStatus> = blobContainerClient.listBlobsByHierarchy("$path/")
             .asSequence()
-            .map { SimpleFileStatus(Paths.get(it.name), it.isPrefix) }
+            .map { SimpleFileStatus(Paths.get(it.name), it.isPrefix, it.properties.lastModified.toInstant()) }
+
+    override fun delete(path: Path) {
+        blobContainerClient.getBlobClient(path.toKey())
+                .delete()
+    }
 
     override fun reader(): KafkaStorage.KafkaStorageReader = AzureKafkaStorageReader()
 
