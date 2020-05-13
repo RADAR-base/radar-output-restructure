@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.radarbase.output.Application
 import org.radarbase.output.accounting.Accountant
-import org.radarbase.output.accounting.OffsetRange
+import org.radarbase.output.accounting.TopicPartitionOffsetRange
 import org.radarbase.output.accounting.OffsetRangeSet
 import org.radarbase.output.accounting.TopicPartition
 import org.radarbase.output.config.*
@@ -37,8 +37,11 @@ import org.radarbase.output.worker.FileCacheStore
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
 
 class FileCacheStoreTest {
+    private val lastModified = Instant.now()
+
     @Test
     @Throws(IOException::class)
     fun appendLine(@TempDir root: Path, @TempDir tmpDir: Path) {
@@ -64,8 +67,8 @@ class FileCacheStoreTest {
         val topicPartition0 = TopicPartition("t", 0)
         val topicPartition1 = TopicPartition("t", 1)
 
-        val offsetRange0 = OffsetRange(topicPartition0, 0, 0)
-        val offsetRange1 = OffsetRange(topicPartition1, 0, 8)
+        val offsetRange0 = TopicPartitionOffsetRange(topicPartition0, OffsetRangeSet.Range(0, 0, lastModified))
+        val offsetRange1 = TopicPartitionOffsetRange(topicPartition1, OffsetRangeSet.Range(0, 8, lastModified))
 
         val factory = Application(
                 RestructureConfig(
@@ -84,43 +87,43 @@ class FileCacheStoreTest {
             var transaction: Accountant.Transaction
 
             record = GenericRecordBuilder(simpleSchema).set("a", "something").build()
-            transaction = Accountant.Transaction(topicPartition1, i1++.toLong())
+            transaction = Accountant.Transaction(topicPartition1, i1++.toLong(), lastModified)
             assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
                     cache.writeRecord(f1, record, transaction))
             record = GenericRecordBuilder(simpleSchema).set("a", "somethingElse").build()
-            transaction = Accountant.Transaction(topicPartition1, i1++.toLong())
+            transaction = Accountant.Transaction(topicPartition1, i1++.toLong(), lastModified)
             assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE,
                     cache.writeRecord(f1, record, transaction))
             record = GenericRecordBuilder(simpleSchema).set("a", "something").build()
-            transaction = Accountant.Transaction(topicPartition0, i0.toLong())
+            transaction = Accountant.Transaction(topicPartition0, i0.toLong(), lastModified)
             assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
                     cache.writeRecord(f2, record, transaction))
             record = GenericRecordBuilder(simpleSchema).set("a", "third").build()
-            transaction = Accountant.Transaction(topicPartition1, i1++.toLong())
+            transaction = Accountant.Transaction(topicPartition1, i1++.toLong(), lastModified)
             assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE,
                     cache.writeRecord(f1, record, transaction))
             record = GenericRecordBuilder(simpleSchema).set("a", "f3").build()
-            transaction = Accountant.Transaction(topicPartition1, i1++.toLong())
+            transaction = Accountant.Transaction(topicPartition1, i1++.toLong(), lastModified)
             assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
                     cache.writeRecord(f3, record, transaction))
             record = GenericRecordBuilder(simpleSchema).set("a", "f2").build()
-            transaction = Accountant.Transaction(topicPartition1, i1++.toLong())
+            transaction = Accountant.Transaction(topicPartition1, i1++.toLong(), lastModified)
             assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
                     cache.writeRecord(f2, record, transaction))
             record = GenericRecordBuilder(simpleSchema).set("a", "f3").build()
-            transaction = Accountant.Transaction(topicPartition1, i1++.toLong())
+            transaction = Accountant.Transaction(topicPartition1, i1++.toLong(), lastModified)
             assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE,
                     cache.writeRecord(f3, record, transaction))
             record = GenericRecordBuilder(simpleSchema).set("a", "f4").build()
-            transaction = Accountant.Transaction(topicPartition1, i1++.toLong())
+            transaction = Accountant.Transaction(topicPartition1, i1++.toLong(), lastModified)
             assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
                     cache.writeRecord(f4, record, transaction))
             record = GenericRecordBuilder(simpleSchema).set("a", "f3").build()
-            transaction = Accountant.Transaction(topicPartition1, i1++.toLong())
+            transaction = Accountant.Transaction(topicPartition1, i1++.toLong(), lastModified)
             assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE,
                     cache.writeRecord(f3, record, transaction))
             record = GenericRecordBuilder(conflictSchema).set("a", "f3").set("b", "conflict").build()
-            transaction = Accountant.Transaction(topicPartition1, i1.toLong())
+            transaction = Accountant.Transaction(topicPartition1, i1.toLong(), lastModified)
             assertEquals(FileCacheStore.WriteResponse.CACHE_AND_NO_WRITE,
                     cache.writeRecord(f3, record, transaction))
             record = GenericRecordBuilder(conflictSchema).set("a", "f1").set("b", "conflict").build()

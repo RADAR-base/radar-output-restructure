@@ -93,7 +93,7 @@ internal class RestructureWorker(
                             progressBar: ProgressBar, seenOffsets: OffsetRangeSet) {
         logger.debug("Reading {}", file.path)
 
-        val offset = file.range.offsetFrom
+        val offset = file.range.range.from
 
         reader.newInput(file).use { input ->
             // processing zero-length files may trigger a stall. See:
@@ -102,11 +102,11 @@ internal class RestructureWorker(
                 logger.warn("File {} has zero length, skipping.", file.path)
                 return
             }
-            val transaction = Accountant.Transaction(file.range.topicPartition, offset)
+            val transaction = Accountant.Transaction(file.range.topicPartition, offset, file.lastModified)
             extractRecords(input) { relativeOffset, record ->
                 transaction.offset = offset + relativeOffset
                 val alreadyContains = time("accounting.check") {
-                    seenOffsets.contains(file.range.topicPartition, transaction.offset)
+                    seenOffsets.contains(file.range.topicPartition, transaction.offset, transaction.lastModified)
                 }
                 if (!alreadyContains) {
                     // Get the fields

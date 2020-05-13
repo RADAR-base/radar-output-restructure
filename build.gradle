@@ -54,6 +54,7 @@ dependencies {
     implementation group: 'com.fasterxml.jackson.dataformat' , name: 'jackson-dataformat-yaml', version: jacksonVersion
     implementation group: 'com.fasterxml.jackson.dataformat' , name: 'jackson-dataformat-csv', version: jacksonVersion
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion")
+    implementation group: 'com.fasterxml.jackson.datatype', name: 'jackson-datatype-jsr310', version: jacksonVersion
     implementation "redis.clients:jedis:$jedisVersion"
 
     implementation group: 'com.beust', name: 'jcommander', version: jCommanderVersion
@@ -137,6 +138,9 @@ task integrationTest(type: Test) {
     useJUnitPlatform()
     testClassesDirs = sourceSets.integrationTest.output.classesDirs
     classpath = sourceSets.integrationTest.runtimeClasspath
+    testLogging {
+        setExceptionFormat("full")
+    }
     shouldRunAfter test
 }
 

@@ -44,7 +44,7 @@ interface OffsetPersistenceFactory {
         /**
          * Add a single offset range to the writer.
          */
-        fun add(range: OffsetRange) = offsets.add(range)
+        fun add(range: TopicPartitionOffsetRange) = offsets.add(range)
 
         /**
          * Add all elements in given offset range set to the writer.

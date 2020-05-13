@@ -18,13 +18,12 @@ package org.radarbase.output.accounting
 
 import org.radarbase.output.storage.StorageDriver
 import org.radarbase.output.util.PostponedWriter
-import org.radarbase.output.util.ThrowingConsumer.tryCatch
 import org.radarbase.output.util.Timer.time
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.io.UncheckedIOException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 
@@ -44,7 +43,7 @@ class OffsetFilePersistence(
                         br.readLine() ?: return@use
 
                         generateSequence { br.readLine() }
-                                .map(::readLine)
+                                .map(::parseLine)
                                 .forEach(set::add)
                     }
                 }
@@ -60,7 +59,7 @@ class OffsetFilePersistence(
             startSet: OffsetRangeSet?
     ): OffsetPersistenceFactory.Writer = FileWriter(path, startSet)
 
-    private fun readLine(line: String): OffsetRange {
+    private fun parseLine(line: String): TopicPartitionOffsetRange {
         val cols = COMMA_PATTERN.split(line)
         var topic = cols[3]
         while (topic[0] == '"') {
@@ -69,11 +68,16 @@ class OffsetFilePersistence(
         while (topic[topic.length - 1] == '"') {
             topic = topic.substring(0, topic.length - 1)
         }
-        return OffsetRange(
+        val lastModified = if (cols.size >= 5) {
+            Instant.parse(cols[4])
+        } else Instant.now()
+
+        return TopicPartitionOffsetRange(
                 topic,
                 cols[2].toInt(),
                 cols[0].toLong(),
-                cols[1].toLong())
+                cols[1].toLong(),
+                lastModified)
     }
 
     companion object {
@@ -94,22 +98,23 @@ class OffsetFilePersistence(
 
                 Files.newBufferedWriter(tmpPath).use { writer ->
                     writer.append("offsetFrom,offsetTo,partition,topic\n")
-                    offsets.stream()
-                            .forEach(tryCatch({ r ->
-                                writer.write(r.offsetFrom.toString())
-                                writer.write(','.toInt())
-                                writer.write(r.offsetTo.toString())
-                                writer.write(','.toInt())
-                                writer.write(r.partition.toString())
-                                writer.write(','.toInt())
-                                writer.write(r.topic)
-                                writer.write('\n'.toInt())
-                            }, "Failed to write value"))
+                    offsets.forEach { topicPartition, offsetIntervals ->
+                        offsetIntervals.forEach { offsetFrom, offsetTo, lastModified ->
+                            writer.write(offsetFrom.toString())
+                            writer.write(','.toInt())
+                            writer.write(offsetTo.toString())
+                            writer.write(','.toInt())
+                            writer.write(topicPartition.partition.toString())
+                            writer.write(','.toInt())
+                            writer.write(topicPartition.topic)
+                            writer.write(','.toInt())
+                            writer.write(lastModified.toString())
+                            writer.write('\n'.toInt())
+                        }
+                    }
                 }
 
                 storage.store(tmpPath, path)
-            } catch (e: UncheckedIOException) {
-                logger.error("Failed to write offsets: {}", e.toString())
             } catch (e: IOException) {
                 logger.error("Failed to write offsets: {}", e.toString())
             }

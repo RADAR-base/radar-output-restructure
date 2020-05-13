@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
-import org.radarbase.output.accounting.OffsetRange
+import org.radarbase.output.accounting.TopicPartitionOffsetRange
 import org.radarbase.output.accounting.OffsetFilePersistence
 import org.radarbase.output.accounting.OffsetPersistenceFactory
 import org.radarbase.output.accounting.TopicPartition
@@ -30,11 +30,13 @@ import org.radarbase.output.storage.StorageDriver
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
 
 class OffsetRangeFileTest {
     private lateinit var testFile: Path
     private lateinit var storage: StorageDriver
     private lateinit var offsetPersistence: OffsetPersistenceFactory
+    private val lastModified = Instant.now()
 
     @BeforeEach
     @Throws(IOException::class)
@@ -60,29 +62,29 @@ class OffsetRangeFileTest {
     @Throws(IOException::class)
     fun write() {
         offsetPersistence.writer(testFile).use { rangeFile ->
-            rangeFile.add(OffsetRange.parseFilename("a+0+0+1"))
-            rangeFile.add(OffsetRange.parseFilename("a+0+1+2"))
+            rangeFile.add(TopicPartitionOffsetRange.parseFilename("a+0+0+1", lastModified))
+            rangeFile.add(TopicPartitionOffsetRange.parseFilename("a+0+1+2", lastModified))
         }
 
         val set = offsetPersistence.read(testFile)
         assertNotNull(set)
         requireNotNull(set)
-        assertTrue(set.contains(OffsetRange.parseFilename("a+0+0+1")))
-        assertTrue(set.contains(OffsetRange.parseFilename("a+0+1+2")))
-        assertTrue(set.contains(OffsetRange.parseFilename("a+0+0+2")))
-        assertFalse(set.contains(OffsetRange.parseFilename("a+0+0+3")))
-        assertFalse(set.contains(OffsetRange.parseFilename("a+0+2+3")))
-        assertFalse(set.contains(OffsetRange.parseFilename("a+1+0+1")))
-        assertFalse(set.contains(OffsetRange.parseFilename("b+0+0+1")))
+        assertTrue(set.contains(TopicPartitionOffsetRange.parseFilename("a+0+0+1", lastModified)))
+        assertTrue(set.contains(TopicPartitionOffsetRange.parseFilename("a+0+1+2", lastModified)))
+        assertTrue(set.contains(TopicPartitionOffsetRange.parseFilename("a+0+0+2", lastModified)))
+        assertFalse(set.contains(TopicPartitionOffsetRange.parseFilename("a+0+0+3", lastModified)))
+        assertFalse(set.contains(TopicPartitionOffsetRange.parseFilename("a+0+2+3", lastModified)))
+        assertFalse(set.contains(TopicPartitionOffsetRange.parseFilename("a+1+0+1", lastModified)))
+        assertFalse(set.contains(TopicPartitionOffsetRange.parseFilename("b+0+0+1", lastModified)))
     }
 
     @Test
     @Throws(IOException::class)
     fun cleanUp() {
         offsetPersistence.writer(testFile).use { rangeFile ->
-            rangeFile.add(OffsetRange.parseFilename("a+0+0+1"))
-            rangeFile.add(OffsetRange.parseFilename("a+0+1+2"))
-            rangeFile.add(OffsetRange.parseFilename("a+0+4+4"))
+            rangeFile.add(TopicPartitionOffsetRange.parseFilename("a+0+0+1", lastModified))
+            rangeFile.add(TopicPartitionOffsetRange.parseFilename("a+0+1+2", lastModified))
+            rangeFile.add(TopicPartitionOffsetRange.parseFilename("a+0+4+4", lastModified))
         }
 
         storage.newBufferedReader(testFile).use { br ->
