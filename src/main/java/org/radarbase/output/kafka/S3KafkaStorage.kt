@@ -18,8 +18,12 @@ class S3KafkaStorage(
             .asSequence()
             .map {
                 val item = it.get()
-                SimpleFileStatus(Paths.get(item.objectName()), item.isDir)
+                SimpleFileStatus(Paths.get(item.objectName()), item.isDir, item.lastModified().toInstant())
             }
+
+    override fun delete(path: Path) {
+        s3Client.removeObject(bucket, path.toString())
+    }
 
     override fun reader(): KafkaStorage.KafkaStorageReader = S3KafkaStorageReader()
 

@@ -127,6 +127,11 @@ class Application(
                         numberFormat.format(restructure.processedFileCount),
                         numberFormat.format(restructure.processedRecordsCount),
                         timeStart.durationSince().format())
+                if (restructure.deletedFileCount.sum() > 0) {
+                    logger.info("Deleted {} old files", numberFormat.format(restructure.deletedFileCount))
+                } else {
+                    logger.info("No files were deleted")
+                }
             }
         } catch (ex: Exception) {
             logger.error("Failed to process records", ex)

@@ -7,7 +7,7 @@ import java.nio.file.Path
 interface KafkaStorage {
     fun reader(): KafkaStorageReader
     fun list(path: Path): Sequence<SimpleFileStatus>
-
+    fun delete(path: Path)
 
     interface KafkaStorageReader: Closeable {
         fun newInput(file: TopicFile): SeekableInput
