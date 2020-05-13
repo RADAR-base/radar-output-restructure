@@ -90,7 +90,9 @@ data class ServiceConfig(
         /** Whether to enable the service mode of this application. */
         val enable: Boolean,
         /** Polling interval in seconds. */
-        val interval: Long = 3600)
+        val interval: Long = 3600,
+        /** Age in days after an avro file can be removed. Ignored if not strictly positive. */
+        val deleteAfterDays: Int = -1)
 
 data class WorkerConfig(
         /** Number of threads to use for processing files. */
@@ -167,7 +169,12 @@ data class TopicConfig(
         /** Topic-specific deduplication handling. */
         val deduplication: DeduplicationConfig? = null,
         /** Whether to exclude the topic from being processed. */
-        val exclude: Boolean = false) {
+        val exclude: Boolean = false,
+        /**
+         * Whether to exclude the topic from being deleted, if this configuration has been set
+         * in the service.
+         */
+        val excludeFromDelete: Boolean = false) {
     fun deduplication(deduplicationDefault: DeduplicationConfig): DeduplicationConfig {
         return deduplication
                 ?.run { if (enable == null) copy(enable = deduplicationDefault.enable) else this }
