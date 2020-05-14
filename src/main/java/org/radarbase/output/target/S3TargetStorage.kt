@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarbase.output.storage
+package org.radarbase.output.target
 
 import io.minio.ErrorCode
 import io.minio.MinioClient
@@ -27,9 +27,8 @@ import java.io.IOException
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.Paths
 
-class S3StorageDriver(config: S3Config) : StorageDriver {
+class S3TargetStorage(config: S3Config) : TargetStorage {
     private val bucket: String = config.bucket
     private val s3Client: MinioClient
 
@@ -54,10 +53,10 @@ class S3StorageDriver(config: S3Config) : StorageDriver {
         }
     }
 
-    override fun status(path: Path): StorageDriver.PathStatus? {
+    override fun status(path: Path): TargetStorage.PathStatus? {
         return try {
             s3Client.statObject(bucket, path.toKey())
-                    .let { StorageDriver.PathStatus(it.length()) }
+                    .let { TargetStorage.PathStatus(it.length()) }
         } catch (ex: ErrorResponseException) {
             if (ex.errorResponse().errorCode() == ErrorCode.NO_SUCH_KEY || ex.errorResponse().errorCode() == ErrorCode.NO_SUCH_OBJECT) {
                 null
@@ -93,6 +92,6 @@ class S3StorageDriver(config: S3Config) : StorageDriver {
     }
 
     companion object {
-        private val logger = LoggerFactory.getLogger(S3StorageDriver::class.java)
+        private val logger = LoggerFactory.getLogger(S3TargetStorage::class.java)
     }
 }

@@ -54,7 +54,7 @@ constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
                 .resolve("$topic.csv")
 
         return if (Files.exists(offsetsPath)) {
-            OffsetFilePersistence(factory.storageDriver).read(offsetsPath)
+            OffsetFilePersistence(factory.targetStorage).read(offsetsPath)
                     .also { Files.delete(offsetsPath) }
         } else null
     }

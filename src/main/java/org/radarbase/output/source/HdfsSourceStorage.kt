@@ -1,4 +1,4 @@
-package org.radarbase.output.kafka
+package org.radarbase.output.source
 
 import org.apache.avro.file.SeekableInput
 import org.apache.avro.mapred.FsInput
@@ -8,10 +8,10 @@ import java.nio.file.Paths
 import java.time.Instant
 
 
-class HdfsKafkaStorage(
+class HdfsSourceStorage(
         private val fileSystem: FileSystem
-): KafkaStorage {
-    override fun reader(): KafkaStorage.KafkaStorageReader = HDFSKafkaStorageReader()
+): SourceStorage {
+    override fun reader(): SourceStorage.SourceStorageReader = HDFSSourceStorageReader()
 
     override fun list(path: Path): Sequence<SimpleFileStatus> {
         return fileSystem.listStatus(path.toHdfsPath())
@@ -27,7 +27,7 @@ class HdfsKafkaStorage(
         fileSystem.delete(path.toHdfsPath(), false)
     }
 
-    inner class HDFSKafkaStorageReader : KafkaStorage.KafkaStorageReader {
+    inner class HDFSSourceStorageReader : SourceStorage.SourceStorageReader {
         override fun newInput(file: TopicFile): SeekableInput {
             return FsInput(file.path.toHdfsPath(), fileSystem)
         }

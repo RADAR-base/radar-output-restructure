@@ -16,7 +16,7 @@
 
 package org.radarbase.output.accounting
 
-import org.radarbase.output.storage.StorageDriver
+import org.radarbase.output.target.TargetStorage
 import org.radarbase.output.util.PostponedWriter
 import org.radarbase.output.util.Timer.time
 import org.slf4j.LoggerFactory
@@ -32,13 +32,13 @@ import java.util.regex.Pattern
  * not present.
  */
 class OffsetFilePersistence(
-        private val storage: StorageDriver
+        private val targetStorage: TargetStorage
 ): OffsetPersistenceFactory {
     override fun read(path: Path): OffsetRangeSet? {
         return try {
-            if (storage.status(path) != null) {
+            if (targetStorage.status(path) != null) {
                 OffsetRangeSet().also { set ->
-                    storage.newBufferedReader(path).use { br ->
+                    targetStorage.newBufferedReader(path).use { br ->
                         // ignore header
                         br.readLine() ?: return@use
 
@@ -49,7 +49,7 @@ class OffsetFilePersistence(
                 }
             } else null
         } catch (ex: IOException) {
-            logger.error("Error reading offsets file. Processing all offsets.")
+            logger.error("Error reading offsets file. Processing all offsets.", ex)
             null
         }
     }
@@ -114,7 +114,7 @@ class OffsetFilePersistence(
                     }
                 }
 
-                storage.store(tmpPath, path)
+                targetStorage.store(tmpPath, path)
             } catch (e: IOException) {
                 logger.error("Failed to write offsets: {}", e.toString())
             }

@@ -1,4 +1,4 @@
-package org.radarbase.output.kafka
+package org.radarbase.output.source
 
 import com.azure.storage.blob.BlobServiceClient
 import org.apache.avro.file.SeekableFileInput
@@ -10,11 +10,11 @@ import java.nio.file.Path
 import java.nio.file.Paths
 
 
-class AzureKafkaStorage(
+class AzureSourceStorage(
         client: BlobServiceClient,
         container: String,
         private val tempPath: Path
-): KafkaStorage {
+): SourceStorage {
     private val blobContainerClient = client.getBlobContainerClient(container)
 
     override fun list(path: Path): Sequence<SimpleFileStatus> = blobContainerClient.listBlobsByHierarchy("$path/")
@@ -26,9 +26,9 @@ class AzureKafkaStorage(
                 .delete()
     }
 
-    override fun reader(): KafkaStorage.KafkaStorageReader = AzureKafkaStorageReader()
+    override fun reader(): SourceStorage.SourceStorageReader = AzureSourceStorageReader()
 
-    private inner class AzureKafkaStorageReader: KafkaStorage.KafkaStorageReader {
+    private inner class AzureSourceStorageReader: SourceStorage.SourceStorageReader {
         private val tempDir = TemporaryDirectory(tempPath, "worker-")
 
         override fun newInput(file: TopicFile): SeekableInput {

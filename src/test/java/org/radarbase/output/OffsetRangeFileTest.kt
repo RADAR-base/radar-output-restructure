@@ -25,8 +25,8 @@ import org.radarbase.output.accounting.OffsetFilePersistence
 import org.radarbase.output.accounting.OffsetPersistenceFactory
 import org.radarbase.output.accounting.TopicPartition
 import org.radarbase.output.config.LocalConfig
-import org.radarbase.output.storage.LocalStorageDriver
-import org.radarbase.output.storage.StorageDriver
+import org.radarbase.output.target.LocalTargetStorage
+import org.radarbase.output.target.TargetStorage
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -34,7 +34,7 @@ import java.time.Instant
 
 class OffsetRangeFileTest {
     private lateinit var testFile: Path
-    private lateinit var storage: StorageDriver
+    private lateinit var targetStorage: TargetStorage
     private lateinit var offsetPersistence: OffsetPersistenceFactory
     private val lastModified = Instant.now()
 
@@ -43,8 +43,8 @@ class OffsetRangeFileTest {
     fun setUp(@TempDir dir: Path) {
         testFile = dir.resolve("test")
         Files.createFile(testFile)
-        storage = LocalStorageDriver(LocalConfig())
-        offsetPersistence = OffsetFilePersistence(storage)
+        targetStorage = LocalTargetStorage(LocalConfig())
+        offsetPersistence = OffsetFilePersistence(targetStorage)
     }
 
     @Test
@@ -52,7 +52,7 @@ class OffsetRangeFileTest {
     fun readEmpty() {
         assertEquals(java.lang.Boolean.TRUE, offsetPersistence.read(testFile)?.isEmpty)
 
-        storage.delete(testFile)
+        targetStorage.delete(testFile)
 
         // will not create
         assertNull(offsetPersistence.read(testFile))
@@ -87,7 +87,7 @@ class OffsetRangeFileTest {
             rangeFile.add(TopicPartitionOffsetRange.parseFilename("a+0+4+4", lastModified))
         }
 
-        storage.newBufferedReader(testFile).use { br ->
+        targetStorage.newBufferedReader(testFile).use { br ->
             assertEquals(3, br.lines().count())
         }
 

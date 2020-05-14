@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarbase.output.storage
+package org.radarbase.output.target
 
 import org.radarbase.output.config.LocalConfig
 import org.slf4j.LoggerFactory
@@ -27,16 +27,16 @@ import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.attribute.PosixFilePermissions
 
-class LocalStorageDriver(private val config: LocalConfig) : StorageDriver {
+class LocalTargetStorage(private val config: LocalConfig) : TargetStorage {
     init {
         logger.info("Local storage configured with user id {}:{} (-1 if not configured)",
                 config.userId, config.groupId)
     }
 
     @Throws(IOException::class)
-    override fun status(path: Path): StorageDriver.PathStatus? {
+    override fun status(path: Path): TargetStorage.PathStatus? {
         return if (Files.exists(path)) {
-            StorageDriver.PathStatus(Files.size(path))
+            TargetStorage.PathStatus(Files.size(path))
         } else {
             null
         }
@@ -81,6 +81,6 @@ class LocalStorageDriver(private val config: LocalConfig) : StorageDriver {
     override fun delete(path: Path) = Files.delete(path)
 
     companion object {
-        private val logger = LoggerFactory.getLogger(LocalStorageDriver::class.java)
+        private val logger = LoggerFactory.getLogger(LocalTargetStorage::class.java)
     }
 }

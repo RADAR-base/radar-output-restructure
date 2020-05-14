@@ -8,9 +8,9 @@ import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.OffsetRangeSet
-import org.radarbase.output.kafka.KafkaStorage
-import org.radarbase.output.kafka.TopicFile
-import org.radarbase.output.kafka.TopicFileList
+import org.radarbase.output.source.SourceStorage
+import org.radarbase.output.source.TopicFile
+import org.radarbase.output.source.TopicFileList
 import org.radarbase.output.path.RecordPathFactory
 import org.radarbase.output.util.ProgressBar
 import org.radarbase.output.util.ReadOnlyFunctionalValue
@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToLong
 
 internal class RestructureWorker(
-        storage: KafkaStorage,
+        storage: SourceStorage,
         private val accountant: Accountant,
         fileStoreFactory: FileStoreFactory,
         private val closed: AtomicBoolean

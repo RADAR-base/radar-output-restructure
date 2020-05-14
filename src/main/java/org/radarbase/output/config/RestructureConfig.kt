@@ -1,7 +1,6 @@
 package org.radarbase.output.config
 
 import com.azure.core.credential.BasicAuthenticationCredential
-import com.azure.core.credential.TokenCredential
 import com.azure.storage.blob.BlobServiceClient
 import com.azure.storage.blob.BlobServiceClientBuilder
 import com.fasterxml.jackson.annotation.JsonIgnore
@@ -15,10 +14,10 @@ import org.radarbase.output.compression.CompressionFactory
 import org.radarbase.output.format.FormatFactory
 import org.radarbase.output.format.RecordConverterFactory
 import org.radarbase.output.path.RecordPathFactory
-import org.radarbase.output.storage.AzureStorageDriver
-import org.radarbase.output.storage.LocalStorageDriver
-import org.radarbase.output.storage.S3StorageDriver
-import org.radarbase.output.storage.StorageDriver
+import org.radarbase.output.target.AzureTargetStorage
+import org.radarbase.output.target.LocalTargetStorage
+import org.radarbase.output.target.S3TargetStorage
+import org.radarbase.output.target.TargetStorage
 import org.slf4j.LoggerFactory
 import java.lang.IllegalStateException
 import java.net.URI
@@ -246,13 +245,6 @@ data class ResourceConfig(
 
     @JsonIgnore
     lateinit var sourceType: ResourceType
-
-    fun toStorageDriver(): StorageDriver = when(sourceType) {
-        ResourceType.S3 -> S3StorageDriver(s3!!)
-        ResourceType.LOCAL -> LocalStorageDriver(local!!)
-        ResourceType.AZURE -> AzureStorageDriver(azure!!)
-        else -> throw IllegalArgumentException("Cannot create storage driver for $sourceType")
-    }
 
     fun validate() {
         sourceType = type.toResourceType()

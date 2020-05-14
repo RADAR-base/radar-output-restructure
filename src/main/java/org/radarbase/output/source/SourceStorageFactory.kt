@@ -1,4 +1,4 @@
-package org.radarbase.output.kafka
+package org.radarbase.output.source
 
 import com.azure.storage.blob.BlobServiceClient
 import io.minio.MinioClient
@@ -7,7 +7,7 @@ import org.radarbase.output.config.ResourceConfig
 import org.radarbase.output.config.ResourceType
 import java.nio.file.Path
 
-class KafkaStorageFactory(private val resourceConfig: ResourceConfig, private val tempPath: Path) {
+class SourceStorageFactory(private val resourceConfig: ResourceConfig, private val tempPath: Path) {
     private val s3SourceClient: MinioClient? = if (resourceConfig.sourceType == ResourceType.S3) {
         requireNotNull(resourceConfig.s3).createS3Client()
     } else null
@@ -16,21 +16,21 @@ class KafkaStorageFactory(private val resourceConfig: ResourceConfig, private va
         requireNotNull(resourceConfig.azure).createAzureClient()
     } else null
 
-    fun createKafkaStorage() = when(resourceConfig.sourceType) {
+    fun createSourceStorage() = when(resourceConfig.sourceType) {
         ResourceType.S3 -> {
             val s3Config = requireNotNull(resourceConfig.s3)
             val minioClient = requireNotNull(s3SourceClient)
-            S3KafkaStorage(minioClient, s3Config.bucket, tempPath)
+            S3SourceStorage(minioClient, s3Config.bucket, tempPath)
         }
         ResourceType.HDFS -> {
             val hdfsConfig = requireNotNull(resourceConfig.hdfs)
             val fileSystem = FileSystem.get(hdfsConfig.configuration)
-            HdfsKafkaStorage(fileSystem)
+            HdfsSourceStorage(fileSystem)
         }
         ResourceType.AZURE -> {
             val azureClient = requireNotNull(azureSourceClient)
             val config = requireNotNull(resourceConfig.azure)
-            AzureKafkaStorage(azureClient, config.container, tempPath)
+            AzureSourceStorage(azureClient, config.container, tempPath)
         }
         else -> throw IllegalStateException("Cannot create kafka storage for type ${resourceConfig.sourceType}")
     }

@@ -69,7 +69,7 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
             ensureCapacity()
 
             val dir = path.parent
-            factory.storageDriver.createDirectories(dir)
+            factory.targetStorage.createDirectories(dir)
 
             try {
                 time("write.open") { FileCache(factory, transaction.topicPartition.topic, path, record, tmpDir.path, accountant) }
@@ -108,7 +108,7 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
         // First check if we already checked this path, because otherwise the storage.exists call
         // will take too much time.
         if (schemasAdded.putIfAbsent(schemaPath, schemaPath) == null) {
-            val storage = factory.storageDriver
+            val storage = factory.targetStorage
 
             if (storage.status(schemaPath) == null) {
                 val tmpSchemaPath = Files.createTempFile(tmpDir.path, "schema-$topic", ".json")

@@ -19,8 +19,8 @@ package org.radarbase.output.worker
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.OffsetRangeSet
-import org.radarbase.output.kafka.TopicFile
-import org.radarbase.output.kafka.TopicFileList
+import org.radarbase.output.source.TopicFile
+import org.radarbase.output.source.TopicFileList
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.IOException
@@ -43,7 +43,7 @@ class RadarKafkaRestructure(
         private val fileStoreFactory: FileStoreFactory
 ): Closeable {
     private val maxFilesPerTopic: Int = fileStoreFactory.config.worker.maxFilesPerTopic ?: Int.MAX_VALUE
-    private val kafkaStorage = fileStoreFactory.kafkaStorage
+    private val kafkaStorage = fileStoreFactory.sourceStorage
 
     private val lockManager = fileStoreFactory.remoteLockManager
     private val excludeTopics: Set<String> = fileStoreFactory.config.topics

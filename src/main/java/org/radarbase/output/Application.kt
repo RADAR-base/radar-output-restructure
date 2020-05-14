@@ -23,10 +23,11 @@ import org.radarbase.output.compression.Compression
 import org.radarbase.output.config.CommandLineArgs
 import org.radarbase.output.config.RestructureConfig
 import org.radarbase.output.format.RecordConverterFactory
-import org.radarbase.output.kafka.KafkaStorage
-import org.radarbase.output.kafka.KafkaStorageFactory
+import org.radarbase.output.source.SourceStorage
+import org.radarbase.output.source.SourceStorageFactory
 import org.radarbase.output.path.RecordPathFactory
-import org.radarbase.output.storage.StorageDriver
+import org.radarbase.output.target.TargetStorage
+import org.radarbase.output.target.TargetStorageFactory
 import org.radarbase.output.util.ProgressBar.Companion.format
 import org.radarbase.output.util.Timer
 import org.radarbase.output.worker.FileCacheStore
@@ -57,15 +58,18 @@ class Application(
         extension = recordConverter.extension + compression.extension
         root = config.paths.output
     }
-    override val storageDriver: StorageDriver = config.target.toStorageDriver()
+
+    private val sourceStorageFactory = SourceStorageFactory(config.source, config.paths.temp)
+    override val sourceStorage: SourceStorage
+        get() = sourceStorageFactory.createSourceStorage()
+
+    private val targetStorageFactory = TargetStorageFactory(config.target)
+    override val targetStorage: TargetStorage
+            get() = targetStorageFactory.createTargetStorage()
+
     override val redisPool: JedisPool = JedisPool(config.redis.uri)
     override val remoteLockManager: RemoteLockManager = RedisRemoteLockManager(
             redisPool, config.redis.lockPrefix)
-
-    private val kafkaStorageFactory = KafkaStorageFactory(config.source, config.paths.temp)
-
-    override val kafkaStorage: KafkaStorage
-        get() = kafkaStorageFactory.createKafkaStorage()
 
     override val offsetPersistenceFactory: OffsetPersistenceFactory = OffsetRedisPersistence(redisPool)
 
@@ -154,24 +158,33 @@ class Application(
 
         private fun Temporal.durationSince() = Duration.between(this, Instant.now())
 
+        private fun parseArgs(args: Array<String>): CommandLineArgs {
+            val commandLineArgs = CommandLineArgs()
+            JCommander.newBuilder()
+                    .addObject(commandLineArgs)
+                    .programName("radar-output-restructure")
+                    .build().run {
+                        try {
+                            parse(*args)
+                        } catch (ex: ParameterException) {
+                            logger.error(ex.message)
+                            usage()
+                            exitProcess(1)
+                        }
+
+                        if (commandLineArgs.help) {
+                            usage()
+                            exitProcess(0)
+                        }
+                    }
+
+
+            return commandLineArgs
+        }
+
         @JvmStatic
         fun main(args: Array<String>) {
-            val commandLineArgs = CommandLineArgs()
-            val parser = JCommander.newBuilder().addObject(commandLineArgs).build()
-
-            parser.programName = "radar-output-restructure"
-            try {
-                parser.parse(*args)
-            } catch (ex: ParameterException) {
-                logger.error(ex.message)
-                parser.usage()
-                exitProcess(1)
-            }
-
-            if (commandLineArgs.help) {
-                parser.usage()
-                exitProcess(0)
-            }
+            val commandLineArgs = parseArgs(args)
 
             logger.info("Starting at {}...",
                     DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(LocalDateTime.now()))
@@ -180,13 +193,12 @@ class Application(
             Timer.isEnabled = commandLineArgs.enableTimer
 
             val application = try {
-                val restructureConfig = RestructureConfig.load(commandLineArgs.configFile)
-                restructureConfig.apply {
-                    addArgs(commandLineArgs)
-                    validate()
-                }
-
-                Application(restructureConfig)
+                Application(RestructureConfig
+                        .load(commandLineArgs.configFile)
+                        .apply {
+                            addArgs(commandLineArgs)
+                            validate()
+                        })
             } catch (ex: IllegalArgumentException) {
                 logger.error("Illegal argument", ex)
                 exitProcess(1)

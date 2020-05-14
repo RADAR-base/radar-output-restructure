@@ -1,4 +1,4 @@
-package org.radarbase.output.kafka
+package org.radarbase.output.source
 
 import org.radarbase.output.accounting.TopicPartitionOffsetRange
 import java.nio.file.Path

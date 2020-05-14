@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarbase.output.storage
+package org.radarbase.output.target
 
 import com.azure.storage.blob.BlobClient
 import com.azure.storage.blob.BlobContainerClient
@@ -27,9 +27,8 @@ import java.io.InputStream
 import java.lang.Exception
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.Paths
 
-class AzureStorageDriver(private val config: AzureConfig) : StorageDriver {
+class AzureTargetStorage(private val config: AzureConfig) : TargetStorage {
     private val container: String = config.container
     private val containerClient: BlobContainerClient
 
@@ -58,9 +57,9 @@ class AzureStorageDriver(private val config: AzureConfig) : StorageDriver {
         containerClient = serviceClient.getBlobContainerClient(container)
     }
 
-    override fun status(path: Path): StorageDriver.PathStatus? {
+    override fun status(path: Path): TargetStorage.PathStatus? {
         return try {
-            StorageDriver.PathStatus(blob(path)
+            TargetStorage.PathStatus(blob(path)
                     .getPropertiesWithResponse(null, null, null)
                     .value
                     .blobSize)
@@ -96,6 +95,6 @@ class AzureStorageDriver(private val config: AzureConfig) : StorageDriver {
     private fun blob(path: Path): BlobClient = containerClient.getBlobClient(path.toKey())
 
     companion object {
-        private val logger = LoggerFactory.getLogger(AzureStorageDriver::class.java)
+        private val logger = LoggerFactory.getLogger(AzureTargetStorage::class.java)
     }
 }

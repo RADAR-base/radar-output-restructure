@@ -23,7 +23,7 @@ import org.radarbase.output.compression.Compression
 import org.radarbase.output.config.DeduplicationConfig
 import org.radarbase.output.format.RecordConverter
 import org.radarbase.output.format.RecordConverterFactory
-import org.radarbase.output.storage.StorageDriver
+import org.radarbase.output.target.TargetStorage
 import org.radarbase.output.util.Timer.time
 import org.slf4j.LoggerFactory
 import java.io.*
@@ -48,7 +48,7 @@ class FileCache(
 
     private val writer: Writer
     private val recordConverter: RecordConverter
-    private val storageDriver: StorageDriver = factory.storageDriver
+    private val targetStorage: TargetStorage = factory.targetStorage
     private val tmpPath: Path
     private val compression: Compression = factory.compression
     private val converterFactory: RecordConverterFactory = factory.recordConverter
@@ -63,7 +63,7 @@ class FileCache(
         val defaultDeduplicate = factory.config.format.deduplication
         deduplicate = topicConfig?.deduplication(defaultDeduplicate) ?: defaultDeduplicate
 
-        val fileIsNew = storageDriver.status(path)?.takeIf { it.size > 0L } == null
+        val fileIsNew = targetStorage.status(path)?.takeIf { it.size > 0L } == null
 
         this.tmpPath = Files.createTempFile(tmpDir, fileName, ".tmp" + compression.extension)
 
@@ -82,7 +82,7 @@ class FileCache(
                     outStream = compression.compress(
                             fileName, BufferedOutputStream(Files.newOutputStream(tmpPath)))
                 }
-                compression.decompress(storageDriver.newInputStream(path))
+                compression.decompress(targetStorage.newInputStream(path))
             }
         }
 
@@ -141,7 +141,7 @@ class FileCache(
             }
 
             time("close.store") {
-                storageDriver.store(tmpPath, path)
+                targetStorage.store(tmpPath, path)
             }
 
             accountant.process(ledger)
@@ -163,7 +163,7 @@ class FileCache(
     @Throws(IOException::class)
     private fun copy(source: Path, sink: OutputStream, compression: Compression): Boolean {
         return try {
-            storageDriver.newInputStream(source).use { fileStream ->
+            targetStorage.newInputStream(source).use { fileStream ->
                 compression.decompress(fileStream).use { copyStream ->
                     copyStream.copyTo(sink, bufferSize = 8192)
                     true
@@ -175,7 +175,7 @@ class FileCache(
             var i = 0
             while (corruptPath == null && i < 100) {
                 val path = source.resolveSibling(source.fileName.toString() + ".corrupted" + suffix)
-                if (storageDriver.status(path) == null) {
+                if (targetStorage.status(path) == null) {
                     corruptPath = path
                 }
                 suffix = "-$i"
@@ -183,7 +183,7 @@ class FileCache(
             }
             if (corruptPath != null) {
                 logger.error("Original file {} could not be read: {}." + " Moved to {}.", source, ex, corruptPath)
-                storageDriver.move(source, corruptPath)
+                targetStorage.move(source, corruptPath)
             } else {
                 logger.error("Original file {} could not be read: {}." + " Too many corrupt backups stored, removing file.", source, ex)
             }
