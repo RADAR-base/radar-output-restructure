@@ -9,7 +9,7 @@ plugins {
 }
 
 group 'org.radarbase'
-version '0.7.0-SNAPSHOT'
+version '1.0.0'
 mainClassName = 'org.radarbase.output.Application'
 
 sourceCompatibility = '1.8'
