@@ -21,6 +21,7 @@ import io.minio.MinioClient
 import io.minio.PutObjectOptions
 import io.minio.errors.ErrorResponseException
 import org.radarbase.output.config.S3Config
+import org.radarbase.output.util.toKey
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.io.InputStream
@@ -34,7 +35,7 @@ class S3StorageDriver(config: S3Config) : StorageDriver {
 
     init {
         s3Client = try {
-            MinioClient(config.endpoint, config.accessToken, config.secretKey)
+            config.createS3Client()
         } catch (ex: IllegalArgumentException) {
             logger.warn("Invalid S3 configuration", ex)
             throw ex
@@ -93,15 +94,5 @@ class S3StorageDriver(config: S3Config) : StorageDriver {
 
     companion object {
         private val logger = LoggerFactory.getLogger(S3StorageDriver::class.java)
-
-        private val rootPath = Paths.get("/")
-
-        private fun Path.toKey(): String {
-            return if (this.startsWith(rootPath)) {
-                rootPath.relativize(this).toString()
-            } else {
-                toString()
-            }
-        }
     }
 }

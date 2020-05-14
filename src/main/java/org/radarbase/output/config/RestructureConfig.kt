@@ -1,5 +1,9 @@
 package org.radarbase.output.config
 
+import com.azure.core.credential.BasicAuthenticationCredential
+import com.azure.core.credential.TokenCredential
+import com.azure.storage.blob.BlobServiceClient
+import com.azure.storage.blob.BlobServiceClientBuilder
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.minio.MinioClient
 import org.apache.hadoop.conf.Configuration
@@ -11,6 +15,7 @@ import org.radarbase.output.compression.CompressionFactory
 import org.radarbase.output.format.FormatFactory
 import org.radarbase.output.format.RecordConverterFactory
 import org.radarbase.output.path.RecordPathFactory
+import org.radarbase.output.storage.AzureStorageDriver
 import org.radarbase.output.storage.LocalStorageDriver
 import org.radarbase.output.storage.S3StorageDriver
 import org.radarbase.output.storage.StorageDriver
@@ -236,7 +241,8 @@ data class ResourceConfig(
         val type: String,
         val s3: S3Config? = null,
         val hdfs: HdfsConfig? = null,
-        val local: LocalConfig? = null) {
+        val local: LocalConfig? = null,
+        val azure: AzureConfig? = null) {
 
     @JsonIgnore
     lateinit var sourceType: ResourceType
@@ -244,6 +250,7 @@ data class ResourceConfig(
     fun toStorageDriver(): StorageDriver = when(sourceType) {
         ResourceType.S3 -> S3StorageDriver(s3!!)
         ResourceType.LOCAL -> LocalStorageDriver(local!!)
+        ResourceType.AZURE -> AzureStorageDriver(azure!!)
         else -> throw IllegalArgumentException("Cannot create storage driver for $sourceType")
     }
 
@@ -254,18 +261,20 @@ data class ResourceConfig(
             ResourceType.S3 -> checkNotNull(s3)
             ResourceType.HDFS -> checkNotNull(hdfs).also { it.validate() }
             ResourceType.LOCAL -> checkNotNull(local)
+            ResourceType.AZURE -> checkNotNull(azure)
         }
     }
 }
 
 enum class ResourceType {
-    S3, HDFS, LOCAL
+    S3, HDFS, LOCAL, AZURE
 }
 
 fun String.toResourceType() = when(toLowerCase()) {
     "s3" -> ResourceType.S3
     "hdfs" -> ResourceType.HDFS
     "local" -> ResourceType.LOCAL
+    "azure" -> ResourceType.AZURE
     else -> throw IllegalArgumentException("Unknown resource type $this, choose s3, hdfs or local")
 }
 
@@ -285,4 +294,16 @@ data class S3Config(
         /** Bucket name. */
         val bucket: String) {
     fun createS3Client() = MinioClient(endpoint, accessToken, secretKey)
+}
+
+data class AzureConfig(
+        val endpoint: String,
+        val container: String,
+        val username: String,
+        val password: String
+) {
+    fun createAzureClient(): BlobServiceClient = BlobServiceClientBuilder()
+            .endpoint(endpoint)
+            .credential(BasicAuthenticationCredential(username, password))
+            .buildClient()
 }
