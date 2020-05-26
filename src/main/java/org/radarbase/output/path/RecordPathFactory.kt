@@ -34,8 +34,20 @@ abstract class RecordPathFactory : Plugin {
     lateinit var root: Path
     lateinit var extension: String
 
-    protected open val timeBinFormat: DateTimeFormatter
-        get() = HOURLY_TIME_BIN_FORMAT
+    protected open var timeBinFormat: DateTimeFormatter = HOURLY_TIME_BIN_FORMAT
+
+    override fun init(properties: Map<String, String>) {
+        super.init(properties)
+        properties["timeBinFormat"]?.let {
+            try {
+                timeBinFormat = DateTimeFormatter
+                        .ofPattern(it)
+                        .withZone(UTC)
+            } catch (ex: IllegalArgumentException) {
+                logger.error("Cannot use time bin format {}, using {} instad", it, timeBinFormat, ex)
+            }
+        }
+    }
 
     /**
      * Get the organization of given record in given topic.
