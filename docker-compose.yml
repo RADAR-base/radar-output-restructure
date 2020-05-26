@@ -1,0 +1,17 @@
+version: "3.5"
+
+services:
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+    command:
+      - server
+      - /data
+
+  redis:
+    image: bitnami/redis
+    ports:
+      - "6379:6379"
+    environment:
+      ALLOW_EMPTY_PASSWORD: "yes"

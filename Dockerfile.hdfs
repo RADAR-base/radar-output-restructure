@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM openjdk:14 AS builder
+FROM openjdk:8-alpine AS builder
 
 RUN mkdir /code
 WORKDIR /code
@@ -29,13 +29,16 @@ COPY ./src /code/src
 
 RUN ./gradlew jar
 
-FROM openjdk:14
+FROM gradiant/hadoop-base:3.1.2
 
 MAINTAINER Joris Borgdorff <joris@thehyve.nl>, Yatharth Ranjan<yatharth.ranjan@kcl.ac.uk>
 
-LABEL description="RADAR-base output data restructuring"
+LABEL description="RADAR-base HDFS data restructuring"
 
-ENV JAVA_OPTS="-Djava.security.egd=file:/dev/./urandom -XX:+UseG1GC -XX:MaxHeapFreeRatio=10 -XX:MinHeapFreeRatio=10"
+ENV JAVA_OPTS="-Djava.library.path=${HADOOP_HOME}/lib/native -Djava.security.egd=file:/dev/./urandom -XX:+UseG1GC -XX:MaxHeapFreeRatio=10 -XX:MinHeapFreeRatio=10" \
+    LD_LIBRARY_PATH=/lib64
+
+RUN apk add --no-cache libc6-compat
 
 COPY --from=builder /code/build/third-party/* /usr/lib/
 COPY --from=builder /code/build/scripts/* /usr/bin/
