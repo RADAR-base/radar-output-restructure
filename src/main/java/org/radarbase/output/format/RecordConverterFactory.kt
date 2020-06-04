@@ -16,19 +16,16 @@
 
 package org.radarbase.output.format
 
-import java.io.BufferedOutputStream
-import java.io.BufferedReader
-import java.io.IOException
-import java.io.InputStreamReader
-import java.io.OutputStreamWriter
-import java.io.Reader
-import java.io.Writer
+import org.apache.avro.Schema
+import org.apache.avro.generic.GenericData
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.LinkedHashSet
 import java.util.regex.Pattern
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.compression.Compression
+import java.io.*
+import java.time.Instant
 
 interface RecordConverterFactory : Format {
     /**
@@ -68,8 +65,55 @@ interface RecordConverterFactory : Format {
         } } } }
     }
 
+    fun readTimeSeconds(source: InputStream, compression: Compression): Pair<Array<String>?, List<Double>>?
+
+    fun contains(source: Path, record: GenericRecord,
+                 compression: Compression, usingFields: Set<String>,
+                 ignoreFields: Set<String>): Boolean
+
     override fun matchesFilename(name: String): Boolean {
         return name.matches((".*" + Pattern.quote(extension) + "(\\.[^.]+)?").toRegex())
+    }
+
+    fun headerFor(record: GenericRecord): Array<String> {
+        val headers = ArrayList<String>()
+        val schema = record.schema
+        for (field in schema.fields) {
+            createHeader(headers, record.get(field.pos()), field.schema(), field.name())
+        }
+        return headers.toTypedArray()
+    }
+
+    private fun createHeader(headers: MutableList<String>, data: Any?, schema: Schema, prefix: String) {
+        when (schema.type) {
+            Schema.Type.RECORD -> {
+                val record = data as GenericRecord
+                val subSchema = record.schema
+                for (field in subSchema.fields) {
+                    val subData = record.get(field.pos())
+                    createHeader(headers, subData, field.schema(), prefix + '.'.toString() + field.name())
+                }
+            }
+            Schema.Type.MAP -> {
+                val valueType = schema.valueType
+                for ((key, value) in data as Map<*, *>) {
+                    val name = "$prefix.$key"
+                    createHeader(headers, value, valueType, name)
+                }
+            }
+            Schema.Type.ARRAY -> {
+                val itemType = schema.elementType
+                for ((i, orig) in (data as List<*>).withIndex()) {
+                    createHeader(headers, orig, itemType, "$prefix.$i")
+                }
+            }
+            Schema.Type.UNION -> {
+                val type = GenericData().resolveUnion(schema, data)
+                createHeader(headers, data, schema.types[type], prefix)
+            }
+            Schema.Type.BYTES, Schema.Type.FIXED, Schema.Type.ENUM, Schema.Type.STRING, Schema.Type.INT, Schema.Type.LONG, Schema.Type.DOUBLE, Schema.Type.FLOAT, Schema.Type.BOOLEAN, Schema.Type.NULL -> headers.add(prefix)
+            else -> throw IllegalArgumentException("Cannot parse field type " + schema.type)
+        }
     }
 
     companion object {

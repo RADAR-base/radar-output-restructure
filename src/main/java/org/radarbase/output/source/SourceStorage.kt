@@ -7,11 +7,13 @@ import java.nio.file.Path
 /** Source storage type. */
 interface SourceStorage {
     /** Create a reader for the storage medium. It should be closed by the caller. */
-    fun reader(): SourceStorageReader
+    fun createReader(): SourceStorageReader
     /** List all files in the given directory. */
     fun list(path: Path): Sequence<SimpleFileStatus>
     /** Delete given file. Will not delete any directories. */
     fun delete(path: Path)
+    /** Find records and topics. */
+    val walker: SourceStorageWalker
 
     /**
      * File reader for the storage medium.

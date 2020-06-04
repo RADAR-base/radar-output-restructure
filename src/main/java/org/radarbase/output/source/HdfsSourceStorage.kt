@@ -11,7 +11,9 @@ import java.time.Instant
 class HdfsSourceStorage(
         private val fileSystem: FileSystem
 ): SourceStorage {
-    override fun reader(): SourceStorage.SourceStorageReader = HDFSSourceStorageReader()
+    override val walker: SourceStorageWalker = GeneralSourceStorageWalker(this)
+
+    override fun createReader(): SourceStorage.SourceStorageReader = HDFSSourceStorageReader()
 
     override fun list(path: Path): Sequence<SimpleFileStatus> {
         return fileSystem.listStatus(path.toHdfsPath())

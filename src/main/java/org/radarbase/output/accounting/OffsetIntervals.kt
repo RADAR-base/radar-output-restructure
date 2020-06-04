@@ -1,6 +1,7 @@
 package org.radarbase.output.accounting
 
 import com.almworks.integers.LongArray
+import org.apache.jute.Index
 import java.time.Instant
 
 class OffsetIntervals {
@@ -58,19 +59,11 @@ class OffsetIntervals {
             if (index < offsetsFrom.size() && offset == offsetsFrom[index] - 1) {
                 offsetsTo[index - 1] = offsetsTo[index]
                 lastProcessed[index - 1] = max(lastProcessed[index - 1], lastProcessed[index])
-                offsetsFrom.removeAt(index)
-                offsetsTo.removeAt(index)
-                lastProcessed.removeAt(index)
+                removeAt(index)
             }
         } else if (index >= offsetsFrom.size() || offset < offsetsFrom[index] - 1) {
             // cannot concat, enter new range
-            offsetsFrom.insert(index, offset)
-            offsetsTo.insert(index, offset)
-            if (index >= offsetsFrom.size()) {
-                lastProcessed.add(lastModified)
-            } else {
-                lastProcessed.add(index, lastModified)
-            }
+            insert(index, offset, offset, lastModified)
         } else {
             // concat with the stream after it
             offsetsFrom[index] = offset
@@ -91,13 +84,7 @@ class OffsetIntervals {
                 lastProcessed[index] = max(lastProcessed[index], lastModified)
             } else if (index >= offsetsFrom.size() || to < offsetsFrom[index] - 1) {
                 // cannot concat, enter new range
-                offsetsFrom.insert(index, from)
-                offsetsTo.insert(index, to)
-                if (index >= offsetsFrom.size()) {
-                    lastProcessed.add(lastModified)
-                } else {
-                    lastProcessed.add(index, lastModified)
-                }
+                insert(index, from, to, lastModified)
                 return
             } else {
                 // concat with the stream after it
@@ -128,9 +115,7 @@ class OffsetIntervals {
             overlapIndex++
         }
         if (overlapIndex != startIndex) {
-            offsetsFrom.removeRange(startIndex, overlapIndex)
-            offsetsTo.removeRange(startIndex, overlapIndex)
-            lastProcessed.subList(startIndex, overlapIndex).clear()
+            removeRange(startIndex, overlapIndex)
             lastProcessed[index] = maxProcessed
         }
     }
@@ -151,6 +136,64 @@ class OffsetIntervals {
         return ("[" + lastProcessed.indices.joinToString(", ") { i ->
             "(${offsetsFrom[i]} - ${offsetsTo[i]}, ${lastProcessed[i]})"
         } + "]")
+    }
+
+    fun remove(range: OffsetRangeSet.Range) {
+        val (from, to, lastModified) = range
+
+        var index = offsetsFrom.binarySearch(from)
+
+        if (index < 0) {  // search comes between -index - 2 and -index - 1
+            index = -index - 1 // is the next stored offsetFrom index after from
+            // There is a previous from index. Check for overlap
+            if (index > 0) {
+                val prevIndex = index - 1
+                if (from <= offsetsTo[prevIndex]) {  // there is overlap
+                    if (to < offsetsTo[prevIndex]) { // the range falls inside an existing interval
+                        // create new interval after the removed range. The interval before the
+                        // range remains.
+                        insert(index, to + 1, offsetsTo[prevIndex], lastProcessed[prevIndex])
+                    }
+
+                    offsetsTo[prevIndex] = from - 1
+                }
+            }
+        }
+
+        // remove intervals inside range
+        while (offsetsFrom[index] >= from && offsetsTo[index] <= to) {
+            removeAt(index)
+            if (index == offsetsTo.size()) {  // last interval has been removed
+                return
+            }
+        }
+
+        // last interval not completely overlapping with range
+        if (offsetsFrom[index] <= to) {
+            offsetsFrom[index] = to + 1
+        }
+    }
+
+    private fun insert(index: Int, from: Long, to: Long, lastModified: Instant) {
+        offsetsFrom.insert(index, from)
+        offsetsTo.insert(index, to)
+        if (index >= lastProcessed.size) {
+            lastProcessed.add(lastModified)
+        } else {
+            lastProcessed.add(index, lastModified)
+        }
+    }
+
+    private fun removeAt(index: Int) {
+        offsetsTo.removeAt(index)
+        offsetsFrom.removeAt(index)
+        lastProcessed.removeAt(index)
+    }
+
+    private fun removeRange(from: Int, to: Int) {
+        offsetsFrom.removeRange(from, to)
+        offsetsTo.removeRange(from, to)
+        lastProcessed.subList(from, to).clear()
     }
 
     companion object {

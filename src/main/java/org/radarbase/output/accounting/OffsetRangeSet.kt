@@ -94,6 +94,10 @@ class OffsetRangeSet {
         return topicPartition.readIntervals { it.size() }
     }
 
+    fun remove(range: TopicPartitionOffsetRange) {
+        return range.topicPartition.modifyIntervals { it.remove(range.range) }
+    }
+
     fun withFactory(
             factory: (OffsetIntervals) -> FunctionalValue<OffsetIntervals>
     ) = OffsetRangeSet(
@@ -148,7 +152,18 @@ class OffsetRangeSet {
             .getOrDefault(this, EMPTY_VALUE)
             .read(function)
 
-    data class Range(val from: Long, val to: Long, val lastProcessed: Instant) {
+    fun copyForTopic(topic: String) = OffsetRangeSet(
+            ranges.entries
+                    .filter { it.key.topic == topic }
+                    .associateByTo(ConcurrentHashMap(),
+                            { it.key },
+                            { (_, intervals) ->
+                                intervals.read { factory(OffsetIntervals(it)) }
+                            }),
+            factory)
+
+
+    data class Range(val from: Long, val to: Long, val lastProcessed: Instant = Instant.now()) {
         val size: Long = to - from + 1
         override fun toString() = "($from - $to, $lastProcessed)"
     }

@@ -33,7 +33,7 @@ internal class RestructureWorker(
 ): Closeable {
     var processedFileCount: Long = 0
     var processedRecordsCount: Long = 0
-    private val reader = storage.reader()
+    private val reader = storage.createReader()
     private val pathFactory: RecordPathFactory = fileStoreFactory.pathFactory
 
     private val cacheStore = fileStoreFactory.newFileCacheStore(accountant)
@@ -85,7 +85,7 @@ internal class RestructureWorker(
             logger.warn("Shutting down")
         }
 
-        progressBar.update(numOffsets)
+        progressBar.update(numOffsets, force = true)
     }
 
     @Throws(IOException::class)
@@ -103,54 +103,44 @@ internal class RestructureWorker(
                 return
             }
             val transaction = Accountant.Transaction(file.range.topicPartition, offset, file.lastModified)
-            extractRecords(input) { relativeOffset, record ->
-                transaction.offset = offset + relativeOffset
-                val alreadyContains = time("accounting.check") {
-                    seenOffsets.contains(file.range.topicPartition, transaction.offset, transaction.lastModified)
-                }
-                if (!alreadyContains) {
-                    // Get the fields
-                    this.writeRecord(transaction, record)
-                }
-                processedRecordsCount++
-                progressBar.update(processedRecordsCount)
-            }
-        }
-    }
+            extractRecords(input) { records ->
+                val recordsInFile = records.mapIndexed { relativeOffset, record ->
+                    transaction.offset = offset + relativeOffset
+                    val alreadyContains = time("accounting.check") {
+                        seenOffsets.contains(file.range.topicPartition, transaction.offset, transaction.lastModified)
+                    }
+                    if (!alreadyContains) {
+                        // Get the fields
+                        this.writeRecord(transaction, record)
+                    }
+                    processedRecordsCount++
+                    progressBar.update(processedRecordsCount)
+                }.count().toLong()
 
-    private fun extractRecords(input: SeekableInput, processing: (Int, GenericRecord) -> Unit) {
-        var tmpRecord: GenericRecord? = null
-
-        DataFileReader(input, GenericDatumReader<GenericRecord>()).use { reader ->
-            generateSequence {
-                time("read") {
-                    if (reader.hasNext()) reader.next(tmpRecord) else null
+                if (recordsInFile != file.range.range.size) {
+                    logger.warn("File {} contains {} records instead of expected {}",
+                            file.path, recordsInFile, file.range.range.size)
                 }
             }
-            .onEach { tmpRecord = it }
-            .forEachIndexed(processing)
         }
     }
 
     @Throws(IOException::class)
     private fun writeRecord(
             transaction: Accountant.Transaction,
-            record: GenericRecord,
-            suffix: Int = 0) {
-        var currentSuffix = suffix
-        val (path) = pathFactory.getRecordOrganization(
-                transaction.topicPartition.topic, record, currentSuffix)
+            record: GenericRecord) {
+        var currentSuffix = 0
+        do {
+            val (path) = pathFactory.getRecordOrganization(
+                    transaction.topicPartition.topic, record, currentSuffix)
 
-        // Write data
-        val response = time("write") {
-            cacheStore.writeRecord(path, record, transaction)
-        }
+            // Write data
+            val response = time("write") {
+                cacheStore.writeRecord(path, record, transaction)
+            }
 
-        if (!response.isSuccessful) {
-            // Write was unsuccessful due to different number of columns,
-            // try again with new file name
-            writeRecord(transaction, record, ++currentSuffix)
-        }
+            currentSuffix += 1
+        } while (!response.isSuccessful)
     }
 
     override fun close() {
@@ -163,5 +153,17 @@ internal class RestructureWorker(
 
         /** Number of offsets to process in a single task.  */
         private const val BATCH_SIZE: Long = 500000
+
+        fun <T> extractRecords(input: SeekableInput, processing: (Sequence<GenericRecord>) -> T): T {
+            var tmpRecord: GenericRecord? = null
+
+            return DataFileReader(input, GenericDatumReader<GenericRecord>()).use { reader ->
+                processing(generateSequence {
+                    time("read") {
+                        if (reader.hasNext()) reader.next(tmpRecord) else null
+                    }
+                }.onEach { tmpRecord = it })
+            }
+        }
     }
 }
