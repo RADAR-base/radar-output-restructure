@@ -139,7 +139,7 @@ class OffsetIntervals {
     }
 
     fun remove(range: OffsetRangeSet.Range) {
-        val (from, to, lastModified) = range
+        val (from, to, _) = range
 
         var index = offsetsFrom.binarySearch(from)
 

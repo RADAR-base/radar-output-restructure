@@ -24,9 +24,9 @@ import org.radarbase.output.util.ProgressBar.Companion.appendTime
 import java.util.*
 
 /** Timer for multi-threaded timings. The timer may be disabled to increase program performance.  */
-internal object Timer {
+object Timer {
     private val shutdownHook = Thread({ println(Timer) }, "Timer")
-    private val times: ConcurrentMap<String, MutableTimerEntry> = ConcurrentHashMap()
+    val times: ConcurrentMap<String, MutableTimerEntry> = ConcurrentHashMap()
 
     /**
      * All currently measured timings.
@@ -102,7 +102,7 @@ internal object Timer {
         return builder.toString()
     }
 
-    internal class MutableTimerEntry {
+    class MutableTimerEntry {
         private val invocations = LongAdder()
         private val totalTime = LongAdder()
         private val threads = ConcurrentHashMap<Long, Long>()
