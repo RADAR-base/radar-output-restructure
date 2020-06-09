@@ -110,7 +110,12 @@ data class WorkerConfig(
          * Number of files to simultaneously keep in cache, including open writer. A higher size will
          * decrease overhead but increase memory usage and open file descriptors.
          */
-        val cacheSize: Int = CACHE_SIZE_DEFAULT) {
+        val cacheSize: Int = CACHE_SIZE_DEFAULT,
+        /**
+         * Number of offsets to simultaneously keep in cache. A higher size will
+         * decrease overhead but increase memory usage.
+         */
+        val cacheOffsetsSize: Long = 500_000) {
     init {
         check(cacheSize >= 1) { "Maximum files per topic must be strictly positive" }
         maxFilesPerTopic?.let { check(it >= 1) { "Maximum files per topic must be strictly positive" } }
