@@ -148,8 +148,8 @@ class OffsetRangeSet {
             .getOrDefault(this, EMPTY_VALUE)
             .read(function)
 
-    data class Range(val from: Long, val to: Long, val lastProcessed: Instant) {
-        val size: Long = to - from + 1
+    data class Range(val from: Long, val to: Long?, val lastProcessed: Instant) {
+        val size: Long? = to?.let { it - from + 1 }
         override fun toString() = "($from - $to, $lastProcessed)"
     }
 

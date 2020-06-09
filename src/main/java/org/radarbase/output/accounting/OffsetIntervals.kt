@@ -21,6 +21,7 @@ class OffsetIntervals {
     }
 
     fun contains(range: OffsetRangeSet.Range): Boolean {
+        checkNotNull(range.to)
         //  -index-1 if not found
         val searchIndex = offsetsFrom.binarySearch(range.from)
         val index = if (searchIndex >= 0) searchIndex else -searchIndex - 2
@@ -80,6 +81,7 @@ class OffsetIntervals {
 
     fun add(range: OffsetRangeSet.Range) {
         val (from, to, lastModified) = range
+        checkNotNull(to)
         var index = offsetsFrom.binarySearch(from)
         if (index < 0) {
             // index where this range would be entered

@@ -146,7 +146,12 @@ class RadarKafkaRestructure(
             .filter { f -> f.lastModified.isBefore(deleteThreshold) &&
                     // ensure that there is a file with a larger offset also
                     // processed, so the largest offset is never removed.
-                    seenFiles.contains(f.range.copy(range = f.range.range.copy(to = f.range.range.to + 1))) }
+                    if (f.range.range.to != null) {
+                        seenFiles.contains(f.range.copy(range = f.range.range.copy(to = f.range.range.to + 1)))
+                    } else {
+                        seenFiles.contains(f.range.topicPartition, f.range.range.from, f.range.range.lastProcessed)
+                    }
+            }
             .take(maxFilesPerTopic)
             .map { kafkaStorage.delete(it.path) }
             .count()

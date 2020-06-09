@@ -41,6 +41,7 @@ internal class RestructureWorker(
     fun processPaths(topicPaths: TopicFileList) {
         val numFiles = topicPaths.numberOfFiles
         val numOffsets = topicPaths.numberOfOffsets
+        val totalProgress = numOffsets ?: numFiles.toLong()
 
         val topic = topicPaths.topic
 
@@ -52,29 +53,34 @@ internal class RestructureWorker(
         val seenOffsets = accountant.offsets
                 .withFactory { ReadOnlyFunctionalValue(it) }
 
-        val progressBar = ProgressBar(topic, numOffsets, 50, 5, TimeUnit.SECONDS)
+        val progressBar = ProgressBar(topic, totalProgress, 50, 5, TimeUnit.SECONDS)
         progressBar.update(0)
 
         val batchSize = (BATCH_SIZE * ThreadLocalRandom.current().nextDouble(0.75, 1.25)).roundToLong()
-        var currentSize: Long = 0
+        var currentSize: Long = 0L
+        var currentFile: Long = 0L
         try {
             for (file in topicPaths.files) {
                 if (closed.get()) {
                     break
                 }
-                try {
+                val processedSize = try {
                     this.processFile(file, progressBar, seenOffsets)
                 } catch (exc: JsonMappingException) {
                     logger.error("Cannot map values", exc)
+                    0L
                 }
 
-                processedFileCount++
-                progressBar.update(currentSize)
-
-                currentSize += file.size
+                currentFile += 1
+                currentSize += processedSize
                 if (currentSize >= batchSize) {
                     currentSize = 0
                     cacheStore.flush()
+                }
+
+                processedFileCount++
+                if (numOffsets == null) {
+                    progressBar.update(currentFile)
                 }
             }
         } catch (ex: IOException) {
@@ -85,26 +91,28 @@ internal class RestructureWorker(
             logger.warn("Shutting down")
         }
 
-        progressBar.update(numOffsets)
+        progressBar.update(totalProgress)
     }
 
     @Throws(IOException::class)
     private fun processFile(file: TopicFile,
-                            progressBar: ProgressBar, seenOffsets: OffsetRangeSet) {
+                            progressBar: ProgressBar, seenOffsets: OffsetRangeSet): Long {
         logger.debug("Reading {}", file.path)
 
         val offset = file.range.range.from
 
-        reader.newInput(file).use { input ->
+        return reader.newInput(file).use { input ->
             // processing zero-length files may trigger a stall. See:
             // https://github.com/RADAR-base/Restructure-HDFS-topic/issues/3
             if (input.length() == 0L) {
                 logger.warn("File {} has zero length, skipping.", file.path)
-                return
+                return 0L
             }
             val transaction = Accountant.Transaction(file.range.topicPartition, offset, file.lastModified)
+            var recordsSeen = 0L
             extractRecords(input) { relativeOffset, record ->
                 transaction.offset = offset + relativeOffset
+                recordsSeen += 1L
                 val alreadyContains = time("accounting.check") {
                     seenOffsets.contains(file.range.topicPartition, transaction.offset, transaction.lastModified)
                 }
@@ -113,8 +121,11 @@ internal class RestructureWorker(
                     this.writeRecord(transaction, record)
                 }
                 processedRecordsCount++
-                progressBar.update(processedRecordsCount)
+                if (file.size != null) {
+                    progressBar.update(processedRecordsCount)
+                }
             }
+            recordsSeen
         }
     }
 
