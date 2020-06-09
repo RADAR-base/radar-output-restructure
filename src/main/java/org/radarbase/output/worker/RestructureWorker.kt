@@ -47,8 +47,13 @@ internal class RestructureWorker(
 
         val numberFormat = NumberFormat.getNumberInstance()
 
-        logger.info("Processing topic {}: converting {} files with {} records",
-                topic, numberFormat.format(numFiles), numberFormat.format(numOffsets))
+        if (numOffsets == null) {
+            logger.info("Processing topic {}: converting {} files",
+                    topic, numberFormat.format(numFiles))
+        } else {
+            logger.info("Processing topic {}: converting {} files with {} records",
+                    topic, numberFormat.format(numFiles), numberFormat.format(numOffsets))
+        }
 
         val seenOffsets = accountant.offsets
                 .withFactory { ReadOnlyFunctionalValue(it) }
