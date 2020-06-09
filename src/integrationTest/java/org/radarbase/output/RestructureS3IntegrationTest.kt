@@ -36,9 +36,15 @@ class RestructureS3IntegrationTest {
             sourceClient.makeBucket(sourceConfig.bucket)
         }
 
-        val statusFileName = Paths.get("in/application_server_status/partition=1/application_server_status+1+0000000018+0000000020.avro")
-        javaClass.getResourceAsStream("/application_server_status/application_server_status+1+0000000018+0000000020.avro").use { statusFile ->
-            sourceClient.putObject(sourceConfig.bucket, statusFileName.toString(), statusFile, PutObjectOptions(-1, MAX_PART_SIZE))
+        val resourceFiles = listOf(
+                "application_server_status/partition=1/application_server_status+1+0000000018+0000000020.avro",
+                "application_server_status/partition=1/application_server_status+1+0000000021.avro"
+        )
+        val targetFiles = resourceFiles.map { Paths.get("in/$it") }
+        resourceFiles.forEachIndexed { i, resourceFile ->
+            javaClass.getResourceAsStream("/$resourceFile").use { statusFile ->
+                sourceClient.putObject(sourceConfig.bucket, targetFiles[i].toString(), statusFile, PutObjectOptions(-1, MAX_PART_SIZE))
+            }
         }
 
         application.start()
@@ -60,7 +66,9 @@ class RestructureS3IntegrationTest {
                         "$outputFolder/schema-application_server_status.json"),
                 files)
 
-        sourceClient.removeObject(sourceConfig.bucket, statusFileName.toString())
+        targetFiles.forEach {
+            sourceClient.removeObject(sourceConfig.bucket, it.toString())
+        }
         sourceClient.removeBucket(sourceConfig.bucket)
         files.forEach {
             targetClient.removeObject(targetConfig.bucket, it)

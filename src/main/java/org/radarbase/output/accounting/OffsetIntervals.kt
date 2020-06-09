@@ -21,12 +21,12 @@ class OffsetIntervals {
     }
 
     fun contains(range: OffsetRangeSet.Range): Boolean {
-        checkNotNull(range.to)
         //  -index-1 if not found
         val searchIndex = offsetsFrom.binarySearch(range.from)
         val index = if (searchIndex >= 0) searchIndex else -searchIndex - 2
+        val rangeTo = range.to ?: range.from
         return (index >= 0
-                && range.to <= offsetsTo[index]
+                && rangeTo <= offsetsTo[index]
                 && range.lastProcessed <= lastProcessed[index])
     }
 
