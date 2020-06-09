@@ -52,7 +52,6 @@ class RadarKafkaRestructure(
 
     val processedFileCount = LongAdder()
     val processedRecordsCount = LongAdder()
-    private val deletedFileCount = LongAdder()
 
     @Throws(IOException::class, InterruptedException::class)
     fun process(directoryName: String) {

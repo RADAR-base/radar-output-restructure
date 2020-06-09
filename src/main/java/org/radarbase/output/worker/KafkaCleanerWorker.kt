@@ -35,10 +35,16 @@ class KafkaCleanerWorker(
     ): Int {
         val offsets = accountant.offsets.copyForTopic(topic)
         return sourceStorage.walker.walkRecords(topic, topicPath)
-                .filter { f -> f.lastModified.isBefore(deleteThreshold) &&
-                        // ensure that there is a file with a larger offset also
-                        // processed, so the largest offset is never removed.
-                        offsets.contains(f.range.copy(range = f.range.range.copy(to = f.range.range.to + 1))) }
+                .filter { f ->
+                    f.lastModified.isBefore(deleteThreshold) &&
+                            // ensure that there is a file with a larger offset also
+                            // processed, so the largest offset is never removed.
+                            offsets.contains(f.range
+                                    .mapRange { r ->
+                                        r.copy(to = r.to?.let { it + 1 })
+                                                .ensureToOffset()
+                                    })
+                }
                 .take(maxFilesPerTopic)
                 .takeWhile { !closed.get() }
                 .count { file ->
@@ -50,7 +56,7 @@ class KafkaCleanerWorker(
                         true
                     } else {
                         logger.warn("Source file was not completely extracted: {}", file.path)
-                        accountant.remove(file.range)
+                        accountant.remove(file.range.mapRange { it.ensureToOffset() })
                         false
                     }
                 }

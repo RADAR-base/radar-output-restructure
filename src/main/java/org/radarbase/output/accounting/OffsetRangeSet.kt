@@ -163,8 +163,9 @@ class OffsetRangeSet {
             factory)
 
 
-    data class Range(val from: Long, val to: Long, val lastProcessed: Instant = Instant.now()) {
-        val size: Long = to - from + 1
+    data class Range(val from: Long, val to: Long?, val lastProcessed: Instant = Instant.now()) {
+        val size: Long? = to?.let { it - from + 1 }
+        fun ensureToOffset(): Range = if (to == null) copy(to = from) else this
         override fun toString() = "($from - $to, $lastProcessed)"
     }
 

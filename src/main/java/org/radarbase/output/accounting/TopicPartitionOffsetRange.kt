@@ -30,22 +30,27 @@ data class TopicPartitionOffsetRange(
     val partition: Int = topicPartition.partition
 
     /** Full constructor.  */
-    constructor(topic: String, partition: Int, offsetFrom: Long, offsetTo: Long, lastModified: Instant = Instant.now()) : this(
+    constructor(topic: String, partition: Int, offsetFrom: Long, offsetTo: Long?, lastModified: Instant = Instant.now()) : this(
             TopicPartition(topic, partition),
             OffsetRangeSet.Range(offsetFrom, offsetTo, lastModified))
 
     override fun toString(): String = "$topic+$partition+${range.from}+${range.to} (${range.lastProcessed})"
 
+    fun mapRange(modification: (OffsetRangeSet.Range) -> OffsetRangeSet.Range) = copy(range = modification(range))
+
     companion object {
+        private val filenameSplitRegex = "[+.]".toRegex()
+
         @Throws(NumberFormatException::class, IndexOutOfBoundsException::class)
         fun parseFilename(filename: String, lastModified: Instant): TopicPartitionOffsetRange {
-            val fileNameParts = filename.split("[+.]".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
+            val fileNameParts = filename.split(filenameSplitRegex)
+                    .dropLastWhile { it.isEmpty() || it == "avro" }
 
             return TopicPartitionOffsetRange(
                     fileNameParts[0],
-                    Integer.parseInt(fileNameParts[1]),
-                    java.lang.Long.parseLong(fileNameParts[2]),
-                    java.lang.Long.parseLong(fileNameParts[3]),
+                    fileNameParts[1].toInt(),
+                    fileNameParts[2].toLong(),
+                    fileNameParts.getOrNull(3)?.toLong(),
                     lastModified)
         }
     }

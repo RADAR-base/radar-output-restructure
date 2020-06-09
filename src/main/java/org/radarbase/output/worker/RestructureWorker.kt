@@ -41,40 +41,58 @@ internal class RestructureWorker(
     fun processPaths(topicPaths: TopicFileList) {
         val numFiles = topicPaths.numberOfFiles
         val numOffsets = topicPaths.numberOfOffsets
+        val totalProgress = numOffsets ?: numFiles.toLong()
 
         val topic = topicPaths.topic
 
         val numberFormat = NumberFormat.getNumberInstance()
 
-        logger.info("Processing topic {}: converting {} files with {} records",
-                topic, numberFormat.format(numFiles), numberFormat.format(numOffsets))
+        if (numOffsets == null) {
+            logger.info("Processing topic {}: converting {} files",
+                    topic, numberFormat.format(numFiles))
+        } else {
+            logger.info("Processing topic {}: converting {} files with {} records",
+                    topic, numberFormat.format(numFiles), numberFormat.format(numOffsets))
+        }
 
         val seenOffsets = accountant.offsets
                 .withFactory { ReadOnlyFunctionalValue(it) }
 
-        val progressBar = ProgressBar(topic, numOffsets, 50, 5, TimeUnit.SECONDS)
+        val progressBar = ProgressBar(topic, totalProgress, 50, 5, TimeUnit.SECONDS)
         progressBar.update(0)
 
         val batchSize = (BATCH_SIZE * ThreadLocalRandom.current().nextDouble(0.75, 1.25)).roundToLong()
-        var currentSize: Long = 0
+        var currentSize = 0L
+        var currentFile = 0L
         try {
             for (file in topicPaths.files) {
                 if (closed.get()) {
                     break
                 }
-                try {
+                val processedSize = try {
                     this.processFile(file, progressBar, seenOffsets)
+                            .also { size ->
+                                val expectedSize = file.range.range.size
+                                if (expectedSize != null && size != expectedSize) {
+                                    logger.warn("File {} contains {} records instead of expected {}",
+                                            file.path, size, expectedSize)
+                                }
+                            }
                 } catch (exc: JsonMappingException) {
                     logger.error("Cannot map values", exc)
+                    0L
                 }
 
-                processedFileCount++
-                progressBar.update(currentSize)
-
-                currentSize += file.size
+                currentFile += 1
+                currentSize += processedSize
                 if (currentSize >= batchSize) {
                     currentSize = 0
                     cacheStore.flush()
+                }
+
+                processedFileCount++
+                if (numOffsets == null) {
+                    progressBar.update(currentFile)
                 }
             }
         } catch (ex: IOException) {
@@ -85,22 +103,22 @@ internal class RestructureWorker(
             logger.warn("Shutting down")
         }
 
-        progressBar.update(numOffsets, force = true)
+        progressBar.update(totalProgress, force = true)
     }
 
     @Throws(IOException::class)
     private fun processFile(file: TopicFile,
-                            progressBar: ProgressBar, seenOffsets: OffsetRangeSet) {
+                            progressBar: ProgressBar, seenOffsets: OffsetRangeSet): Long {
         logger.debug("Reading {}", file.path)
 
         val offset = file.range.range.from
 
-        reader.newInput(file).use { input ->
+        return reader.newInput(file).use { input ->
             // processing zero-length files may trigger a stall. See:
             // https://github.com/RADAR-base/Restructure-HDFS-topic/issues/3
             if (input.length() == 0L) {
                 logger.warn("File {} has zero length, skipping.", file.path)
-                return
+                return 0L
             }
             val transaction = Accountant.Transaction(file.range.topicPartition, offset, file.lastModified)
             extractRecords(input) { records ->
@@ -114,13 +132,12 @@ internal class RestructureWorker(
                         this.writeRecord(transaction, record)
                     }
                     processedRecordsCount++
-                    progressBar.update(processedRecordsCount)
+                    if (file.size != null) {
+                        progressBar.update(processedRecordsCount)
+                    }
                 }.count().toLong()
 
-                if (recordsInFile != file.range.range.size) {
-                    logger.warn("File {} contains {} records instead of expected {}",
-                            file.path, recordsInFile, file.range.range.size)
-                }
+                recordsInFile
             }
         }
     }

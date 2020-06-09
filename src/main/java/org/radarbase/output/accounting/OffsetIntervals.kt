@@ -1,7 +1,6 @@
 package org.radarbase.output.accounting
 
 import com.almworks.integers.LongArray
-import org.apache.jute.Index
 import java.time.Instant
 
 class OffsetIntervals {
@@ -22,6 +21,7 @@ class OffsetIntervals {
     }
 
     fun contains(range: OffsetRangeSet.Range): Boolean {
+        checkNotNull(range.to)
         //  -index-1 if not found
         val searchIndex = offsetsFrom.binarySearch(range.from)
         val index = if (searchIndex >= 0) searchIndex else -searchIndex - 2
@@ -73,6 +73,7 @@ class OffsetIntervals {
 
     fun add(range: OffsetRangeSet.Range) {
         val (from, to, lastModified) = range
+        checkNotNull(to)
         var index = offsetsFrom.binarySearch(from)
         if (index < 0) {
             // index where this range would be entered
@@ -140,6 +141,7 @@ class OffsetIntervals {
 
     fun remove(range: OffsetRangeSet.Range) {
         val (from, to, _) = range
+        checkNotNull(to)
 
         var index = offsetsFrom.binarySearch(from)
 
