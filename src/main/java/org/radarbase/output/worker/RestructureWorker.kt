@@ -35,6 +35,7 @@ internal class RestructureWorker(
     var processedRecordsCount: Long = 0
     private val reader = storage.createReader()
     private val pathFactory: RecordPathFactory = fileStoreFactory.pathFactory
+    private val batchSize = fileStoreFactory.config.worker.cacheOffsetsSize
 
     private val cacheStore = fileStoreFactory.newFileCacheStore(accountant)
 
@@ -61,7 +62,7 @@ internal class RestructureWorker(
         val progressBar = ProgressBar(topic, totalProgress, 50, 5, TimeUnit.SECONDS)
         progressBar.update(0)
 
-        val batchSize = (BATCH_SIZE * ThreadLocalRandom.current().nextDouble(0.75, 1.25)).roundToLong()
+        val batchSize = generateBatchSize()
         var currentSize = 0L
         var currentFile = 0L
         try {
@@ -160,6 +161,11 @@ internal class RestructureWorker(
         } while (!response.isSuccessful)
     }
 
+    private fun generateBatchSize(): Long {
+        val modifier = ThreadLocalRandom.current().nextDouble(0.75, 1.25)
+        return (batchSize * modifier).roundToLong()
+    }
+
     override fun close() {
         reader.close()
         cacheStore.close()
@@ -167,9 +173,6 @@ internal class RestructureWorker(
 
     companion object {
         private val logger = LoggerFactory.getLogger(RestructureWorker::class.java)
-
-        /** Number of offsets to process in a single task.  */
-        private const val BATCH_SIZE: Long = 500000
 
         fun <T> extractRecords(input: SeekableInput, processing: (Sequence<GenericRecord>) -> T): T {
             var tmpRecord: GenericRecord? = null
