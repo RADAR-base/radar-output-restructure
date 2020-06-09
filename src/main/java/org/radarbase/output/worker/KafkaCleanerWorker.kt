@@ -22,12 +22,15 @@ class KafkaCleanerWorker(
         private val closed: AtomicBoolean
 ) : Closeable {
     private val maxFilesPerTopic: Int = fileStoreFactory.config.worker.maxFilesPerTopic ?: Int.MAX_VALUE
+    private val batchSize = fileStoreFactory.config.worker.cacheOffsetsSize
+
     private val pathFactory = fileStoreFactory.pathFactory
     private val reader = sourceStorage.createReader()
 
     private val deleteThreshold: Instant? = Instant.now().apply { minus(fileStoreFactory.config.cleaner.age.toLong(), ChronoUnit.DAYS) }
 
     private val cacheStore = ContainsFileCacheStore(fileStoreFactory)
+    private var cachedRecords = 0L
 
     fun deleteOldFiles(
             topic: String,
@@ -48,7 +51,7 @@ class KafkaCleanerWorker(
                 .take(maxFilesPerTopic)
                 .takeWhile { !closed.get() }
                 .count { file ->
-                    if (isExtracted(file)) {
+                    val extractionSuccessful = if (isExtracted(file)) {
                         logger.info("Removing {}", file.path)
                         time("cleaner.delete") {
                             sourceStorage.delete(file.path)
@@ -59,6 +62,11 @@ class KafkaCleanerWorker(
                         accountant.remove(file.range.mapRange { it.ensureToOffset() })
                         false
                     }
+                    if (cachedRecords > batchSize) {
+                        cachedRecords = 0
+                        cacheStore.clear()
+                    }
+                    extractionSuccessful
                 }
     }
 
@@ -71,7 +79,10 @@ class KafkaCleanerWorker(
                 return false
             }
             extractRecords(input) { records ->
-                records.all { record -> containsRecord(file.topic, record) }
+                records.all { record ->
+                    cachedRecords += 1
+                    containsRecord(file.topic, record)
+                }
             }
         }
     }

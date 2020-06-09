@@ -86,10 +86,12 @@ class ContainsFileCacheStore(private val factory: FileStoreFactory) : Closeable 
         }
     }
 
-    @Throws(IOException::class)
-    override fun close() {
+    fun clear() {
         caches.clear()
     }
+
+    @Throws(IOException::class)
+    override fun close() = clear()
 
     enum class FindResult {
         FILE_NOT_FOUND,
