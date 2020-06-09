@@ -72,7 +72,7 @@ class KafkaCleaner(
         } ?: 0L
     }
 
-    fun deleteOldFiles(
+    private fun deleteOldFiles(
             accountant: Accountant,
             extractionCheck: ExtractionCheck,
             topic: String,
@@ -87,7 +87,6 @@ class KafkaCleaner(
                             offsets.contains(f.range
                                     .mapRange { r ->
                                         r.copy(to = r.to?.let { it + 1 })
-                                                .ensureToOffset()
                                     })
                 }
                 .take(maxFilesPerTopic)
