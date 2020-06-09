@@ -21,6 +21,10 @@ class S3SourceStorage(
                 SimpleFileStatus(Paths.get(item.objectName()), item.isDir, item.lastModified().toInstant())
             }
 
+    override fun findTopicPaths(path: Path): Sequence<Path> = list(path).asSequence()
+                .groupBy { it.path.parent.parent }.keys
+                .asSequence()
+
     override fun delete(path: Path) {
         s3Client.removeObject(bucket, path.toKey())
     }
