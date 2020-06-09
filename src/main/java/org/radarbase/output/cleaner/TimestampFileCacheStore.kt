@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 
-package org.radarbase.output.worker
+package org.radarbase.output.cleaner
 
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.util.Timer.time
-import java.io.Closeable
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.nio.file.Path
@@ -29,8 +28,8 @@ import java.util.*
  * Caches open file handles. If more than the limit is cached, the half of the files that were used
  * the longest ago cache are evicted from cache.
  */
-class ContainsFileCacheStore(private val factory: FileStoreFactory) : Closeable {
-    private val caches: MutableMap<Path, ContainsFileCache>
+class TimestampFileCacheStore(private val factory: FileStoreFactory) {
+    private val caches: MutableMap<Path, TimestampFileCache>
     private val maxCacheSize: Int
     private val schemasAdded: MutableMap<Path, Path>
 
@@ -56,7 +55,7 @@ class ContainsFileCacheStore(private val factory: FileStoreFactory) : Closeable 
             val fileCache = caches[path]
                     ?: time("cleaner.cache") {
                         ensureCapacity()
-                        ContainsFileCache(factory, path)
+                        TimestampFileCache(factory, path)
                                 .also { caches[path] = it }
                     }
 
@@ -89,9 +88,6 @@ class ContainsFileCacheStore(private val factory: FileStoreFactory) : Closeable 
     fun clear() {
         caches.clear()
     }
-
-    @Throws(IOException::class)
-    override fun close() = clear()
 
     enum class FindResult {
         FILE_NOT_FOUND,

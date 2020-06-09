@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.radarbase.output.worker
+package org.radarbase.output.cleaner
 
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.FileStoreFactory
@@ -25,11 +25,11 @@ import java.io.FileNotFoundException
 import java.nio.file.Path
 
 /** Keeps path handles of a path.  */
-class ContainsFileCache(
+class TimestampFileCache(
         factory: FileStoreFactory,
         /** File that the cache is maintaining.  */
         val path: Path
-) : Comparable<ContainsFileCache> {
+) : Comparable<TimestampFileCache> {
     private val converterFactory: RecordConverterFactory = factory.recordConverter
     private var lastUse: Long = 0
     private val header: Array<String>?
@@ -69,9 +69,9 @@ class ContainsFileCache(
      * the absolute path of the path.
      * @param other FileCache to compare with.
      */
-    override fun compareTo(other: ContainsFileCache): Int = comparator.compare(this, other)
+    override fun compareTo(other: TimestampFileCache): Int = comparator.compare(this, other)
 
     companion object {
-        val comparator = compareBy(ContainsFileCache::lastUse, ContainsFileCache::path)
+        val comparator = compareBy(TimestampFileCache::lastUse, TimestampFileCache::path)
     }
 }

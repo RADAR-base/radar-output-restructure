@@ -30,10 +30,8 @@ import org.radarbase.output.target.TargetStorage
 import org.radarbase.output.target.TargetStorageFactory
 import org.radarbase.output.util.ProgressBar.Companion.format
 import org.radarbase.output.util.Timer
-import org.radarbase.output.util.Timer.time
 import org.radarbase.output.worker.FileCacheStore
-import org.radarbase.output.worker.KafkaCleaner
-import org.radarbase.output.worker.KafkaCleanerWorker
+import org.radarbase.output.cleaner.KafkaCleaner
 import org.radarbase.output.worker.RadarKafkaRestructure
 import org.slf4j.LoggerFactory
 import redis.clients.jedis.JedisPool

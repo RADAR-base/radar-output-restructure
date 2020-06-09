@@ -14,8 +14,8 @@ class HdfsRemoteLockManager(
         fileSystem.mkdirs(lockPath)
     }
 
-    override fun acquireTopicLock(topic: String): RemoteLockManager.RemoteLock? {
-        val topicLockPath = Path(lockPath, "$topic.lock")
+    override fun acquireLock(name: String): RemoteLockManager.RemoteLock? {
+        val topicLockPath = Path(lockPath, "$name.lock")
         return try {
             HdfsRemoteLock(topicLockPath, fileSystem.create(topicLockPath, true, 1, 1, MINIMUM_BLOCK_SIZE))
         } catch (ex: FileAlreadyExistsException) {

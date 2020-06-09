@@ -84,7 +84,7 @@ class RadarKafkaRestructure(
         val topic = topicPath.fileName.toString()
 
         return try {
-            lockManager.acquireTopicLock(topic)?.use {
+            lockManager.tryRunLocked(topic) {
                 Accountant(fileStoreFactory, topic).use { accountant ->
                     startWorker(topic, topicPath, accountant, accountant.offsets)
                 }
