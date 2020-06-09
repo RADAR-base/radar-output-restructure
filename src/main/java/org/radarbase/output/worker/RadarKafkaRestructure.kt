@@ -156,28 +156,6 @@ class RadarKafkaRestructure(
             .map { kafkaStorage.delete(it.path) }
             .count()
 
-//    private fun findTopicPaths(path: Path): Sequence<Path> {
-//        logger.info("Path {}", path)
-//        val fileStatuses = kafkaStorage.list(path)
-//        logger.info("File status size {}", fileStatuses.toList().size)
-//        val avroFile = fileStatuses.find {  !it.isDirectory && it.path.fileName.toString().endsWith(".avro", true) }
-//
-//        val topic = fileStatuses.asSequence()
-//                .groupBy { it.path.parent.parent }
-//                .keys
-//        logger.info("Topic group {} ", topic)
-//
-//        return if (avroFile != null) {
-//            logger.info("Path  in avro file {} ", avroFile.path.parent.parent)
-//            sequenceOf(avroFile.path.parent.parent)
-//        } else {
-//            logger.info("IN elsi {} ")
-//            fileStatuses.asSequence()
-//                    .filter { it.isDirectory && it.path.fileName.toString() != "+tmp" }
-//                    .flatMap { findTopicPaths(it.path) }
-//        }
-//    }
-
     private fun findRecordPaths(topic: String, path: Path): Sequence<TopicFile> = kafkaStorage.list(path)
             .flatMap { status ->
                 val filename = status.path.fileName.toString()
