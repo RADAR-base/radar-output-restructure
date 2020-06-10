@@ -161,7 +161,7 @@ class RadarKafkaRestructure(
                 val filename = status.path.fileName.toString()
                 when {
                     status.isDirectory && filename != "+tmp" -> findRecordPaths(topic, status.path)
-                    filename.endsWith(".avro") -> sequenceOf(TopicFile(topic, status.path, status.lastModified))
+                    !status.isDirectory && filename.endsWith(".avro") -> sequenceOf(TopicFile(topic, status.path, status.lastModified ?: Instant.now()))
                     else -> emptySequence()
                 }
             }

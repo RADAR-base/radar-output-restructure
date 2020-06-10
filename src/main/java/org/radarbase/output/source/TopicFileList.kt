@@ -16,4 +16,4 @@ data class TopicFile(val topic: String, val path: Path, val lastModified: Instan
     val size: Long? = range.range.size
 }
 
-data class SimpleFileStatus(val path: Path, val isDirectory: Boolean, val lastModified: Instant)
+data class SimpleFileStatus(val path: Path, val isDirectory: Boolean, val lastModified: Instant?)
