@@ -9,6 +9,7 @@ import org.radarbase.output.config.ResourceConfig
 import org.radarbase.output.config.RestructureConfig
 import org.radarbase.output.config.S3Config
 import org.radarbase.output.util.Timer
+import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Paths
 
 class RestructureS3IntegrationTest {
@@ -70,6 +71,18 @@ class RestructureS3IntegrationTest {
                         "$secondParticipantOutput/20200528_1000.csv",
                         "$secondParticipantOutput/schema-android_phone_acceleration.json"),
                 files)
+
+        println(targetClient.getObject(targetConfig.bucket, "$firstParticipantOutput/20200128_1300.csv").readBytes().toString(UTF_8))
+
+        val csvContents = """
+                key.projectId,key.userId,key.sourceId,value.time,value.serverStatus,value.ipAddress
+                STAGING_PROJECT,1543bc93-3c17-4381-89a5-c5d6272b827c,99caf236-bbe6-4eed-9c63-fba77349821d,1.58021982003E9,CONNECTED,
+                STAGING_PROJECT,1543bc93-3c17-4381-89a5-c5d6272b827c,99caf236-bbe6-4eed-9c63-fba77349821d,1.58021982003E9,CONNECTED,
+
+                """.trimIndent()
+        assertEquals(csvContents, targetClient.getObject(targetConfig.bucket, "$firstParticipantOutput/20200128_1300.csv")
+                .readBytes()
+                .toString(UTF_8))
 
         targetFiles.forEach {
             sourceClient.removeObject(sourceConfig.bucket, it.toString())
