@@ -100,6 +100,7 @@ class SourceDataCleaner(
                         true
                     } else {
                         logger.warn("Source file was not completely extracted: {}", file.path)
+                        // extract the file again at a later time
                         accountant.remove(file.range.mapRange { it.ensureToOffset() })
                         false
                     }
