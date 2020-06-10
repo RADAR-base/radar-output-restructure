@@ -32,7 +32,7 @@ object TimeUtil {
 
             schema.getField("start")
                     ?.takeIf { it.schema().type == Schema.Type.LONG }
-                    ?.let { return ((get(it.pos()) as Long) / 1000.0).toInstant() }
+                    ?.let { return Instant.ofEpochMilli(get(it.pos()) as Long) }
         }
 
         value?.run {
