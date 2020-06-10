@@ -33,7 +33,7 @@ internal class RestructureWorker(
 ): Closeable {
     var processedFileCount: Long = 0
     var processedRecordsCount: Long = 0
-    private val reader = storage.reader()
+    private val reader = storage.createReader()
     private val pathFactory: RecordPathFactory = fileStoreFactory.pathFactory
     private val batchSize = fileStoreFactory.config.worker.cacheOffsetsSize
 
@@ -72,6 +72,13 @@ internal class RestructureWorker(
                 }
                 val processedSize = try {
                     this.processFile(file, progressBar, seenOffsets)
+                            .also { size ->
+                                val expectedSize = file.range.range.size
+                                if (expectedSize != null && size != expectedSize) {
+                                    logger.warn("File {} contains {} records instead of expected {}",
+                                            file.path, size, expectedSize)
+                                }
+                            }
                 } catch (exc: JsonMappingException) {
                     logger.error("Cannot map values", exc)
                     0L
@@ -97,7 +104,7 @@ internal class RestructureWorker(
             logger.warn("Shutting down")
         }
 
-        progressBar.update(totalProgress)
+        progressBar.update(totalProgress, force = true)
     }
 
     @Throws(IOException::class)
@@ -115,59 +122,43 @@ internal class RestructureWorker(
                 return 0L
             }
             val transaction = Accountant.Transaction(file.range.topicPartition, offset, file.lastModified)
-            var recordsSeen = 0L
-            extractRecords(input) { relativeOffset, record ->
-                transaction.offset = offset + relativeOffset
-                recordsSeen += 1L
-                val alreadyContains = time("accounting.check") {
-                    seenOffsets.contains(file.range.topicPartition, transaction.offset, transaction.lastModified)
-                }
-                if (!alreadyContains) {
-                    // Get the fields
-                    this.writeRecord(transaction, record)
-                }
-                processedRecordsCount++
-                if (file.size != null) {
-                    progressBar.update(processedRecordsCount)
-                }
-            }
-            recordsSeen
-        }
-    }
+            extractRecords(input) { records ->
+                val recordsInFile = records.mapIndexed { relativeOffset, record ->
+                    transaction.offset = offset + relativeOffset
+                    val alreadyContains = time("accounting.check") {
+                        seenOffsets.contains(file.range.topicPartition, transaction.offset, transaction.lastModified)
+                    }
+                    if (!alreadyContains) {
+                        // Get the fields
+                        this.writeRecord(transaction, record)
+                    }
+                    processedRecordsCount++
+                    if (file.size != null) {
+                        progressBar.update(processedRecordsCount)
+                    }
+                }.count().toLong()
 
-    private fun extractRecords(input: SeekableInput, processing: (Int, GenericRecord) -> Unit) {
-        var tmpRecord: GenericRecord? = null
-
-        DataFileReader(input, GenericDatumReader<GenericRecord>()).use { reader ->
-            generateSequence {
-                time("read") {
-                    if (reader.hasNext()) reader.next(tmpRecord) else null
-                }
+                recordsInFile
             }
-            .onEach { tmpRecord = it }
-            .forEachIndexed(processing)
         }
     }
 
     @Throws(IOException::class)
     private fun writeRecord(
             transaction: Accountant.Transaction,
-            record: GenericRecord,
-            suffix: Int = 0) {
-        var currentSuffix = suffix
-        val (path) = pathFactory.getRecordOrganization(
-                transaction.topicPartition.topic, record, currentSuffix)
+            record: GenericRecord) {
+        var currentSuffix = 0
+        do {
+            val (path) = pathFactory.getRecordOrganization(
+                    transaction.topicPartition.topic, record, currentSuffix)
 
-        // Write data
-        val response = time("write") {
-            cacheStore.writeRecord(path, record, transaction)
-        }
+            // Write data
+            val response = time("write") {
+                cacheStore.writeRecord(path, record, transaction)
+            }
 
-        if (!response.isSuccessful) {
-            // Write was unsuccessful due to different number of columns,
-            // try again with new file name
-            writeRecord(transaction, record, ++currentSuffix)
-        }
+            currentSuffix += 1
+        } while (!response.isSuccessful)
     }
 
     private fun generateBatchSize(): Long {
@@ -182,5 +173,17 @@ internal class RestructureWorker(
 
     companion object {
         private val logger = LoggerFactory.getLogger(RestructureWorker::class.java)
+
+        fun <T> extractRecords(input: SeekableInput, processing: (Sequence<GenericRecord>) -> T): T {
+            var tmpRecord: GenericRecord? = null
+
+            return DataFileReader(input, GenericDatumReader<GenericRecord>()).use { reader ->
+                processing(generateSequence {
+                    time("read") {
+                        if (reader.hasNext()) reader.next(tmpRecord) else null
+                    }
+                }.onEach { tmpRecord = it })
+            }
+        }
     }
 }

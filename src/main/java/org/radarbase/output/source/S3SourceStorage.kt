@@ -14,6 +14,8 @@ class S3SourceStorage(
         private val bucket: String,
         private val tempPath: Path
 ): SourceStorage {
+    override val walker: SourceStorageWalker = GeneralSourceStorageWalker(this)
+
     override fun list(path: Path): Sequence<SimpleFileStatus> = s3Client.listObjects(bucket, "$path/", false)
             .asSequence()
             .map {
@@ -25,7 +27,7 @@ class S3SourceStorage(
         s3Client.removeObject(bucket, path.toKey())
     }
 
-    override fun reader(): SourceStorage.SourceStorageReader = S3SourceStorageReader()
+    override fun createReader(): SourceStorage.SourceStorageReader = S3SourceStorageReader()
 
     private inner class S3SourceStorageReader: SourceStorage.SourceStorageReader {
         private val tempDir = TemporaryDirectory(tempPath, "worker-")

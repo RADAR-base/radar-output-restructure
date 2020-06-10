@@ -36,6 +36,8 @@ data class TopicPartitionOffsetRange(
 
     override fun toString(): String = "$topic+$partition+${range.from}+${range.to} (${range.lastProcessed})"
 
+    fun mapRange(modification: (OffsetRangeSet.Range) -> OffsetRangeSet.Range) = copy(range = modification(range))
+
     companion object {
         private val filenameSplitRegex = "[+.]".toRegex()
 

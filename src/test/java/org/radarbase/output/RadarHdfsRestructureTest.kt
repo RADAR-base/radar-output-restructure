@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.radarbase.output.path.ObservationKeyPathFactory
 import org.radarbase.output.path.RecordPathFactory
+import org.radarbase.output.util.TimeUtil.getDate
 
 class RadarHdfsRestructureTest {
     @Test
@@ -43,7 +44,7 @@ class RadarHdfsRestructureTest {
         val valueField1 = GenericRecordBuilder(valueSchema1)
                 .set("time", currentTime.toDouble()).build()
 
-        var date = RecordPathFactory.getDate(keyField, valueField1)
+        var date = getDate(keyField, valueField1)
         var result = factory.getTimeBin(date)
 
         assertEquals("20170502_0700", result)
@@ -53,7 +54,7 @@ class RadarHdfsRestructureTest {
                 .endRecord()
         val valueField2 = GenericRecordBuilder(valueSchema2)
                 .set("a", 0.1).build()
-        date = RecordPathFactory.getDate(keyField, valueField2)
+        date = getDate(keyField, valueField2)
         result = factory.getTimeBin(date)
         assertEquals("20170502_0600", result)
     }

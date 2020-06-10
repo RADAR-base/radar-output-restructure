@@ -140,6 +140,22 @@ target:
     groupId: 100  # write as regular group, use -1 to use current user (default).
 ```
 
+### Cleaner
+
+Source files can be automatically be removed by a cleaner process. This checks whether the file has already been extracted and is older than a configured age. This feature is not enabled by default. It can be configured in the `cleaner` configuration section:
+
+```yaml
+cleaner:
+  # Enable cleaning up old source files
+  enable: true
+  # Interval in seconds to clean data
+  interval: 1260  # 21 minutes
+  # Number of days after which a source file is considered old
+  age: 7
+```
+
+The cleaner can also be enabled with the `--cleaner` command-line flag. To run the cleaner as a separate process from output restructuring, start a process that has configuration property `worker: enable: false` or command-line argument `--no-restructure`.
+
 ### Service
 
 To run the output generator as a service that will regularly poll the HDFS directory, add the `--service` flag and optionally the `--interval` flag to adjust the polling interval or use the corresponding configuration file parameters.

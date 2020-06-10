@@ -31,6 +31,7 @@ import org.radarbase.output.target.TargetStorageFactory
 import org.radarbase.output.util.ProgressBar.Companion.format
 import org.radarbase.output.util.Timer
 import org.radarbase.output.worker.FileCacheStore
+import org.radarbase.output.cleaner.SourceDataCleaner
 import org.radarbase.output.worker.RadarKafkaRestructure
 import org.slf4j.LoggerFactory
 import redis.clients.jedis.JedisPool
@@ -88,7 +89,12 @@ class Application(
         if (config.service.enable) {
             runService()
         } else {
-            runRestructure()
+            if (config.worker.enable) {
+                runRestructure()
+            }
+            if (config.cleaner.enable) {
+                runCleaner()
+            }
         }
     }
 
@@ -97,8 +103,15 @@ class Application(
         logger.info("Press Ctrl+C to exit...")
         val executorService = Executors.newSingleThreadScheduledExecutor()
 
-        executorService.scheduleAtFixedRate(::runRestructure,
-                config.service.interval / 4, config.service.interval, TimeUnit.SECONDS)
+        if (config.worker.enable) {
+            executorService.scheduleAtFixedRate(::runRestructure,
+                    config.service.interval / 4, config.service.interval, TimeUnit.SECONDS)
+        }
+
+        if (config.cleaner.enable) {
+            executorService.scheduleAtFixedRate(::runCleaner,
+                    config.cleaner.interval / 4, config.cleaner.interval, TimeUnit.SECONDS)
+        }
 
         try {
             Thread.sleep(java.lang.Long.MAX_VALUE)
@@ -114,9 +127,37 @@ class Application(
         }
     }
 
+    private fun runCleaner() {
+        val timeStart = Instant.now()
+
+        try {
+            val numberFormat = NumberFormat.getNumberInstance()
+            SourceDataCleaner(this).use { cleaner ->
+                for (input in config.paths.inputs) {
+                    logger.info("Cleaning {}", input)
+                    cleaner.process(input.toString())
+                }
+                logger.info("Cleaned up {} files in {}",
+                        numberFormat.format(cleaner.deletedFileCount.sum()),
+                        timeStart.durationSince().format())
+            }
+        } catch (e: InterruptedException) {
+            logger.error("Cleaning interrupted")
+        } catch (ex: Exception) {
+            logger.error("Failed to clean records", ex)
+        } finally {
+            if (Timer.isEnabled) {
+                logger.info("{}", Timer)
+                Timer.reset()
+            }
+        }
+    }
+
     private fun runRestructure() {
         val timeStart = Instant.now()
         try {
+            val numberFormat = NumberFormat.getNumberInstance()
+
             RadarKafkaRestructure(this).use { restructure ->
                 for (input in config.paths.inputs) {
                     logger.info("In:  {}", input)
@@ -124,23 +165,15 @@ class Application(
                     restructure.process(input.toString())
                 }
 
-                val numberFormat = NumberFormat.getNumberInstance()
                 logger.info("Processed {} files and {} records in {}",
-                        numberFormat.format(restructure.processedFileCount),
-                        numberFormat.format(restructure.processedRecordsCount),
+                        numberFormat.format(restructure.processedFileCount.sum()),
+                        numberFormat.format(restructure.processedRecordsCount.sum()),
                         timeStart.durationSince().format())
-                if (restructure.deletedFileCount.sum() > 0) {
-                    logger.info("Deleted {} old files", numberFormat.format(restructure.deletedFileCount))
-                } else {
-                    logger.info("No files were deleted")
-                }
             }
-        } catch (ex: Exception) {
-            logger.error("Failed to process records", ex)
-        } catch (ex: IOException) {
-            logger.error("Processing failed", ex)
         } catch (e: InterruptedException) {
             logger.error("Processing interrupted")
+        } catch (ex: Exception) {
+            logger.error("Failed to process records", ex)
         } finally {
             // Print timings and reset the timings for the next iteration.
             if (Timer.isEnabled) {

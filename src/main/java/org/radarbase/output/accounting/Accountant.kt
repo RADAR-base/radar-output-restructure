@@ -59,6 +59,11 @@ constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
         } else null
     }
 
+    open fun remove(range: TopicPartitionOffsetRange) = time("accounting.remove") {
+        offsetFile.offsets.remove(range)
+        offsetFile.triggerWrite()
+    }
+
     open fun process(ledger: Ledger) = time("accounting.process") {
         offsetFile.addAll(ledger.offsets)
         offsetFile.triggerWrite()

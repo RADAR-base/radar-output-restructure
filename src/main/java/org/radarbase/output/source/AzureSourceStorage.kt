@@ -26,7 +26,9 @@ class AzureSourceStorage(
                 .delete()
     }
 
-    override fun reader(): SourceStorage.SourceStorageReader = AzureSourceStorageReader()
+    override val walker: SourceStorageWalker = GeneralSourceStorageWalker(this)
+
+    override fun createReader(): SourceStorage.SourceStorageReader = AzureSourceStorageReader()
 
     private inner class AzureSourceStorageReader: SourceStorage.SourceStorageReader {
         private val tempDir = TemporaryDirectory(tempPath, "worker-")

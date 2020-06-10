@@ -20,71 +20,28 @@ import com.fasterxml.jackson.core.JsonFactory
 import com.fasterxml.jackson.core.JsonGenerator
 import com.fasterxml.jackson.core.util.MinimalPrettyPrinter
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.apache.avro.Schema
-import org.apache.avro.generic.GenericData
-import org.apache.avro.generic.GenericFixed
 import org.apache.avro.generic.GenericRecord
+import java.io.BufferedReader
 import java.io.IOException
-import java.io.Reader
 import java.io.Writer
-import java.nio.ByteBuffer
-import java.util.*
 
 /**
  * Writes an Avro record to JSON format.
  */
-class JsonAvroConverter @Throws(IOException::class)
-constructor(writer: Writer) : RecordConverter {
-
+class JsonAvroConverter(
+        writer: Writer,
+        private val converter: JsonAvroDataConverter
+) : RecordConverter {
     private val generator: JsonGenerator = JSON_FACTORY.createGenerator(writer)
             .setPrettyPrinter(MinimalPrettyPrinter("\n"))
 
     @Throws(IOException::class)
     override fun writeRecord(record: GenericRecord): Boolean {
-        JSON_WRITER.writeValue(generator, convertRecord(record))
+        JSON_WRITER.writeValue(generator, converter.convertRecord(record))
         return true
     }
 
-    override fun convertRecord(record: GenericRecord): Map<String, Any?> {
-        val map = HashMap<String, Any?>()
-        val schema = record.schema
-        for (field in schema.fields) {
-            map[field.name()] = convertAvro(record.get(field.pos()), field.schema())
-        }
-        return map
-    }
-
-    private fun convertAvro(data: Any?, schema: Schema): Any? {
-        when (schema.type) {
-            Schema.Type.RECORD -> return convertRecord(data as GenericRecord)
-            Schema.Type.MAP -> {
-                val value = HashMap<String, Any?>()
-                val valueType = schema.valueType
-                for ((key, value1) in data as Map<*, *>) {
-                    value[key.toString()] = convertAvro(value1, valueType)
-                }
-                return value
-            }
-            Schema.Type.ARRAY -> {
-                val origList = data as List<*>
-                val itemType = schema.elementType
-                val list = ArrayList<Any?>(origList.size)
-                for (orig in origList) {
-                    list.add(convertAvro(orig, itemType))
-                }
-                return list
-            }
-            Schema.Type.UNION -> {
-                val type = GenericData().resolveUnion(schema, data)
-                return convertAvro(data, schema.types[type])
-            }
-            Schema.Type.BYTES -> return (data as ByteBuffer).array()
-            Schema.Type.FIXED -> return (data as GenericFixed).bytes()
-            Schema.Type.ENUM, Schema.Type.STRING -> return data.toString()
-            Schema.Type.INT, Schema.Type.LONG, Schema.Type.DOUBLE, Schema.Type.FLOAT, Schema.Type.BOOLEAN, Schema.Type.NULL -> return data
-            else -> throw IllegalArgumentException("Cannot parse field type " + schema.type)
-        }
-    }
+    override fun convertRecord(record: GenericRecord): Map<String, Any?> = converter.convertRecord(record)
 
     @Throws(IOException::class)
     override fun flush() = generator.flush()
@@ -94,17 +51,10 @@ constructor(writer: Writer) : RecordConverter {
 
     companion object {
         private val JSON_FACTORY = JsonFactory()
-        private val JSON_WRITER = ObjectMapper(JSON_FACTORY).writer()
+        internal val JSON_WRITER = ObjectMapper(JSON_FACTORY).writer()
+        internal val JSON_READER = ObjectMapper(JSON_FACTORY).reader()
 
-        val factory: RecordConverterFactory = object : RecordConverterFactory {
-            override val extension: String = ".json"
-
-            override val formats: Collection<String> = setOf("json")
-
-            @Throws(IOException::class)
-            override fun converterFor(writer: Writer,
-                                      record: GenericRecord, writeHeader: Boolean,
-                                      reader: Reader): RecordConverter = JsonAvroConverter(writer)
-        }
+        val factory: RecordConverterFactory = JsonAvroConverterFactory()
     }
 }
+
