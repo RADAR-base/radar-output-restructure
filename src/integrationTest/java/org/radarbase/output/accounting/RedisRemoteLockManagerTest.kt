@@ -26,9 +26,9 @@ internal class RedisRemoteLockManagerTest {
 
     @Test
     fun testExclusiveLock() {
-        lockManager1.acquireTopicLock("t").use { l1 ->
+        lockManager1.acquireLock("t").use { l1 ->
             assertThat(l1, not(nullValue()))
-            lockManager2.acquireTopicLock("t").use { l2 ->
+            lockManager2.acquireLock("t").use { l2 ->
                 assertThat(l2, nullValue())
             }
         }
@@ -36,9 +36,9 @@ internal class RedisRemoteLockManagerTest {
 
     @Test
     fun testGranularityLock() {
-        lockManager1.acquireTopicLock("t1").use { l1 ->
+        lockManager1.acquireLock("t1").use { l1 ->
             assertThat(l1, not(nullValue()))
-            lockManager2.acquireTopicLock("t2").use { l2 ->
+            lockManager2.acquireLock("t2").use { l2 ->
                 assertThat(l2, not(nullValue()))
             }
         }
@@ -46,10 +46,10 @@ internal class RedisRemoteLockManagerTest {
 
     @Test
     fun testNonOverlappingLock() {
-        lockManager1.acquireTopicLock("t").use { l1 ->
+        lockManager1.acquireLock("t").use { l1 ->
             assertThat(l1, not(nullValue()))
         }
-        lockManager2.acquireTopicLock("t").use { l2 ->
+        lockManager2.acquireLock("t").use { l2 ->
             assertThat(l2, not(nullValue()))
         }
     }
@@ -57,10 +57,10 @@ internal class RedisRemoteLockManagerTest {
 
     @Test
     fun testNonOverlappingLockSameManager() {
-        lockManager1.acquireTopicLock("t").use { l1 ->
+        lockManager1.acquireLock("t").use { l1 ->
             assertThat(l1, not(nullValue()))
         }
-        lockManager1.acquireTopicLock("t").use { l2 ->
+        lockManager1.acquireLock("t").use { l2 ->
             assertThat(l2, not(nullValue()))
         }
     }

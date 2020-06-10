@@ -29,9 +29,9 @@ import java.util.concurrent.atomic.AtomicLong
 class ProgressBar(private val label: String, private val total: Long, private val numStripes: Int, updateInterval: Long,
                   updateIntervalUnit: TimeUnit) {
     private val startTime: Long = System.nanoTime()
-    private val isDone: AtomicBoolean = AtomicBoolean(false)
     private val updateIntervalNanos: Long = updateIntervalUnit.toNanos(updateInterval)
-    private val lastUpdate: AtomicLong = AtomicLong(0L)
+    private var lastUpdate = 0L
+    private var isDone: Boolean = false
 
     init {
         require(total >= 0) { "Total of progress bar must be positive" }
@@ -39,11 +39,13 @@ class ProgressBar(private val label: String, private val total: Long, private va
     }
 
     @Synchronized
-    fun update(progress: Long) {
+    fun update(progress: Long, force: Boolean = false) {
         val now = System.nanoTime()
-        if (updateIntervalNanos <= 0 || lastUpdate.updateAndGet { l -> if (now > l + updateIntervalNanos) now else l } != now) {
+
+        if (!force && updateIntervalNanos > 0 && now <= lastUpdate + updateIntervalNanos) {
             return
         }
+        lastUpdate = now
 
         try {
             require(progress in 0..total) { "Update value $progress out of range [0, $total]." }
@@ -52,8 +54,10 @@ class ProgressBar(private val label: String, private val total: Long, private va
             return
         }
 
-        if (progress == total && !isDone.compareAndSet(false, true)) {
-            return
+        if (progress == total) {
+            // go through only once
+            if (isDone) return
+            else isDone = true
         }
 
         val builder = StringBuilder(numStripes + 30 + label.length)

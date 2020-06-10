@@ -26,7 +26,7 @@ import java.util.*
 /** Timer for multi-threaded timings. The timer may be disabled to increase program performance.  */
 object Timer {
     private val shutdownHook = Thread({ println(Timer) }, "Timer")
-    private val times: ConcurrentMap<String, MutableTimerEntry> = ConcurrentHashMap()
+    val times: ConcurrentMap<String, MutableTimerEntry> = ConcurrentHashMap()
 
     /**
      * All currently measured timings.
@@ -39,7 +39,7 @@ object Timer {
      * Whether the timer is enabled. A disabled timer will have much less performance impact on
      * timed code.
      */
-    @get:Synchronized
+    @Volatile
     @set:Synchronized
     var isEnabled: Boolean = false
         set(value) {
@@ -57,7 +57,7 @@ object Timer {
     /**
      * Time a given action, labeled by an action type.
      */
-    fun <T> time(type: String, action: () -> T): T {
+    inline fun <T> time(type: String, action: () -> T): T {
         return if (isEnabled) {
             val startTime = System.nanoTime()
             try {
@@ -102,10 +102,10 @@ object Timer {
         return builder.toString()
     }
 
-    private class MutableTimerEntry {
-        val invocations = LongAdder()
-        val totalTime = LongAdder()
-        val threads = ConcurrentHashMap<Long, Long>()
+    class MutableTimerEntry {
+        private val invocations = LongAdder()
+        private val totalTime = LongAdder()
+        private val threads = ConcurrentHashMap<Long, Long>()
 
         fun add(nanoTime: Long) {
             invocations.increment()

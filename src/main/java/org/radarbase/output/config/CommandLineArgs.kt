@@ -27,6 +27,12 @@ class CommandLineArgs {
     @Parameter(names = ["-F", "--config-file"], description = "Config file. By default, $RESTRUCTURE_CONFIG_FILE_NAME is tried.")
     var configFile: String? = null
 
+    @Parameter(names = ["-C", "--clean"], description = "Run with old file cleaning enabled.")
+    var clean: Boolean? = null
+
+    @Parameter(names = ["--no-restructure"], description = "Disable restructuring. Only useful if --clean is selected.")
+    var noRestructure: Boolean? = null
+
     @Parameter(names = ["-f", "--format"], description = "Format to use when converting the files. JSON and CSV are available by default.")
     var format: String? = null
 

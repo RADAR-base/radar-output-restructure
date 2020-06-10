@@ -36,7 +36,6 @@ import java.util.*
  */
 class FileCacheStore @Throws(IOException::class)
 constructor(private val factory: FileStoreFactory, private val accountant: Accountant) : Flushable, Closeable {
-
     private val tmpDir: TemporaryDirectory
 
     private val caches: MutableMap<Path, FileCache>
@@ -98,7 +97,6 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
             fileCache.close()
             NO_CACHE_AND_NO_WRITE
         }
-
     }
 
     @Throws(IOException::class)

@@ -9,6 +9,7 @@ import org.radarbase.output.config.ResourceConfig
 import org.radarbase.output.config.RestructureConfig
 import org.radarbase.output.config.S3Config
 import org.radarbase.output.util.Timer
+import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Paths
 
 class RestructureS3IntegrationTest {
@@ -36,9 +37,16 @@ class RestructureS3IntegrationTest {
             sourceClient.makeBucket(sourceConfig.bucket)
         }
 
-        val statusFileName = Paths.get("in/application_server_status/partition=1/application_server_status+1+0000000018+0000000020.avro")
-        javaClass.getResourceAsStream("/application_server_status/application_server_status+1+0000000018+0000000020.avro").use { statusFile ->
-            sourceClient.putObject(sourceConfig.bucket, statusFileName.toString(), statusFile, PutObjectOptions(-1, MAX_PART_SIZE))
+        val resourceFiles = listOf(
+                "application_server_status/partition=1/application_server_status+1+0000000018+0000000020.avro",
+                "application_server_status/partition=1/application_server_status+1+0000000021.avro",
+                "android_phone_acceleration/partition=0/android_phone_acceleration+0+0003018784.avro"
+        )
+        val targetFiles = resourceFiles.map { Paths.get("in/$it") }
+        resourceFiles.forEachIndexed { i, resourceFile ->
+            javaClass.getResourceAsStream("/$resourceFile").use { statusFile ->
+                sourceClient.putObject(sourceConfig.bucket, targetFiles[i].toString(), statusFile, PutObjectOptions(-1, MAX_PART_SIZE))
+            }
         }
 
         application.start()
@@ -50,17 +58,35 @@ class RestructureS3IntegrationTest {
 
         application.redisPool.resource.use { redis ->
             assertEquals(1L, redis.del("offsets/application_server_status.json"))
+            assertEquals(1L, redis.del("offsets/android_phone_acceleration.json"))
         }
 
-        val outputFolder = "output/STAGING_PROJECT/1543bc93-3c17-4381-89a5-c5d6272b827c/application_server_status"
+        val firstParticipantOutput = "output/STAGING_PROJECT/1543bc93-3c17-4381-89a5-c5d6272b827c/application_server_status"
+        val secondParticipantOutput = "output/radar-test-root/4ab9b985-6eec-4e51-9a29-f4c571c89f99/android_phone_acceleration"
         assertEquals(
                 listOf(
-                        "$outputFolder/20200128_1300.csv",
-                        "$outputFolder/20200128_1400.csv",
-                        "$outputFolder/schema-application_server_status.json"),
+                        "$firstParticipantOutput/20200128_1300.csv",
+                        "$firstParticipantOutput/20200128_1400.csv",
+                        "$firstParticipantOutput/schema-application_server_status.json",
+                        "$secondParticipantOutput/20200528_1000.csv",
+                        "$secondParticipantOutput/schema-android_phone_acceleration.json"),
                 files)
 
-        sourceClient.removeObject(sourceConfig.bucket, statusFileName.toString())
+        println(targetClient.getObject(targetConfig.bucket, "$firstParticipantOutput/20200128_1300.csv").readBytes().toString(UTF_8))
+
+        val csvContents = """
+                key.projectId,key.userId,key.sourceId,value.time,value.serverStatus,value.ipAddress
+                STAGING_PROJECT,1543bc93-3c17-4381-89a5-c5d6272b827c,99caf236-bbe6-4eed-9c63-fba77349821d,1.58021982003E9,CONNECTED,
+                STAGING_PROJECT,1543bc93-3c17-4381-89a5-c5d6272b827c,99caf236-bbe6-4eed-9c63-fba77349821d,1.58021982003E9,CONNECTED,
+
+                """.trimIndent()
+        assertEquals(csvContents, targetClient.getObject(targetConfig.bucket, "$firstParticipantOutput/20200128_1300.csv")
+                .readBytes()
+                .toString(UTF_8))
+
+        targetFiles.forEach {
+            sourceClient.removeObject(sourceConfig.bucket, it.toString())
+        }
         sourceClient.removeBucket(sourceConfig.bucket)
         files.forEach {
             targetClient.removeObject(targetConfig.bucket, it)

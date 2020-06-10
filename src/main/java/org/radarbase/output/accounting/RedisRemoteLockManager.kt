@@ -16,8 +16,8 @@ class RedisRemoteLockManager(
         logger.info("Managing locks as ID {}", uuid)
     }
 
-    override fun acquireTopicLock(topic: String): RemoteLockManager.RemoteLock? {
-        val lockKey = "$keyPrefix/$topic.lock"
+    override fun acquireLock(name: String): RemoteLockManager.RemoteLock? {
+        val lockKey = "$keyPrefix/$name.lock"
         redisPool.resource.use { redis ->
             return redis.set(lockKey, uuid, setParams)?.let {
                 RemoteLock(lockKey)

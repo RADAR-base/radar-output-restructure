@@ -66,4 +66,96 @@ internal class OffsetIntervalsTest {
             assertTrue(contains(2, futureModified))
         }
     }
+
+    @Test
+    fun testRemoveEnd() {
+        OffsetIntervals().run {
+            add(OffsetRangeSet.Range(0, 2, lastModified))
+            assertTrue(contains(1, lastModified))
+            remove(OffsetRangeSet.Range(1, 2, lastModified))
+
+            assertEquals(listOf(
+                    OffsetRangeSet.Range(0, 0, lastModified)
+            ), toList())
+        }
+    }
+
+    @Test
+    fun testRemoveMultiple() {
+        OffsetIntervals().run {
+            add(OffsetRangeSet.Range(0, 2, lastModified))
+            add(OffsetRangeSet.Range(4, 5, lastModified))
+            remove(OffsetRangeSet.Range(2, 4, lastModified))
+
+            assertEquals(listOf(
+                    OffsetRangeSet.Range(0, 1, lastModified),
+                    OffsetRangeSet.Range(5, 5, lastModified)
+            ), toList())
+        }
+    }
+
+
+    @Test
+    fun testRemoveExact() {
+        OffsetIntervals().run {
+            add(OffsetRangeSet.Range(0, 2, lastModified))
+            add(OffsetRangeSet.Range(4, 5, lastModified))
+            add(OffsetRangeSet.Range(7, 8, lastModified))
+            remove(OffsetRangeSet.Range(4, 5, lastModified))
+
+            assertEquals(listOf(
+                    OffsetRangeSet.Range(0, 2, lastModified),
+                    OffsetRangeSet.Range(7, 8, lastModified)
+            ), toList())
+        }
+    }
+
+
+    @Test
+    fun testRemoveExactMultiple() {
+        OffsetIntervals().run {
+            add(OffsetRangeSet.Range(0, 2, lastModified))
+            add(OffsetRangeSet.Range(4, 5, lastModified))
+            add(OffsetRangeSet.Range(7, 8, lastModified))
+            remove(OffsetRangeSet.Range(4, 7, lastModified))
+
+            assertEquals(listOf(
+                    OffsetRangeSet.Range(0, 2, lastModified),
+                    OffsetRangeSet.Range(8, 8, lastModified)
+            ), toList())
+        }
+    }
+
+    @Test
+    fun testRemoveEmpty() {
+        OffsetIntervals().run {
+            remove(OffsetRangeSet.Range(4, 7, lastModified))
+
+            assertEquals(emptyList<OffsetRangeSet.Range>(), toList())
+        }
+    }
+
+    @Test
+    fun testRemoveMiddle() {
+        OffsetIntervals().run {
+            add(OffsetRangeSet.Range(0, 2, lastModified))
+            remove(OffsetRangeSet.Range(1, 1, lastModified))
+            assertEquals(listOf(
+                OffsetRangeSet.Range(0, 0, lastModified),
+                OffsetRangeSet.Range(2, 2, lastModified)
+            ), toList())
+        }
+    }
+
+
+    @Test
+    fun testRemoveStart() {
+        OffsetIntervals().run {
+            add(OffsetRangeSet.Range(0, 2, lastModified))
+            remove(OffsetRangeSet.Range(0, 0, lastModified))
+            assertEquals(listOf(
+                    OffsetRangeSet.Range(1, 2, lastModified)
+            ), toList())
+        }
+    }
 }

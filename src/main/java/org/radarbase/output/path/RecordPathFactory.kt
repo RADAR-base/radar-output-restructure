@@ -16,18 +16,14 @@
 
 package org.radarbase.output.path
 
-import org.apache.avro.Schema
-import org.apache.avro.Schema.Type
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.Plugin
+import org.radarbase.output.util.TimeUtil
 import org.slf4j.LoggerFactory
 import java.nio.file.Path
 import java.time.Instant
-import java.time.LocalDate
-import java.time.LocalDateTime
 import java.time.ZoneOffset.UTC
 import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
 import java.util.regex.Pattern
 
 abstract class RecordPathFactory : Plugin {
@@ -67,7 +63,7 @@ abstract class RecordPathFactory : Plugin {
             throw IllegalArgumentException("Failed to process $record; no key or value")
         }
 
-        val time = getDate(keyField, valueField)
+        val time = TimeUtil.getDate(keyField, valueField)
 
         val relativePath = getRelativePath(topic, keyField, valueField, time, attempt)
         val outputPath = root.resolve(relativePath)
@@ -118,106 +114,6 @@ abstract class RecordPathFactory : Plugin {
         val HOURLY_TIME_BIN_FORMAT: DateTimeFormatter = DateTimeFormatter
                 .ofPattern("yyyyMMdd_HH'00'")
                 .withZone(UTC)
-
-        /**
-         * Get the date contained in given records
-         * @param keyField key field of the record
-         * @param valueField value field of the record
-         * @return date contained in the values of either record, or `null` if not found or
-         * it cannot be parsed.
-         */
-        fun getDate(keyField: GenericRecord?,
-                    valueField: GenericRecord?): Instant? {
-            var timeField: Schema.Field?
-
-            if (valueField != null) {
-                timeField = valueField.schema.getField("time")
-                if (timeField != null && timeField.schema().type == Type.DOUBLE) {
-                    val time = valueField.get(timeField.pos()) as Double
-                    // Convert from millis to date and apply dateFormat
-                    return Instant.ofEpochMilli((time * 1000.0).toLong())
-                }
-            }
-
-            if (keyField != null) {
-                timeField = keyField.schema.getField("timeStart")
-
-                if (timeField != null && timeField.schema().type == Type.DOUBLE) {
-                    val time = keyField.get(timeField.pos()) as Double
-                    // Convert from millis to date and apply dateFormat
-                    return Instant.ofEpochMilli((time * 1000.0).toLong())
-                }
-
-                // WindowedKey
-                timeField = keyField.schema.getField("start")
-                if (timeField != null && timeField.schema().type == Type.LONG) {
-                    return Instant.ofEpochMilli(keyField.get("start") as Long)
-                }
-            }
-
-            if (valueField != null) {
-                var result = parseDateTime(valueField)
-                if (result != null) {
-                    return result
-                }
-                result = parseDate(valueField)
-                if (result != null) {
-                    return result
-                }
-            }
-
-            return null
-        }
-
-        /**
-         * Parse the dateTime field of a record, if present.
-         *
-         * @param record record that may contain a dateTime field
-         * @return `Instant` representing the dateTime or `null` if the field cannot be
-         * found or parsed.
-         */
-        fun parseDateTime(record: GenericRecord): Instant? {
-            // dateTime
-            val timeField = record.schema.getField("dateTime")
-            if (timeField != null && timeField.schema().type == Type.STRING) {
-                val dateTime = record.get(timeField.pos()).toString()
-                try {
-                    return if (dateTime[dateTime.length - 1] == 'Z') {
-                        Instant.parse(dateTime)
-                    } else {
-                        LocalDateTime.parse(dateTime).toInstant(UTC)
-                    }
-                } catch (ex: DateTimeParseException) {
-                    // try next data type
-                }
-
-            }
-
-            return null
-        }
-
-        /**
-         * Parse the date field of a record, if present.
-         *
-         * @param record record that may contain a date field
-         * @return `Instant` representing the start of given date or `null` if the field
-         * cannot be found or parsed.
-         */
-        fun parseDate(record: GenericRecord): Instant? {
-            // dateTime
-            val timeField = record.schema.getField("date")
-            if (timeField != null && timeField.schema().type == Type.STRING) {
-                val date = record.get(timeField.pos()).toString()
-                try {
-                    return LocalDate.parse(date).atStartOfDay(UTC).toInstant()
-                } catch (ex: DateTimeParseException) {
-                    // no other options
-                }
-
-            }
-
-            return null
-        }
 
         fun sanitizeId(id: Any?, defaultValue: String): String = id
                 ?.let { ILLEGAL_CHARACTER_PATTERN.matcher(it.toString()).replaceAll("") }

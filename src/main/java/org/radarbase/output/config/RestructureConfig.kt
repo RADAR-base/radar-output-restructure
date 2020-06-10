@@ -28,6 +28,8 @@ import java.nio.file.Paths
 data class RestructureConfig(
         /** Whether and how to run as a service. */
         val service: ServiceConfig = ServiceConfig(enable = false),
+        /** Cleaner of old files. */
+        val cleaner: CleanerConfig = CleanerConfig(),
         /** Work limits. */
         val worker: WorkerConfig = WorkerConfig(),
         /** Topic exceptional handling. */
@@ -48,6 +50,9 @@ data class RestructureConfig(
     fun validate() {
         source.validate()
         target.validate()
+        cleaner.validate()
+        service.validate()
+        check(worker.enable || cleaner.enable) { "Either restructuring or cleaning needs to be enabled."}
     }
 
     /** Override configuration using command line arguments. */
@@ -64,6 +69,8 @@ data class RestructureConfig(
         args.format?.let { copy(format = format.copy(type = it)) }
         args.deduplicate?.let { copy(format = format.copy(deduplication = format.deduplication.copy(enable = it))) }
         args.compression?.let { copy(compression = compression.copy(type = it)) }
+        args.clean?.let { copy(cleaner = cleaner.copy(enable = it)) }
+        args.noRestructure?.let { copy(worker = worker.copy(enable = !it)) }
     }
 
     companion object {
@@ -88,17 +95,38 @@ data class RedisConfig(
         /**
          * Prefix to use for creating a lock of a topic.
          */
-        val lockPrefix: String = "radar-output/lock/")
+        val lockPrefix: String = "radar-output/lock")
 
 data class ServiceConfig(
         /** Whether to enable the service mode of this application. */
         val enable: Boolean,
         /** Polling interval in seconds. */
-        val interval: Long = 3600,
+        val interval: Long = 300L,
         /** Age in days after an avro file can be removed. Ignored if not strictly positive. */
-        val deleteAfterDays: Int = -1)
+        val deleteAfterDays: Int = -1) {
+
+    fun validate() {
+        check(interval > 0) { "Cleaner interval must be strictly positive" }
+    }
+}
+
+data class CleanerConfig(
+        /** Whether to enable the cleaner */
+        val enable: Boolean = false,
+        /** How often to run the cleaner */
+        val interval: Long = 1260L,
+        /** Age in days after an avro file can be removed. Must be strictly positive. */
+        val age: Int = 7) {
+
+    fun validate() {
+        check(age > 0) { "Cleaner file age must be strictly positive" }
+        check(interval > 0) { "Cleaner interval must be strictly positive" }
+    }
+}
 
 data class WorkerConfig(
+        /** Whether to enable restructuring */
+        val enable: Boolean = true,
         /** Number of threads to use for processing files. */
         val numThreads: Int = 1,
         /**
@@ -234,9 +262,7 @@ data class HdfsConfig(
     }
 
     fun validate() {
-        if (nameNodes.isEmpty()) {
-            throw IllegalArgumentException("Cannot use HDFS without any name nodes.")
-        }
+        check(nameNodes.isNotEmpty()) { "Cannot use HDFS without any name nodes." }
     }
 }
 
