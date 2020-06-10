@@ -1,6 +1,5 @@
 package org.radarbase.output.source
 
-import org.radarbase.output.accounting.OffsetRangeSet
 import org.radarbase.output.accounting.TopicPartitionOffsetRange
 import java.nio.file.Path
 import java.time.Instant
@@ -17,4 +16,4 @@ data class TopicFile(val topic: String, val path: Path, val lastModified: Instan
     val size: Long? = range.range.size
 }
 
-data class SimpleFileStatus(val path: Path, val isDirectory: Boolean, val lastModified: Instant)
+data class SimpleFileStatus(val path: Path, val isDirectory: Boolean, val lastModified: Instant?)

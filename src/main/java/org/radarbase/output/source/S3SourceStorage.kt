@@ -16,11 +16,11 @@ class S3SourceStorage(
 ): SourceStorage {
     override val walker: SourceStorageWalker = GeneralSourceStorageWalker(this)
 
-    override fun list(path: Path): Sequence<SimpleFileStatus> = s3Client.listObjects(bucket, path.toString())
+    override fun list(path: Path): Sequence<SimpleFileStatus> = s3Client.listObjects(bucket, "$path/", false)
             .asSequence()
             .map {
                 val item = it.get()
-                SimpleFileStatus(Paths.get(item.objectName()), item.isDir, item.lastModified().toInstant())
+                SimpleFileStatus(Paths.get(item.objectName()), item.isDir, if (item.isDir) null else item.lastModified().toInstant())
             }
 
     override fun delete(path: Path) {

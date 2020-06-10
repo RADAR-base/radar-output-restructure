@@ -10,6 +10,7 @@ interface SourceStorage {
     fun createReader(): SourceStorageReader
     /** List all files in the given directory. */
     fun list(path: Path): Sequence<SimpleFileStatus>
+
     /** Delete given file. Will not delete any directories. */
     fun delete(path: Path)
     /** Find records and topics. */
