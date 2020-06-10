@@ -13,7 +13,7 @@ import java.time.temporal.ChronoUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.LongAdder
 
-class KafkaCleaner(
+class SourceDataCleaner(
         private val fileStoreFactory: FileStoreFactory
 ) : Closeable {
     private val isClosed = AtomicBoolean(false)
@@ -117,7 +117,7 @@ class KafkaCleaner(
     }
 
     companion object {
-        private val logger = LoggerFactory.getLogger(KafkaCleaner::class.java)
+        private val logger = LoggerFactory.getLogger(SourceDataCleaner::class.java)
     }
 }
 

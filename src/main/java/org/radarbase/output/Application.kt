@@ -31,7 +31,7 @@ import org.radarbase.output.target.TargetStorageFactory
 import org.radarbase.output.util.ProgressBar.Companion.format
 import org.radarbase.output.util.Timer
 import org.radarbase.output.worker.FileCacheStore
-import org.radarbase.output.cleaner.KafkaCleaner
+import org.radarbase.output.cleaner.SourceDataCleaner
 import org.radarbase.output.worker.RadarKafkaRestructure
 import org.slf4j.LoggerFactory
 import redis.clients.jedis.JedisPool
@@ -132,7 +132,7 @@ class Application(
 
         try {
             val numberFormat = NumberFormat.getNumberInstance()
-            KafkaCleaner(this).use { cleaner ->
+            SourceDataCleaner(this).use { cleaner ->
                 for (input in config.paths.inputs) {
                     logger.info("Cleaning {}", input)
                     cleaner.process(input.toString())
@@ -141,12 +141,10 @@ class Application(
                         numberFormat.format(cleaner.deletedFileCount.sum()),
                         timeStart.durationSince().format())
             }
-        } catch (ex: Exception) {
-            logger.error("Failed to clean records", ex)
-        } catch (ex: IOException) {
-            logger.error("Cleaning failed", ex)
         } catch (e: InterruptedException) {
             logger.error("Cleaning interrupted")
+        } catch (ex: Exception) {
+            logger.error("Failed to clean records", ex)
         } finally {
             if (Timer.isEnabled) {
                 logger.info("{}", Timer)
@@ -172,12 +170,10 @@ class Application(
                         numberFormat.format(restructure.processedRecordsCount.sum()),
                         timeStart.durationSince().format())
             }
-        } catch (ex: Exception) {
-            logger.error("Failed to process records", ex)
-        } catch (ex: IOException) {
-            logger.error("Processing failed", ex)
         } catch (e: InterruptedException) {
             logger.error("Processing interrupted")
+        } catch (ex: Exception) {
+            logger.error("Failed to process records", ex)
         } finally {
             // Print timings and reset the timings for the next iteration.
             if (Timer.isEnabled) {
