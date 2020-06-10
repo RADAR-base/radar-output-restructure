@@ -156,25 +156,12 @@ class RadarKafkaRestructure(
             .map { kafkaStorage.delete(it.path) }
             .count()
 
-    private fun findTopicPaths(path: Path): Sequence<Path> {
-        val fileStatuses = kafkaStorage.list(path)
-        val avroFile = fileStatuses.find {  !it.isDirectory && it.path.fileName.toString().endsWith(".avro", true) }
-
-        return if (avroFile != null) {
-            sequenceOf(avroFile.path.parent.parent)
-        } else {
-            fileStatuses.asSequence()
-                    .filter { it.isDirectory && it.path.fileName.toString() != "+tmp" }
-                    .flatMap { findTopicPaths(it.path) }
-        }
-    }
-
     private fun findRecordPaths(topic: String, path: Path): Sequence<TopicFile> = kafkaStorage.list(path)
             .flatMap { status ->
                 val filename = status.path.fileName.toString()
                 when {
                     status.isDirectory && filename != "+tmp" -> findRecordPaths(topic, status.path)
-                    filename.endsWith(".avro") -> sequenceOf(TopicFile(topic, status.path, status.lastModified))
+                    !status.isDirectory && filename.endsWith(".avro") -> sequenceOf(TopicFile(topic, status.path, status.lastModified ?: Instant.now()))
                     else -> emptySequence()
                 }
             }
@@ -183,7 +170,7 @@ class RadarKafkaRestructure(
         isClosed.set(true)
     }
 
-    private fun getTopicPaths(path: Path): List<Path> = findTopicPaths(path)
+    private fun getTopicPaths(path: Path): List<Path> = kafkaStorage.findTopicPaths(path)
                 .distinct()
                 .filter { it.fileName.toString() !in excludeTopics }
                 .toMutableList()

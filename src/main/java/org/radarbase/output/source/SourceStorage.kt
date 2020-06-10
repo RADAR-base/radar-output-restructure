@@ -10,6 +10,18 @@ interface SourceStorage {
     fun reader(): SourceStorageReader
     /** List all files in the given directory. */
     fun list(path: Path): Sequence<SimpleFileStatus>
+    /** List all topic paths in the given directory. */
+    fun findTopicPaths(path: Path): Sequence<Path> {
+        val fileStatuses = list(path)
+        val avroFile = fileStatuses.find {  !it.isDirectory && it.path.fileName.toString().endsWith(".avro", true) }
+        return if (avroFile != null) {
+            sequenceOf(avroFile.path.parent.parent)
+        } else {
+            fileStatuses.asSequence()
+                    .filter { it.isDirectory && it.path.fileName.toString() != "+tmp" }
+                    .flatMap { findTopicPaths(it.path) }
+        }
+    }
     /** Delete given file. Will not delete any directories. */
     fun delete(path: Path)
 

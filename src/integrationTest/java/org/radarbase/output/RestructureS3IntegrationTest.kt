@@ -38,7 +38,8 @@ class RestructureS3IntegrationTest {
 
         val resourceFiles = listOf(
                 "application_server_status/partition=1/application_server_status+1+0000000018+0000000020.avro",
-                "application_server_status/partition=1/application_server_status+1+0000000021.avro"
+                "application_server_status/partition=1/application_server_status+1+0000000021.avro",
+                "android_phone_acceleration/partition=0/android_phone_acceleration+0+0003018784.avro"
         )
         val targetFiles = resourceFiles.map { Paths.get("in/$it") }
         resourceFiles.forEachIndexed { i, resourceFile ->
@@ -56,14 +57,18 @@ class RestructureS3IntegrationTest {
 
         application.redisPool.resource.use { redis ->
             assertEquals(1L, redis.del("offsets/application_server_status.json"))
+            assertEquals(1L, redis.del("offsets/android_phone_acceleration.json"))
         }
 
-        val outputFolder = "output/STAGING_PROJECT/1543bc93-3c17-4381-89a5-c5d6272b827c/application_server_status"
+        val firstParticipantOutput = "output/STAGING_PROJECT/1543bc93-3c17-4381-89a5-c5d6272b827c/application_server_status"
+        val secondParticipantOutput = "output/radar-test-root/4ab9b985-6eec-4e51-9a29-f4c571c89f99/android_phone_acceleration"
         assertEquals(
                 listOf(
-                        "$outputFolder/20200128_1300.csv",
-                        "$outputFolder/20200128_1400.csv",
-                        "$outputFolder/schema-application_server_status.json"),
+                        "$firstParticipantOutput/20200128_1300.csv",
+                        "$firstParticipantOutput/20200128_1400.csv",
+                        "$firstParticipantOutput/schema-application_server_status.json",
+                        "$secondParticipantOutput/20200528_1000.csv",
+                        "$secondParticipantOutput/schema-android_phone_acceleration.json"),
                 files)
 
         targetFiles.forEach {
