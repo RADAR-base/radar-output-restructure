@@ -4,10 +4,7 @@ import io.minio.PutObjectOptions
 import io.minio.PutObjectOptions.MAX_PART_SIZE
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
-import org.radarbase.output.config.PathConfig
-import org.radarbase.output.config.ResourceConfig
-import org.radarbase.output.config.RestructureConfig
-import org.radarbase.output.config.S3Config
+import org.radarbase.output.config.*
 import org.radarbase.output.util.Timer
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Paths
@@ -29,7 +26,8 @@ class RestructureS3IntegrationTest {
         val config = RestructureConfig(
                 source = ResourceConfig("s3", s3 = sourceConfig),
                 target = ResourceConfig("s3", s3 = targetConfig),
-                paths = PathConfig(inputs = listOf(Paths.get("in")))
+                paths = PathConfig(inputs = listOf(Paths.get("in"))),
+                worker = WorkerConfig(minimumFileAge = 0L)
         )
         val application = Application(config)
         val sourceClient = sourceConfig.createS3Client()
