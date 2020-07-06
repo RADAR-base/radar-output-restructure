@@ -20,11 +20,13 @@ import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.OffsetRangeSet
 import org.radarbase.output.source.TopicFileList
+import org.radarbase.output.util.TimeUtil.durationSince
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.IOException
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.time.Duration
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.LongAdder
 
@@ -39,16 +41,27 @@ import java.util.concurrent.atomic.LongAdder
 class RadarKafkaRestructure(
         private val fileStoreFactory: FileStoreFactory
 ): Closeable {
-    private val maxFilesPerTopic: Int = fileStoreFactory.config.worker.maxFilesPerTopic ?: Int.MAX_VALUE
     private val sourceStorage = fileStoreFactory.sourceStorage
 
     private val lockManager = fileStoreFactory.remoteLockManager
-    private val excludeTopics: Set<String> = fileStoreFactory.config.topics
-            .mapNotNullTo(HashSet()) { (topic, conf) ->
-                topic.takeIf { conf.exclude }
-            }
 
     private val isClosed = AtomicBoolean(false)
+
+    private val excludeTopics: Set<String>
+    private val maxFilesPerTopic: Int
+    private val minimumFileAge: Duration
+
+    init {
+        val config = fileStoreFactory.config
+        excludeTopics = config.topics
+                .mapNotNullTo(HashSet()) { (topic, conf) ->
+                    topic.takeIf { conf.exclude }
+                }
+
+        val workerConfig = config.worker
+        maxFilesPerTopic = workerConfig.maxFilesPerTopic ?: Int.MAX_VALUE
+        minimumFileAge = Duration.ofSeconds(workerConfig.minimumFileAge.coerceAtLeast(0L))
+    }
 
     val processedFileCount = LongAdder()
     val processedRecordsCount = LongAdder()
@@ -103,7 +116,8 @@ class RadarKafkaRestructure(
         return RestructureWorker(sourceStorage, accountant, fileStoreFactory, isClosed).use { worker ->
             try {
                 val topicPaths = TopicFileList(topic, sourceStorage.walker.walkRecords(topic, topicPath)
-                        .filter { f -> !seenFiles.contains(f.range) }
+                        .filter { f -> !seenFiles.contains(f.range)
+                                && f.lastModified.durationSince() >= minimumFileAge }
                         .take(maxFilesPerTopic)
                         .toList())
 

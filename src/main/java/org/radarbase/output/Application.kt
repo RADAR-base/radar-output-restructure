@@ -32,6 +32,7 @@ import org.radarbase.output.util.ProgressBar.Companion.format
 import org.radarbase.output.util.Timer
 import org.radarbase.output.worker.FileCacheStore
 import org.radarbase.output.cleaner.SourceDataCleaner
+import org.radarbase.output.util.TimeUtil.durationSince
 import org.radarbase.output.worker.RadarKafkaRestructure
 import org.slf4j.LoggerFactory
 import redis.clients.jedis.JedisPool
@@ -186,8 +187,6 @@ class Application(
     companion object {
         private val logger = LoggerFactory.getLogger(Application::class.java)
         const val CACHE_SIZE_DEFAULT = 100
-
-        private fun Temporal.durationSince() = Duration.between(this, Instant.now())
 
         private fun parseArgs(args: Array<String>): CommandLineArgs {
             val commandLineArgs = CommandLineArgs()
