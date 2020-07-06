@@ -19,6 +19,7 @@ package org.radarbase.output.cleaner
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.util.Timer.time
+import org.slf4j.LoggerFactory
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.nio.file.Path
@@ -60,13 +61,19 @@ class TimestampFileCacheStore(private val factory: FileStoreFactory) {
                     }
 
             time("cleaner.contains") {
-                if (fileCache.contains(record)) FindResult.FOUND else FindResult.NOT_FOUND
+                if (fileCache.contains(record)) FindResult.FOUND else {
+                    logger.warn("Target {} does not contain record {}", path, record)
+                    FindResult.NOT_FOUND
+                }
             }
         } catch (ex: FileNotFoundException) {
+            logger.warn("Target {} for {} has not been created yet.", path, record)
             FindResult.FILE_NOT_FOUND
         } catch (ex: IllegalArgumentException) {
+            logger.warn("Schema of {} does not match schema of record {}: {}", path, record, ex.message)
             FindResult.BAD_SCHEMA
         } catch (ex: IndexOutOfBoundsException) {
+            logger.warn("Schema of {} does not match schema of record {} (wrong number of columns)", path, record)
             FindResult.BAD_SCHEMA
         }
     }
@@ -94,5 +101,9 @@ class TimestampFileCacheStore(private val factory: FileStoreFactory) {
         BAD_SCHEMA,
         NOT_FOUND,
         FOUND
+    }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(TimestampFileCacheStore::class.java)
     }
 }
