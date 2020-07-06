@@ -3,6 +3,7 @@ package org.radarbase.output.worker
 import com.fasterxml.jackson.databind.JsonMappingException
 import org.apache.avro.file.DataFileReader
 import org.apache.avro.file.SeekableInput
+import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericDatumReader
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.FileStoreFactory
@@ -176,8 +177,11 @@ internal class RestructureWorker(
 
         fun <T> extractRecords(input: SeekableInput, processing: (Sequence<GenericRecord>) -> T): T {
             var tmpRecord: GenericRecord? = null
+            val genericData = GenericData().apply {
+                isFastReaderEnabled = true
+            }
 
-            return DataFileReader(input, GenericDatumReader<GenericRecord>()).use { reader ->
+            return DataFileReader(input, GenericDatumReader<GenericRecord>(null, null, genericData)).use { reader ->
                 processing(generateSequence {
                     time("read") {
                         if (reader.hasNext()) reader.next(tmpRecord) else null

@@ -61,7 +61,7 @@ class TimestampExtractionCheck(
                     TimestampFileCacheStore.FindResult.BAD_SCHEMA -> suffix += 1  // continue next suffix
                 }
             } catch (ex: IOException) {
-                logger.error("Failed to read target file for checking data integrity", ex)
+                logger.error("Failed to read target file {} for checking data integrity", path, ex)
                 return false
             }
         } while (true)

@@ -53,7 +53,9 @@ class TimestampFileCache(
         if (header != null) {
             val recordHeader = converterFactory.headerFor(record)
             if (!recordHeader.contentEquals(header)) {
-                throw IllegalArgumentException("Header mismatch")
+                throw IllegalArgumentException(
+                        "Header mismatch: record header ${recordHeader.contentToString()}" +
+                                " does not match target header ${header.contentToString()}")
             }
         }
 
