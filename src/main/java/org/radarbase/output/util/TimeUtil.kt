@@ -4,11 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import java.math.RoundingMode
-import java.time.Instant
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.ZoneOffset
+import java.time.*
 import java.time.format.DateTimeParseException
+import java.time.temporal.Temporal
 
 object TimeUtil {
     private val NANO_MULTIPLIER = 1_000_000_000.toBigDecimal()
@@ -143,4 +141,7 @@ object TimeUtil {
     fun Instant.toDouble() = (epochSecond.toBigDecimal()
             + (nano.toBigDecimal().divide(NANO_MULTIPLIER, 9, RoundingMode.HALF_UP))
             ).toDouble()
+
+
+    fun Temporal.durationSince(): Duration = Duration.between(this, Instant.now())
 }
