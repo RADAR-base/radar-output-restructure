@@ -55,19 +55,10 @@ class TimestampExtractionCheck(
 
             try {
                 when (cacheStore.contains(path, record)) {
-                    TimestampFileCacheStore.FindResult.FILE_NOT_FOUND -> {
-                        logger.warn("Target {} for {} has not been created yet.", path, record)
-                        return false
-                    }
-                    TimestampFileCacheStore.FindResult.NOT_FOUND -> {
-                        logger.warn("Target {} does not contain record {}", path, record)
-                        return false
-                    }
+                    TimestampFileCacheStore.FindResult.FILE_NOT_FOUND -> return false
+                    TimestampFileCacheStore.FindResult.NOT_FOUND -> return false
                     TimestampFileCacheStore.FindResult.FOUND -> return true
-                    TimestampFileCacheStore.FindResult.BAD_SCHEMA -> {
-                        logger.warn("Schema of {} does not match schema of record {}", path, record)
-                        suffix += 1
-                    }  // continue next suffix
+                    TimestampFileCacheStore.FindResult.BAD_SCHEMA -> suffix += 1  // continue next suffix
                 }
             } catch (ex: IOException) {
                 logger.error("Failed to read target file {} for checking data integrity", path, ex)
