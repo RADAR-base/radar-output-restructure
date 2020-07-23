@@ -20,10 +20,10 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
-import org.radarbase.output.accounting.TopicPartitionOffsetRange
 import org.radarbase.output.accounting.OffsetFilePersistence
 import org.radarbase.output.accounting.OffsetPersistenceFactory
 import org.radarbase.output.accounting.TopicPartition
+import org.radarbase.output.accounting.TopicPartitionOffsetRange
 import org.radarbase.output.config.LocalConfig
 import org.radarbase.output.target.LocalTargetStorage
 import org.radarbase.output.target.TargetStorage

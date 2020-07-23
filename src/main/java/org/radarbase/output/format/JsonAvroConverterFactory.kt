@@ -1,14 +1,10 @@
 package org.radarbase.output.format
 
-import com.fasterxml.jackson.databind.JsonNode
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.compression.Compression
 import org.radarbase.output.format.JsonAvroConverter.Companion.JSON_READER
 import org.radarbase.output.format.JsonAvroConverter.Companion.JSON_WRITER
 import org.radarbase.output.util.TimeUtil.getDate
-import org.radarbase.output.util.TimeUtil.parseDate
-import org.radarbase.output.util.TimeUtil.parseDateTime
-import org.radarbase.output.util.TimeUtil.toDouble
 import java.io.*
 import java.nio.file.Files
 import java.nio.file.Path

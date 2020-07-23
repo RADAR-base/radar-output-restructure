@@ -4,7 +4,6 @@ import org.apache.hadoop.fs.FSDataOutputStream
 import org.apache.hadoop.fs.FileSystem
 import org.apache.hadoop.fs.Path
 import org.slf4j.LoggerFactory
-import java.lang.Exception
 
 class HdfsRemoteLockManager(
         private val fileSystem: FileSystem,

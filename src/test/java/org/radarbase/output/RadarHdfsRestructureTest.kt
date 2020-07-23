@@ -21,7 +21,6 @@ import org.apache.avro.generic.GenericRecordBuilder
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.radarbase.output.path.ObservationKeyPathFactory
-import org.radarbase.output.path.RecordPathFactory
 import org.radarbase.output.util.TimeUtil.getDate
 
 class RadarHdfsRestructureTest {

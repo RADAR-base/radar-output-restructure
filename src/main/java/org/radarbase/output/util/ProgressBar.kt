@@ -19,8 +19,6 @@ package org.radarbase.output.util
 import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Progress bar.
