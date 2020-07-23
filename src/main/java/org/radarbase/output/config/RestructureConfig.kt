@@ -3,6 +3,7 @@ package org.radarbase.output.config
 import com.azure.core.credential.BasicAuthenticationCredential
 import com.azure.storage.blob.BlobServiceClient
 import com.azure.storage.blob.BlobServiceClientBuilder
+import com.azure.storage.common.StorageSharedKeyCredential
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.minio.MinioClient
 import org.apache.hadoop.conf.Configuration
@@ -329,11 +330,23 @@ data class S3Config(
 data class AzureConfig(
         val endpoint: String,
         val container: String,
-        val username: String,
-        val password: String
+        val username: String?,
+        val password: String?,
+        val accountName: String?,
+        val accountKey: String?,
+        val sasToken: String?
 ) {
-    fun createAzureClient(): BlobServiceClient = BlobServiceClientBuilder()
-            .endpoint(endpoint)
-            .credential(BasicAuthenticationCredential(username, password))
-            .buildClient()
+    fun createAzureClient(): BlobServiceClient = BlobServiceClientBuilder().apply {
+        endpoint(endpoint)
+        when {
+            username != null && password != null -> credential(BasicAuthenticationCredential(username, password))
+            accountName != null && accountKey != null -> credential(StorageSharedKeyCredential(accountName, accountKey))
+            sasToken != null -> sasToken(sasToken)
+            else -> logger.warn("No Azure credentials supplied. Assuming a public blob storage.")
+        }
+    }.buildClient()
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(AzureConfig::class.java)
+    }
 }

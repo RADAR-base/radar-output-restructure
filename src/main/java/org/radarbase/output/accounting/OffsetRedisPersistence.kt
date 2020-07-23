@@ -18,6 +18,7 @@ package org.radarbase.output.accounting
 
 import com.fasterxml.jackson.databind.ObjectReader
 import com.fasterxml.jackson.databind.ObjectWriter
+import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.radarbase.output.util.PostponedWriter
@@ -95,8 +96,10 @@ class OffsetRedisPersistence(
                 val ranges: List<OffsetRangeSet.Range>)
 
         private val logger = LoggerFactory.getLogger(OffsetRedisPersistence::class.java)
-        private val mapper = jacksonObjectMapper()
-                .registerModule(JavaTimeModule())
+        private val mapper = jacksonObjectMapper().apply {
+            registerModule(JavaTimeModule())
+            configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false)
+        }
         val redisOffsetWriter: ObjectWriter = mapper.writerFor(RedisOffsetRangeSet::class.java)
         val redisOffsetReader: ObjectReader = mapper.readerFor(RedisOffsetRangeSet::class.java)
     }

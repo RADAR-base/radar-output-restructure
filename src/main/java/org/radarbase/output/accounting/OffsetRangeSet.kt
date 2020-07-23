@@ -16,6 +16,7 @@
 
 package org.radarbase.output.accounting
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import org.radarbase.output.util.FunctionalValue
 import org.radarbase.output.util.LockedFunctionalValue
 import org.radarbase.output.util.ReadOnlyFunctionalValue
@@ -164,6 +165,7 @@ class OffsetRangeSet {
 
 
     data class Range(val from: Long, val to: Long?, val lastProcessed: Instant = Instant.now()) {
+        @JsonIgnore
         val size: Long? = to?.let { it - from + 1 }
         fun ensureToOffset(): Range = if (to == null) copy(to = from) else this
         override fun toString() = "($from - $to, $lastProcessed)"
