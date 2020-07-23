@@ -19,7 +19,7 @@ class AzureSourceStorage(
 
     override fun list(path: Path): Sequence<SimpleFileStatus> = blobContainerClient.listBlobsByHierarchy("$path/")
             .asSequence()
-            .map { SimpleFileStatus(Paths.get(it.name), it.isPrefix, it.properties.lastModified.toInstant()) }
+            .map { SimpleFileStatus(Paths.get(it.name), it.isPrefix ?: false, it.properties?.lastModified?.toInstant()) }
 
     override fun delete(path: Path) {
         blobContainerClient.getBlobClient(path.toKey())
@@ -38,7 +38,7 @@ class AzureSourceStorage(
 
             blobContainerClient
                     .getBlobClient(file.path.toKey())
-                    .downloadToFile(fileName.toString())
+                    .downloadToFile(fileName.toString(), true)
 
             return object : SeekableFileInput(fileName.toFile()) {
                 override fun close() {

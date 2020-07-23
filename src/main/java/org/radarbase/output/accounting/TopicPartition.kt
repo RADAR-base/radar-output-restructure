@@ -16,7 +16,7 @@
 
 package org.radarbase.output.accounting
 
-import java.util.Objects
+import java.util.*
 
 @Suppress("EqualsOrHashCode")
 data class TopicPartition(val topic: String, val partition: Int) : Comparable<TopicPartition> {

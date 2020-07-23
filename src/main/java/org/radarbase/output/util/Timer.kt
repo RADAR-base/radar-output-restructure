@@ -16,12 +16,12 @@
 
 package org.radarbase.output.util
 
+import org.radarbase.output.util.ProgressBar.Companion.appendTime
 import java.time.Duration
+import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.atomic.LongAdder
-import org.radarbase.output.util.ProgressBar.Companion.appendTime
-import java.util.*
 
 /** Timer for multi-threaded timings. The timer may be disabled to increase program performance.  */
 object Timer {

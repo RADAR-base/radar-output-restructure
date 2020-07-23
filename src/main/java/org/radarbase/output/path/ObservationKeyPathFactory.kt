@@ -16,10 +16,10 @@
 
 package org.radarbase.output.path
 
+import org.apache.avro.generic.GenericRecord
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Instant
-import org.apache.avro.generic.GenericRecord
 
 open class ObservationKeyPathFactory : RecordPathFactory() {
     override fun getRelativePath(topic: String, key: GenericRecord,

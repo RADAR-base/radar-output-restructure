@@ -18,14 +18,25 @@ package org.radarbase.output.format
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
-import java.nio.file.Files
-import java.nio.file.Path
-import java.util.LinkedHashSet
-import java.util.regex.Pattern
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.compression.Compression
 import java.io.*
-import java.time.Instant
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.*
+import java.util.regex.Pattern
+import kotlin.collections.ArrayList
+import kotlin.collections.Collection
+import kotlin.collections.List
+import kotlin.collections.Map
+import kotlin.collections.MutableList
+import kotlin.collections.Set
+import kotlin.collections.component1
+import kotlin.collections.component2
+import kotlin.collections.emptySet
+import kotlin.collections.iterator
+import kotlin.collections.toTypedArray
+import kotlin.collections.withIndex
 
 interface RecordConverterFactory : Format {
     /**

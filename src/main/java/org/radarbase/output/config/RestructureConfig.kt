@@ -3,23 +3,19 @@ package org.radarbase.output.config
 import com.azure.core.credential.BasicAuthenticationCredential
 import com.azure.storage.blob.BlobServiceClient
 import com.azure.storage.blob.BlobServiceClientBuilder
+import com.azure.storage.common.StorageSharedKeyCredential
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.minio.MinioClient
 import org.apache.hadoop.conf.Configuration
 import org.radarbase.output.Application.Companion.CACHE_SIZE_DEFAULT
 import org.radarbase.output.Plugin
-import org.radarbase.output.path.ObservationKeyPathFactory
 import org.radarbase.output.compression.Compression
 import org.radarbase.output.compression.CompressionFactory
 import org.radarbase.output.format.FormatFactory
 import org.radarbase.output.format.RecordConverterFactory
+import org.radarbase.output.path.ObservationKeyPathFactory
 import org.radarbase.output.path.RecordPathFactory
-import org.radarbase.output.target.AzureTargetStorage
-import org.radarbase.output.target.LocalTargetStorage
-import org.radarbase.output.target.S3TargetStorage
-import org.radarbase.output.target.TargetStorage
 import org.slf4j.LoggerFactory
-import java.lang.IllegalStateException
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
@@ -329,11 +325,23 @@ data class S3Config(
 data class AzureConfig(
         val endpoint: String,
         val container: String,
-        val username: String,
-        val password: String
+        val username: String?,
+        val password: String?,
+        val accountName: String?,
+        val accountKey: String?,
+        val sasToken: String?
 ) {
-    fun createAzureClient(): BlobServiceClient = BlobServiceClientBuilder()
-            .endpoint(endpoint)
-            .credential(BasicAuthenticationCredential(username, password))
-            .buildClient()
+    fun createAzureClient(): BlobServiceClient = BlobServiceClientBuilder().apply {
+        endpoint(endpoint)
+        when {
+            !username.isNullOrEmpty() && !password.isNullOrEmpty() -> credential(BasicAuthenticationCredential(username, password))
+            !accountName.isNullOrEmpty() && !accountKey.isNullOrEmpty() -> credential(StorageSharedKeyCredential(accountName, accountKey))
+            !sasToken.isNullOrEmpty() -> sasToken(sasToken)
+            else -> logger.warn("No Azure credentials supplied. Assuming a public blob storage.")
+        }
+    }.buildClient()
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(AzureConfig::class.java)
+    }
 }

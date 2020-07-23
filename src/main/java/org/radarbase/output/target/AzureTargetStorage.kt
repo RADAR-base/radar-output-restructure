@@ -24,7 +24,6 @@ import org.radarbase.output.util.toKey
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.io.InputStream
-import java.lang.Exception
 import java.nio.file.Files
 import java.nio.file.Path
 

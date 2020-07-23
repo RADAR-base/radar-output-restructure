@@ -5,8 +5,7 @@ import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericFixed
 import org.apache.avro.generic.GenericRecord
 import java.nio.ByteBuffer
-import java.util.ArrayList
-import java.util.HashMap
+import java.util.*
 
 class JsonAvroDataConverter {
     fun convertRecord(record: GenericRecord): Map<String, Any?> {

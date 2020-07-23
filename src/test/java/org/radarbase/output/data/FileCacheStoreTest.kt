@@ -16,8 +16,8 @@
 
 package org.radarbase.output.data
 
-import com.nhaarman.mockitokotlin2.mock
 import com.nhaarman.mockitokotlin2.check
+import com.nhaarman.mockitokotlin2.mock
 import com.nhaarman.mockitokotlin2.times
 import com.nhaarman.mockitokotlin2.verify
 import org.apache.avro.SchemaBuilder
@@ -29,9 +29,9 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.radarbase.output.Application
 import org.radarbase.output.accounting.Accountant
-import org.radarbase.output.accounting.TopicPartitionOffsetRange
 import org.radarbase.output.accounting.OffsetRangeSet
 import org.radarbase.output.accounting.TopicPartition
+import org.radarbase.output.accounting.TopicPartitionOffsetRange
 import org.radarbase.output.config.*
 import org.radarbase.output.worker.FileCacheStore
 import java.io.IOException

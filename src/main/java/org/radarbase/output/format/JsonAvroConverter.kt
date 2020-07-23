@@ -21,7 +21,6 @@ import com.fasterxml.jackson.core.JsonGenerator
 import com.fasterxml.jackson.core.util.MinimalPrettyPrinter
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.avro.generic.GenericRecord
-import java.io.BufferedReader
 import java.io.IOException
 import java.io.Writer
 

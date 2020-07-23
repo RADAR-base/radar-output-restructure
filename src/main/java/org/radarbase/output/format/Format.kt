@@ -16,7 +16,7 @@
 
 package org.radarbase.output.format
 
-import java.util.Locale
+import java.util.*
 
 interface Format {
     val formats: Collection<String>

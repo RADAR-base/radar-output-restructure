@@ -7,12 +7,24 @@ service:
 # Source data resource
 # @since: 0.7.0
 source:
-  type: s3  # hdfs or s3
+  type: s3  # hdfs, azure or s3
   s3:
     endpoint: http://localhost:9000  # using AWS S3 endpoint is also possible.
     bucket: radar
     accessToken: minioadmin
     secretKey: minioadmin
+  azure:
+    endpoint: https://MyBlobStorageAccount.blob.core.windows.net
+    # when using personal login
+    #username: User
+    #password: Password
+    # when using shared access tokens
+    #accountName: MyBlobStorageAccount
+    #accountKey: MyLongToken
+    # when using a specially made SAS token
+    #sasToken: MyLongToken
+    # if no credentials are supplied, this only works with a publicly writable blob storage
+    container: MySourceContainer
   # only actually needed if source type is hdfs
   hdfs:
     nameNodes: [hdfs-namenode-1, hdfs-namenode-2]
@@ -20,12 +32,24 @@ source:
 # Target data resource
 # @since: 0.7.0
 target:
-  type: s3  # s3 or local
+  type: s3  # s3, azure or local
   s3:
     endpoint: http://localhost:9000
     bucket: out
     accessToken: minioadmin
     secretKey: minioadmin
+  azure:
+    endpoint: https://MyBlobStorageAccount.blob.core.windows.net
+    # when using personal login
+    #username: User
+    #password: Password
+    # when using shared access tokens
+    #accountName: MyBlobStorageAccount
+    #accountKey: MyLongToken
+    # when using a specially made SAS token
+    #sasToken: MyLongToken
+    # if no credentials are supplied, this only works with a publicly writable blob storage
+    container: MyTargetContainer
   # only actually needed if target type is local
   local:
     userId: 1000  # write as regular user, use -1 to use current user (default).
@@ -102,7 +126,7 @@ paths:
   # Output directory in target
   output: /output
   # Output path construction factory
-  factory: org.radarbase.output.path.MonthlyObservationKeyPathFactory
+  #factory: org.radarbase.output.path.MonthlyObservationKeyPathFactory
   # Additional properties
   # properties: {}
 
