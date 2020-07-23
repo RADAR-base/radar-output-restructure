@@ -339,9 +339,9 @@ data class AzureConfig(
     fun createAzureClient(): BlobServiceClient = BlobServiceClientBuilder().apply {
         endpoint(endpoint)
         when {
-            username != null && password != null -> credential(BasicAuthenticationCredential(username, password))
-            accountName != null && accountKey != null -> credential(StorageSharedKeyCredential(accountName, accountKey))
-            sasToken != null -> sasToken(sasToken)
+            !username.isNullOrEmpty() && !password.isNullOrEmpty() -> credential(BasicAuthenticationCredential(username, password))
+            !accountName.isNullOrEmpty() && !accountKey.isNullOrEmpty() -> credential(StorageSharedKeyCredential(accountName, accountKey))
+            !sasToken.isNullOrEmpty() -> sasToken(sasToken)
             else -> logger.warn("No Azure credentials supplied. Assuming a public blob storage.")
         }
     }.buildClient()
