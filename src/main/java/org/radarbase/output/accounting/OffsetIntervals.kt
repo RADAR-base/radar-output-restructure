@@ -179,7 +179,7 @@ class OffsetIntervals {
     private fun insert(index: Int, from: Long, to: Long, lastModified: Instant) {
         offsetsFrom.insert(index, from)
         offsetsTo.insert(index, to)
-        if (index >= lastProcessed.size) {
+        if (index > lastProcessed.size) {
             lastProcessed.add(lastModified)
         } else {
             lastProcessed.add(index, lastModified)
