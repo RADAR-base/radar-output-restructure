@@ -29,17 +29,15 @@ import org.radarbase.output.source.SourceStorage
 import org.radarbase.output.source.SourceStorageFactory
 import org.radarbase.output.target.TargetStorage
 import org.radarbase.output.target.TargetStorageFactory
-import org.radarbase.output.util.ProgressBar.Companion.format
-import org.radarbase.output.util.TimeUtil.durationSince
 import org.radarbase.output.util.Timer
 import org.radarbase.output.worker.FileCacheStore
+import org.radarbase.output.worker.Job
 import org.radarbase.output.worker.RadarKafkaRestructure
 import org.slf4j.LoggerFactory
 import redis.clients.jedis.JedisPool
 import java.io.IOException
 import java.nio.file.Files
 import java.text.NumberFormat
-import java.time.Instant
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
@@ -71,6 +69,11 @@ class Application(
 
     override val offsetPersistenceFactory: OffsetPersistenceFactory = OffsetRedisPersistence(redisHolder)
 
+    private val jobs = listOf(
+            Job("restructure", config.worker.enable, config.service.interval, ::runRestructure),
+            Job("clean", config.cleaner.enable, config.cleaner.interval, ::runCleaner))
+            .filter { it.isEnabled }
+
     @Throws(IOException::class)
     override fun newFileCacheStore(accountant: Accountant) = FileCacheStore(this, accountant)
 
@@ -88,12 +91,7 @@ class Application(
         if (config.service.enable) {
             runService()
         } else {
-            if (config.worker.enable) {
-                runRestructure()
-            }
-            if (config.cleaner.enable) {
-                runCleaner()
-            }
+            jobs.forEach { it.run() }
         }
     }
 
@@ -102,15 +100,7 @@ class Application(
         logger.info("Press Ctrl+C to exit...")
         val executorService = Executors.newSingleThreadScheduledExecutor()
 
-        if (config.worker.enable) {
-            executorService.scheduleAtFixedRate(::runRestructure,
-                    config.service.interval / 4, config.service.interval, TimeUnit.SECONDS)
-        }
-
-        if (config.cleaner.enable) {
-            executorService.scheduleAtFixedRate(::runCleaner,
-                    config.cleaner.interval / 4, config.cleaner.interval, TimeUnit.SECONDS)
-        }
+        jobs.forEach { it.schedule(executorService) }
 
         try {
             Thread.sleep(java.lang.Long.MAX_VALUE)
@@ -127,58 +117,30 @@ class Application(
     }
 
     private fun runCleaner() {
-        val timeStart = Instant.now()
-
-        try {
-            val numberFormat = NumberFormat.getNumberInstance()
-            SourceDataCleaner(this).use { cleaner ->
-                for (input in config.paths.inputs) {
-                    logger.info("Cleaning {}", input)
-                    cleaner.process(input.toString())
-                }
-                logger.info("Cleaned up {} files in {}",
-                        numberFormat.format(cleaner.deletedFileCount.sum()),
-                        timeStart.durationSince().format())
+        val numberFormat = NumberFormat.getNumberInstance()
+        SourceDataCleaner(this).use { cleaner ->
+            for (input in config.paths.inputs) {
+                logger.info("Cleaning {}", input)
+                cleaner.process(input.toString())
             }
-        } catch (e: InterruptedException) {
-            logger.error("Cleaning interrupted")
-        } catch (ex: Exception) {
-            logger.error("Failed to clean records", ex)
-        } finally {
-            if (Timer.isEnabled) {
-                logger.info("{}", Timer)
-                Timer.reset()
-            }
+            logger.info("Cleaned up {} files",
+                    numberFormat.format(cleaner.deletedFileCount.sum()))
         }
     }
 
     private fun runRestructure() {
-        val timeStart = Instant.now()
-        try {
-            val numberFormat = NumberFormat.getNumberInstance()
+        val numberFormat = NumberFormat.getNumberInstance()
 
-            RadarKafkaRestructure(this).use { restructure ->
-                for (input in config.paths.inputs) {
-                    logger.info("In:  {}", input)
-                    logger.info("Out: {}", pathFactory.root)
-                    restructure.process(input.toString())
-                }
+        RadarKafkaRestructure(this).use { restructure ->
+            for (input in config.paths.inputs) {
+                logger.info("In:  {}", input)
+                logger.info("Out: {}", pathFactory.root)
+                restructure.process(input.toString())
+            }
 
-                logger.info("Processed {} files and {} records in {}",
-                        numberFormat.format(restructure.processedFileCount.sum()),
-                        numberFormat.format(restructure.processedRecordsCount.sum()),
-                        timeStart.durationSince().format())
-            }
-        } catch (e: InterruptedException) {
-            logger.error("Processing interrupted")
-        } catch (ex: Exception) {
-            logger.error("Failed to process records", ex)
-        } finally {
-            // Print timings and reset the timings for the next iteration.
-            if (Timer.isEnabled) {
-                logger.info("{}", Timer)
-                Timer.reset()
-            }
+            logger.info("Processed {} files and {} records",
+                    numberFormat.format(restructure.processedFileCount.sum()),
+                    numberFormat.format(restructure.processedRecordsCount.sum()))
         }
     }
 
