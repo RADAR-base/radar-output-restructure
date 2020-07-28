@@ -37,7 +37,10 @@ class S3SourceStorage(
             val tags = s3Client.getObjectTags(GetObjectTagsArgs.Builder().objectBuild(bucket, status.path))
             val endOffset = tags.get()["endOffset"]?.toLongOrNull()
             if (endOffset != null) {
-                topicFile = topicFile.copy(range = topicFile.range.mapRange { it.copy(to = endOffset) })
+                topicFile = topicFile.copy(
+                        range = topicFile.range.mapRange {
+                            it.copy(to = endOffset)
+                        })
             }
         }
 

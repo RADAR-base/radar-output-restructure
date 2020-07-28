@@ -9,7 +9,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 
-
 class AzureSourceStorage(
         client: BlobServiceClient,
         container: String,
@@ -21,6 +20,28 @@ class AzureSourceStorage(
     override fun list(path: Path): Sequence<SimpleFileStatus> = blobContainerClient.listBlobsByHierarchy("$path/")
             .asSequence()
             .map { SimpleFileStatus(Paths.get(it.name), it.isPrefix ?: false, it.properties?.lastModified?.toInstant()) }
+
+
+    override fun createTopicFile(topic: String, status: SimpleFileStatus): TopicFile {
+        var topicFile = super.createTopicFile(topic, status)
+
+        if (topicFile.range.range.to == null) {
+            try {
+                val endOffset = blobClient(topicFile.path).properties.metadata["endOffset"]?.toLongOrNull()
+
+                if (endOffset != null) {
+                    topicFile = topicFile.copy(
+                            range = topicFile.range.mapRange {
+                                it.copy(to = endOffset)
+                            })
+                }
+            } catch (ex: Exception) {
+                // never mind
+            }
+        }
+
+        return topicFile
+    }
 
     override fun delete(path: Path) {
         blobClient(path).delete()
