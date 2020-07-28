@@ -1,10 +1,13 @@
 package org.radarbase.output.source
 
-import io.minio.MinioClient
+import io.minio.*
 import org.apache.avro.file.SeekableFileInput
 import org.apache.avro.file.SeekableInput
 import org.radarbase.output.util.TemporaryDirectory
-import org.radarbase.output.util.toKey
+import org.radarbase.output.util.bucketBuild
+import org.radarbase.output.util.objectBuild
+import org.slf4j.LoggerFactory
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -16,7 +19,11 @@ class S3SourceStorage(
 ): SourceStorage {
     override val walker: SourceStorageWalker = GeneralSourceStorageWalker(this)
 
-    override fun list(path: Path): Sequence<SimpleFileStatus> = s3Client.listObjects(bucket, "$path/", false)
+    override fun list(path: Path): Sequence<SimpleFileStatus> = s3Client.listObjects(
+            ListObjectsArgs.Builder().bucketBuild(bucket) {
+                prefix("$path/")
+                recursive(false)
+            })
             .asSequence()
             .map {
                 val item = it.get()
@@ -24,7 +31,7 @@ class S3SourceStorage(
             }
 
     override fun delete(path: Path) {
-        s3Client.removeObject(bucket, path.toKey())
+        s3Client.removeObject(RemoveObjectArgs.Builder().objectBuild(bucket, path))
     }
 
     override fun createReader(): SourceStorage.SourceStorageReader = S3SourceStorageReader()
@@ -33,12 +40,24 @@ class S3SourceStorage(
         private val tempDir = TemporaryDirectory(tempPath, "worker-")
 
         override fun newInput(file: TopicFile): SeekableInput {
-            val fileName = Files.createTempFile(tempDir.path, "${file.topic}-${file.path.fileName}", ".avro")
-            s3Client.getObject(bucket, file.path.toKey(), fileName.toString())
-            return object : SeekableFileInput(fileName.toFile()) {
+            val tempFile = Files.createTempFile(tempDir.path, "${file.topic}-${file.path.fileName}", ".avro")
+
+            try {
+                Files.newOutputStream(tempFile).use { out ->
+                    s3Client.getObject(GetObjectArgs.Builder().objectBuild(bucket, file.path)).copyTo(out)
+                }
+            } catch (ex: IOException) {
+                try {
+                    Files.delete(tempFile)
+                } catch (ex: IOException) {
+                    logger.warn("Failed to delete temporary file {}", tempFile)
+                }
+                throw ex
+            }
+            return object : SeekableFileInput(tempFile.toFile()) {
                 override fun close() {
                     super.close()
-                    Files.deleteIfExists(fileName)
+                    Files.deleteIfExists(tempFile)
                 }
             }
         }
@@ -46,5 +65,9 @@ class S3SourceStorage(
         override fun close() {
             tempDir.close()
         }
+    }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(S3SourceStorage::class.java)
     }
 }

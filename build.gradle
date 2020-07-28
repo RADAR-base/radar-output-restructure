@@ -28,7 +28,7 @@ ext {
     jCommanderVersion = '1.78'
     almworksVersion = '1.1.1'
     junitVersion = '5.6.1'
-    minioVersion = '7.0.1'
+    minioVersion = '7.1.0'
     jedisVersion = '3.2.0'
     azureStorageVersion = '12.6.0'
 }
@@ -84,6 +84,11 @@ compileKotlin {
     }
 }
 compileTestKotlin {
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+}
+compileIntegrationTestKotlin {
     kotlinOptions {
         jvmTarget = "1.8"
     }

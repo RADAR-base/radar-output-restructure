@@ -16,14 +16,14 @@ class AzureSourceStorage(
         private val tempPath: Path
 ): SourceStorage {
     private val blobContainerClient = client.getBlobContainerClient(container)
+    private fun blobClient(path: Path) = blobContainerClient.getBlobClient(path.toKey())
 
     override fun list(path: Path): Sequence<SimpleFileStatus> = blobContainerClient.listBlobsByHierarchy("$path/")
             .asSequence()
             .map { SimpleFileStatus(Paths.get(it.name), it.isPrefix ?: false, it.properties?.lastModified?.toInstant()) }
 
     override fun delete(path: Path) {
-        blobContainerClient.getBlobClient(path.toKey())
-                .delete()
+        blobClient(path).delete()
     }
 
     override val walker: SourceStorageWalker = GeneralSourceStorageWalker(this)
@@ -36,8 +36,7 @@ class AzureSourceStorage(
         override fun newInput(file: TopicFile): SeekableInput {
             val fileName = Files.createTempFile(tempDir.path, "${file.topic}-${file.path.fileName}", ".avro")
 
-            blobContainerClient
-                    .getBlobClient(file.path.toKey())
+            blobClient(file.path)
                     .downloadToFile(fileName.toString(), true)
 
             return object : SeekableFileInput(fileName.toFile()) {

@@ -319,7 +319,10 @@ data class S3Config(
         val secretKey: String,
         /** Bucket name. */
         val bucket: String) {
-    fun createS3Client() = MinioClient(endpoint, accessToken, secretKey)
+    fun createS3Client() = MinioClient.Builder()
+            .endpoint(endpoint)
+            .credentials(accessToken, secretKey)
+            .build()
 }
 
 data class AzureConfig(

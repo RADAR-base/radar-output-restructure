@@ -1,11 +1,13 @@
 package org.radarbase.output
 
-import io.minio.PutObjectOptions
+import io.minio.*
 import io.minio.PutObjectOptions.MAX_PART_SIZE
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.radarbase.output.config.*
 import org.radarbase.output.util.Timer
+import org.radarbase.output.util.bucketBuild
+import org.radarbase.output.util.objectBuild
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Paths
 
@@ -31,8 +33,8 @@ class RestructureS3IntegrationTest {
         )
         val application = Application(config)
         val sourceClient = sourceConfig.createS3Client()
-        if (!sourceClient.bucketExists(sourceConfig.bucket)) {
-            sourceClient.makeBucket(sourceConfig.bucket)
+        if (!sourceClient.bucketExists(BucketExistsArgs.Builder().bucketBuild(sourceConfig.bucket))) {
+            sourceClient.makeBucket(MakeBucketArgs.Builder().bucketBuild(sourceConfig.bucket))
         }
 
         val resourceFiles = listOf(
@@ -43,14 +45,18 @@ class RestructureS3IntegrationTest {
         val targetFiles = resourceFiles.map { Paths.get("in/$it") }
         resourceFiles.forEachIndexed { i, resourceFile ->
             javaClass.getResourceAsStream("/$resourceFile").use { statusFile ->
-                sourceClient.putObject(sourceConfig.bucket, targetFiles[i].toString(), statusFile, PutObjectOptions(-1, MAX_PART_SIZE))
+                sourceClient.putObject(PutObjectArgs.Builder().objectBuild(sourceConfig.bucket, targetFiles[i]) {
+                    stream(statusFile, -1, MAX_PART_SIZE)
+                })
             }
         }
 
         application.start()
 
         val targetClient = targetConfig.createS3Client()
-        val files = targetClient.listObjects(targetConfig.bucket, "output")
+        val files = targetClient.listObjects(ListObjectsArgs.Builder().bucketBuild(targetConfig.bucket) {
+                    prefix("output")
+                })
                 .map { it.get().objectName() }
                 .toList()
 
@@ -70,7 +76,11 @@ class RestructureS3IntegrationTest {
                         "$secondParticipantOutput/schema-android_phone_acceleration.json"),
                 files)
 
-        println(targetClient.getObject(targetConfig.bucket, "$firstParticipantOutput/20200128_1300.csv").readBytes().toString(UTF_8))
+        println(targetClient.getObject(GetObjectArgs.builder()
+                .bucketBuild(targetConfig.bucket) {
+                    `object`("$firstParticipantOutput/20200128_1300.csv")
+                }
+        ).readBytes().toString(UTF_8))
 
         val csvContents = """
                 key.projectId,key.userId,key.sourceId,value.time,value.serverStatus,value.ipAddress
@@ -78,18 +88,24 @@ class RestructureS3IntegrationTest {
                 STAGING_PROJECT,1543bc93-3c17-4381-89a5-c5d6272b827c,99caf236-bbe6-4eed-9c63-fba77349821d,1.58021982003E9,CONNECTED,
 
                 """.trimIndent()
-        assertEquals(csvContents, targetClient.getObject(targetConfig.bucket, "$firstParticipantOutput/20200128_1300.csv")
+        assertEquals(csvContents, targetClient.getObject(GetObjectArgs.Builder()
+                .bucketBuild(targetConfig.bucket) {
+                    `object`("$firstParticipantOutput/20200128_1300.csv")
+                })
                 .readBytes()
                 .toString(UTF_8))
 
         targetFiles.forEach {
-            sourceClient.removeObject(sourceConfig.bucket, it.toString())
+            sourceClient.removeObject(RemoveObjectArgs.Builder()
+                    .objectBuild(sourceConfig.bucket, it))
         }
-        sourceClient.removeBucket(sourceConfig.bucket)
+        sourceClient.removeBucket(RemoveBucketArgs.Builder().bucketBuild(sourceConfig.bucket))
         files.forEach {
-            targetClient.removeObject(targetConfig.bucket, it)
+            targetClient.removeObject(RemoveObjectArgs.Builder().bucketBuild(targetConfig.bucket) {
+                `object`(it)
+            })
         }
-        targetClient.removeBucket(targetConfig.bucket)
+        targetClient.removeBucket(RemoveBucketArgs.Builder().bucketBuild(targetConfig.bucket))
 
         println(Timer)
     }
