@@ -23,6 +23,7 @@ class S3SourceStorage(
             ListObjectsArgs.Builder().bucketBuild(bucket) {
                 prefix("$path/")
                 recursive(false)
+                useUrlEncodingType(false)
             })
             .asSequence()
             .map {

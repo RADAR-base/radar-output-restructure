@@ -56,6 +56,8 @@ class RestructureS3IntegrationTest {
         val targetClient = targetConfig.createS3Client()
         val files = targetClient.listObjects(ListObjectsArgs.Builder().bucketBuild(targetConfig.bucket) {
                     prefix("output")
+                    recursive(true)
+                    useUrlEncodingType(false)
                 })
                 .map { it.get().objectName() }
                 .toList()
