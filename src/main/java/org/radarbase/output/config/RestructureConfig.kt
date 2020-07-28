@@ -107,9 +107,9 @@ data class ServiceConfig(
 }
 
 data class CleanerConfig(
-        /** Whether to enable the cleaner */
+        /** Whether to enable the cleaner. */
         val enable: Boolean = false,
-        /** How often to run the cleaner */
+        /** How often to run the cleaner in seconds. */
         val interval: Long = 1260L,
         /** Age in days after an avro file can be removed. Must be strictly positive. */
         val age: Int = 7) {
