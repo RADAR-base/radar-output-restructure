@@ -11,8 +11,8 @@ data class TopicFileList(val topic: String, val files: List<TopicFile>) {
     val numberOfFiles: Int = this.files.size
 }
 
-data class TopicFile(val topic: String, val path: Path, val lastModified: Instant) {
-    val range: TopicPartitionOffsetRange = TopicPartitionOffsetRange.parseFilename(path.fileName.toString(), lastModified)
+data class TopicFile(val topic: String, val path: Path, val lastModified: Instant, val range: TopicPartitionOffsetRange) {
+    constructor(topic: String, path: Path, lastModified: Instant) : this(topic, path, lastModified, TopicPartitionOffsetRange.parseFilename(path.fileName.toString(), lastModified))
     val size: Long? = range.range.size
 }
 

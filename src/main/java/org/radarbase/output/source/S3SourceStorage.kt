@@ -30,6 +30,19 @@ class S3SourceStorage(
                 SimpleFileStatus(Paths.get(item.objectName()), item.isDir, if (item.isDir) null else item.lastModified().toInstant())
             }
 
+    override fun createTopicFile(topic: String, status: SimpleFileStatus): TopicFile {
+        val topicFile = super.createTopicFile(topic, status)
+        return if (topicFile.range.range.to == null) {
+            val tags = s3Client.getObjectTags(GetObjectTagsArgs.Builder().objectBuild(bucket, status.path))
+            val endOffset = tags.get()["endOffset"]?.toLongOrNull()
+            if (endOffset != null) {
+                topicFile.copy(range = topicFile.range.mapRange { it.copy(to = endOffset) })
+            } else {
+                topicFile
+            }
+        } else topicFile
+    }
+
     override fun delete(path: Path) {
         s3Client.removeObject(RemoveObjectArgs.Builder().objectBuild(bucket, path))
     }

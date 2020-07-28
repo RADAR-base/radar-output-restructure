@@ -3,6 +3,7 @@ package org.radarbase.output.source
 import org.apache.avro.file.SeekableInput
 import java.io.Closeable
 import java.nio.file.Path
+import java.time.Instant
 
 /** Source storage type. */
 interface SourceStorage {
@@ -13,6 +14,10 @@ interface SourceStorage {
 
     /** Delete given file. Will not delete any directories. */
     fun delete(path: Path)
+    fun createTopicFile(topic: String, status: SimpleFileStatus): TopicFile {
+        return TopicFile(topic, status.path, status.lastModified ?: Instant.now())
+    }
+
     /** Find records and topics. */
     val walker: SourceStorageWalker
 
