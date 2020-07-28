@@ -54,7 +54,7 @@ class RestructureS3IntegrationTest {
                 .map { it.get().objectName() }
                 .toList()
 
-        application.redisPool.resource.use { redis ->
+        application.redisHolder.execute { redis ->
             assertEquals(1L, redis.del("offsets/application_server_status.json"))
             assertEquals(1L, redis.del("offsets/android_phone_acceleration.json"))
         }

@@ -65,11 +65,11 @@ class Application(
 
     override val targetStorage: TargetStorage = TargetStorageFactory(config.target).createTargetStorage()
 
-    override val redisPool: JedisPool = JedisPool(config.redis.uri)
+    override val redisHolder: RedisHolder = RedisHolder(JedisPool(config.redis.uri))
     override val remoteLockManager: RemoteLockManager = RedisRemoteLockManager(
-            redisPool, config.redis.lockPrefix)
+            redisHolder, config.redis.lockPrefix)
 
-    override val offsetPersistenceFactory: OffsetPersistenceFactory = OffsetRedisPersistence(redisPool)
+    override val offsetPersistenceFactory: OffsetPersistenceFactory = OffsetRedisPersistence(redisHolder)
 
     @Throws(IOException::class)
     override fun newFileCacheStore(accountant: Accountant) = FileCacheStore(this, accountant)
