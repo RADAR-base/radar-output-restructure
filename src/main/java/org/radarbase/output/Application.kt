@@ -42,6 +42,8 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.LongAdder
+import kotlin.Long.Companion.MAX_VALUE
 import kotlin.system.exitProcess
 
 /** Main application.  */
@@ -103,12 +105,12 @@ class Application(
         jobs.forEach { it.schedule(executorService) }
 
         try {
-            Thread.sleep(java.lang.Long.MAX_VALUE)
+            Thread.sleep(MAX_VALUE)
         } catch (e: InterruptedException) {
             logger.info("Interrupted, shutting down...")
             executorService.shutdownNow()
             try {
-                executorService.awaitTermination(java.lang.Long.MAX_VALUE, TimeUnit.SECONDS)
+                executorService.awaitTermination(MAX_VALUE, TimeUnit.SECONDS)
                 Thread.currentThread().interrupt()
             } catch (ex: InterruptedException) {
                 logger.info("Interrupted again...")
@@ -117,20 +119,17 @@ class Application(
     }
 
     private fun runCleaner() {
-        val numberFormat = NumberFormat.getNumberInstance()
         SourceDataCleaner(this).use { cleaner ->
             for (input in config.paths.inputs) {
                 logger.info("Cleaning {}", input)
                 cleaner.process(input.toString())
             }
             logger.info("Cleaned up {} files",
-                    numberFormat.format(cleaner.deletedFileCount.sum()))
+                    cleaner.deletedFileCount.format())
         }
     }
 
     private fun runRestructure() {
-        val numberFormat = NumberFormat.getNumberInstance()
-
         RadarKafkaRestructure(this).use { restructure ->
             for (input in config.paths.inputs) {
                 logger.info("In:  {}", input)
@@ -139,14 +138,17 @@ class Application(
             }
 
             logger.info("Processed {} files and {} records",
-                    numberFormat.format(restructure.processedFileCount.sum()),
-                    numberFormat.format(restructure.processedRecordsCount.sum()))
+                    restructure.processedFileCount.format(),
+                    restructure.processedRecordsCount.format())
         }
     }
 
     companion object {
         private val logger = LoggerFactory.getLogger(Application::class.java)
         const val CACHE_SIZE_DEFAULT = 100
+
+        private fun LongAdder.format(): String =
+                NumberFormat.getNumberInstance().format(sum())
 
         private fun parseArgs(args: Array<String>): CommandLineArgs {
             val commandLineArgs = CommandLineArgs()
