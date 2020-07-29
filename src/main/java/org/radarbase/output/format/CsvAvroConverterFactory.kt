@@ -8,6 +8,7 @@ import org.radarbase.output.util.TimeUtil.parseDate
 import org.radarbase.output.util.TimeUtil.parseDateTime
 import org.radarbase.output.util.TimeUtil.parseTime
 import org.radarbase.output.util.TimeUtil.toDouble
+import org.slf4j.LoggerFactory
 import java.io.*
 import java.nio.file.Files
 import java.nio.file.Path
@@ -19,24 +20,49 @@ class CsvAvroConverterFactory: RecordConverterFactory {
 
     @Throws(IOException::class)
     override fun deduplicate(fileName: String, source: Path, target: Path, compression: Compression, distinctFields: Set<String>, ignoreFields: Set<String>) {
-        val (header, lines) = Files.newInputStream(source).use {
-            processLines(it, compression) { header, lines ->
-                Pair(header, lines.toList())
+        val (header, lineIndexes) = Files.newInputStream(source).use { input ->
+            processLines(input, compression) { header, lines ->
+                if (header == null) return
+                val fields = fieldIndexes(header, distinctFields, ignoreFields)
+                var count = 0
+                val lineMap = lines
+                        .onEach { count += 1 }
+                        .mapIndexed { i, line -> Pair(ArrayWrapper(line.byIndex(fields)), i) }
+                        .toMap(HashMap())
+
+                if (lineMap.size == count) {
+                    logger.debug("File {} is already deduplicated. Skipping.", fileName)
+                    return
+                }
+
+                Pair(header, lineMap.values
+                        .toIntArray()
+                        .apply { sort() })
             }
         }
 
-        if (header == null) return
+        Files.newInputStream(source).use { input ->
+            processLines(input, compression) { _, lines ->
+                var indexIndex = 0
+                writeLines(target, fileName, compression, sequenceOf(header) + lines.filterIndexed { i, _ ->
+                    if (indexIndex < lineIndexes.size && lineIndexes[indexIndex] == i) {
+                        indexIndex += 1
+                        true
+                    } else false
+                })
+            }
+        }
+    }
 
-        val indexes = fieldIndexes(header, distinctFields, ignoreFields)
-        val distinct = lines.distinctByLast { line -> ArrayWrapper(line.byIndex(indexes)) }
-
+    private fun writeLines(target: Path, fileName: String, compression: Compression, lines: Sequence<Array<String>>) {
         Files.newOutputStream(target).use { fileOut ->
             BufferedOutputStream(fileOut).use { bufOut ->
                 compression.compress(fileName, bufOut).use { zipOut ->
                     OutputStreamWriter(zipOut).use { writer ->
                         CSVWriter(writer).use { csvWriter ->
-                            csvWriter.writeNext(header, false)
-                            csvWriter.writeAll(distinct, false)
+                            lines.forEach {
+                                csvWriter.writeNext(it, false)
+                            }
                         }
                     }
                 }
@@ -45,15 +71,14 @@ class CsvAvroConverterFactory: RecordConverterFactory {
     }
 
     private val fieldTimeParsers = listOf(
-            Pair<String, (String) -> Double?>("value.time", { it.parseTime() }),
-            Pair<String, (String) -> Double?>("key.timeStart", { it.parseTime() }),
-            Pair<String, (String) -> Double?>("key.start", { it.parseTime() }),
-            Pair<String, (String) -> Double?>("value.dateTime", { it.parseDateTime()?.toDouble() }),
-            Pair<String, (String) -> Double?>("value.date", { it.parseDate()?.toDouble() }),
-            Pair<String, (String) -> Double?>("value.timeReceived", { it.parseTime() }),
-            Pair<String, (String) -> Double?>("value.timeReceived", { it.parseTime() }),
-            Pair<String, (String) -> Double?>("value.timeCompleted", { it.parseTime() })
-    )
+            fieldTimeParser("value.time") { it.parseTime() },
+            fieldTimeParser("key.timeStart") { it.parseTime() },
+            fieldTimeParser("key.start") { it.parseTime() },
+            fieldTimeParser("value.dateTime") { it.parseDateTime()?.toDouble() },
+            fieldTimeParser("value.date") { it.parseDate()?.toDouble() },
+            fieldTimeParser("value.timeReceived") { it.parseTime() },
+            fieldTimeParser("value.timeReceived") { it.parseTime() },
+            fieldTimeParser("value.timeCompleted") { it.parseTime() })
 
     override fun readTimeSeconds(source: InputStream, compression: Compression): Pair<Array<String>, List<Double>>? {
         return processLines(source, compression) { header, lines ->
@@ -107,6 +132,10 @@ class CsvAvroConverterFactory: RecordConverterFactory {
     override val hasHeader: Boolean = true
 
     companion object {
+        private val logger = LoggerFactory.getLogger(CsvAvroConverterFactory::class.java)
+
+        private fun fieldTimeParser(name: String, method: (String) -> Double?) = Pair(name, method)
+
         private inline fun <T> processLines(
                 input: InputStream,
                 compression: Compression,
@@ -116,30 +145,13 @@ class CsvAvroConverterFactory: RecordConverterFactory {
                 BufferedReader(inReader).use { bufReader ->
                     CSVReader(bufReader).use { csvReader ->
                         val header = csvReader.readNext()
-                        val lines = if (header == null) emptySequence() else generateSequence { csvReader.readNext() }
+                        val lines = if (header != null) {
+                            generateSequence { csvReader.readNext() }
+                        } else emptySequence()
                         process(header, lines)
                     }
                 }
             }
-        }
-
-
-        /**
-         * Make a copy of the current list that only contains distinct entries.
-         * For duplicate entries, the last entry in the list is selected. Being distinct is
-         * determined by the provided mapping.
-         * @param <T> type of data.
-         * @param <V> type that is mapped to for distinguishing. This type should have valid
-         *            hashCode and equals implementations.
-         */
-        private inline fun <T, V> List<T>.distinctByLast(mapping: (T) -> V): List<T> {
-            val map: MutableMap<V, Int> = HashMap()
-            forEachIndexed { i, v ->
-                map[mapping(v)] = i
-            }
-            return map.values.toIntArray()
-                    .apply { sort() }
-                    .map { i -> this[i] }
         }
 
         private fun fieldIndexes(
