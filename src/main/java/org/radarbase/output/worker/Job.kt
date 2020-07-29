@@ -9,9 +9,15 @@ import java.util.concurrent.Future
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 
-class Job(val name: String, val isEnabled: Boolean, val intervalSeconds: Long, val work: () -> Unit) {
+class Job(
+        val name: String,
+        val isEnabled: Boolean,
+        private val intervalSeconds: Long,
+        val work: () -> Unit
+) {
     fun run() {
         val timeStart = Instant.now()
+        logger.info("Job {} started", name)
         try {
             work()
             logger.info("Job {} completed in {}", name, timeStart.durationSince().format())
@@ -27,12 +33,12 @@ class Job(val name: String, val isEnabled: Boolean, val intervalSeconds: Long, v
         }
     }
 
-    fun schedule(executorService: ScheduledExecutorService): Future<*> {
-        return executorService.scheduleAtFixedRate(::run,
-                intervalSeconds / 4,
-                intervalSeconds,
-                TimeUnit.SECONDS)
-    }
+    fun schedule(
+            executorService: ScheduledExecutorService
+    ): Future<*> = executorService.scheduleAtFixedRate(::run,
+            intervalSeconds / 4,
+            intervalSeconds,
+            TimeUnit.SECONDS)
 
     companion object {
         private val logger = LoggerFactory.getLogger(Job::class.java)
