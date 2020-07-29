@@ -318,20 +318,32 @@ data class S3Config(
         /** Secret key belonging to access token. */
         val secretKey: String,
         /** Bucket name. */
-        val bucket: String) {
-    fun createS3Client() = MinioClient.Builder()
+        val bucket: String,
+        /** If no endOffset is in the filename, read it from object tags. */
+        val endOffsetFromTags: Boolean = false
+) {
+    fun createS3Client(): MinioClient = MinioClient.Builder()
             .endpoint(endpoint)
             .credentials(accessToken, secretKey)
             .build()
 }
 
 data class AzureConfig(
+        /** URL to reach object store at. */
         val endpoint: String,
+        /** Name of the Azure Blob Storage container. */
         val container: String,
+        /** If no endOffset is in the filename, read it from object metadata. */
+        val endOffsetFromMetadata: Boolean = false,
+        /** Azure username. */
         val username: String?,
+        /** Azure password. */
         val password: String?,
+        /** Shared Azure Blob Storage account name. */
         val accountName: String?,
+        /** Shared Azure Blob Storage account key. */
         val accountKey: String?,
+        /** Azure SAS token for a configured service. */
         val sasToken: String?
 ) {
     fun createAzureClient(): BlobServiceClient = BlobServiceClientBuilder().apply {

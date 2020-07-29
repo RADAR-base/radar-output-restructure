@@ -3,6 +3,7 @@ package org.radarbase.output.source
 import io.minio.*
 import org.apache.avro.file.SeekableFileInput
 import org.apache.avro.file.SeekableInput
+import org.radarbase.output.config.S3Config
 import org.radarbase.output.util.TemporaryDirectory
 import org.radarbase.output.util.bucketBuild
 import org.radarbase.output.util.objectBuild
@@ -14,10 +15,12 @@ import java.nio.file.Paths
 
 class S3SourceStorage(
         private val s3Client: MinioClient,
-        private val bucket: String,
+        config: S3Config,
         private val tempPath: Path
 ): SourceStorage {
     override val walker: SourceStorageWalker = GeneralSourceStorageWalker(this)
+    private val bucket = config.bucket
+    private val readEndOffset = config.endOffsetFromTags
 
     override fun list(path: Path): Sequence<SimpleFileStatus> = s3Client.listObjects(
             ListObjectsArgs.Builder().bucketBuild(bucket) {
@@ -34,14 +37,18 @@ class S3SourceStorage(
     override fun createTopicFile(topic: String, status: SimpleFileStatus): TopicFile {
         var topicFile = super.createTopicFile(topic, status)
 
-        if (topicFile.range.range.to == null) {
-            val tags = s3Client.getObjectTags(GetObjectTagsArgs.Builder().objectBuild(bucket, status.path))
-            val endOffset = tags.get()["endOffset"]?.toLongOrNull()
-            if (endOffset != null) {
-                topicFile = topicFile.copy(
-                        range = topicFile.range.mapRange {
-                            it.copy(to = endOffset)
-                        })
+        if (readEndOffset && topicFile.range.range.to == null) {
+            try {
+                val tags = s3Client.getObjectTags(GetObjectTagsArgs.Builder().objectBuild(bucket, status.path))
+                val endOffset = tags.get()["endOffset"]?.toLongOrNull()
+                if (endOffset != null) {
+                    topicFile = topicFile.copy(
+                            range = topicFile.range.mapRange {
+                                it.copy(to = endOffset)
+                            })
+                }
+            } catch (ex: Exception) {
+                // skip reading end offset
             }
         }
 

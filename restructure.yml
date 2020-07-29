@@ -13,6 +13,9 @@ source:
     bucket: radar
     accessToken: minioadmin
     secretKey: minioadmin
+    # If true, try to read the metadata property "endOffset" to determine the
+    # final offset of an input object.
+    #endOffsetFromTags: false
   azure:
     endpoint: https://MyBlobStorageAccount.blob.core.windows.net
     # when using personal login
@@ -25,6 +28,9 @@ source:
     #sasToken: MyLongToken
     # if no credentials are supplied, this only works with a publicly writable blob storage
     container: MySourceContainer
+    # If true, try to read the metadata property "endOffset" to determine the
+    # final offset of an input object.
+    #endOffsetFromMetadata: false
   # only actually needed if source type is hdfs
   hdfs:
     nameNodes: [hdfs-namenode-1, hdfs-namenode-2]

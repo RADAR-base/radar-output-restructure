@@ -3,6 +3,7 @@ package org.radarbase.output.source
 import com.azure.storage.blob.BlobServiceClient
 import org.apache.avro.file.SeekableFileInput
 import org.apache.avro.file.SeekableInput
+import org.radarbase.output.config.AzureConfig
 import org.radarbase.output.util.TemporaryDirectory
 import org.radarbase.output.util.toKey
 import java.nio.file.Files
@@ -11,10 +12,12 @@ import java.nio.file.Paths
 
 class AzureSourceStorage(
         client: BlobServiceClient,
-        container: String,
+        config: AzureConfig,
         private val tempPath: Path
 ): SourceStorage {
-    private val blobContainerClient = client.getBlobContainerClient(container)
+    private val blobContainerClient = client.getBlobContainerClient(config.container)
+    private val readOffsetFromMetadata = config.endOffsetFromMetadata
+
     private fun blobClient(path: Path) = blobContainerClient.getBlobClient(path.toKey())
 
     override fun list(path: Path): Sequence<SimpleFileStatus> = blobContainerClient.listBlobsByHierarchy("$path/")
@@ -25,7 +28,7 @@ class AzureSourceStorage(
     override fun createTopicFile(topic: String, status: SimpleFileStatus): TopicFile {
         var topicFile = super.createTopicFile(topic, status)
 
-        if (topicFile.range.range.to == null) {
+        if (readOffsetFromMetadata && topicFile.range.range.to == null) {
             try {
                 val endOffset = blobClient(topicFile.path).properties.metadata["endOffset"]?.toLongOrNull()
 
@@ -36,7 +39,7 @@ class AzureSourceStorage(
                             })
                 }
             } catch (ex: Exception) {
-                // never mind
+                // skip reading end offset
             }
         }
 

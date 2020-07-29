@@ -20,7 +20,7 @@ class SourceStorageFactory(private val resourceConfig: ResourceConfig, private v
         ResourceType.S3 -> {
             val s3Config = requireNotNull(resourceConfig.s3)
             val minioClient = requireNotNull(s3SourceClient)
-            S3SourceStorage(minioClient, s3Config.bucket, tempPath)
+            S3SourceStorage(minioClient, s3Config, tempPath)
         }
         ResourceType.HDFS -> {
             val hdfsConfig = requireNotNull(resourceConfig.hdfs)
@@ -29,8 +29,8 @@ class SourceStorageFactory(private val resourceConfig: ResourceConfig, private v
         }
         ResourceType.AZURE -> {
             val azureClient = requireNotNull(azureSourceClient)
-            val config = requireNotNull(resourceConfig.azure)
-            AzureSourceStorage(azureClient, config.container, tempPath)
+            val azureConfig = requireNotNull(resourceConfig.azure)
+            AzureSourceStorage(azureClient, azureConfig, tempPath)
         }
         else -> throw IllegalStateException("Cannot create kafka storage for type ${resourceConfig.sourceType}")
     }
