@@ -61,19 +61,13 @@ class TimestampFileCacheStore(private val factory: FileStoreFactory) {
                     }
 
             time("cleaner.contains") {
-                if (fileCache.contains(record)) FindResult.FOUND else {
-                    logger.warn("Target {} does not contain record {}", path, record)
-                    FindResult.NOT_FOUND
-                }
+                if (fileCache.contains(record)) FindResult.FOUND else FindResult.NOT_FOUND
             }
         } catch (ex: FileNotFoundException) {
-            logger.warn("Target {} for {} has not been created yet.", path, record)
             FindResult.FILE_NOT_FOUND
         } catch (ex: IllegalArgumentException) {
-            logger.warn("Schema of {} does not match schema of record {}: {}", path, record, ex.message)
             FindResult.BAD_SCHEMA
         } catch (ex: IndexOutOfBoundsException) {
-            logger.warn("Schema of {} does not match schema of record {} (wrong number of columns)", path, record)
             FindResult.BAD_SCHEMA
         }
     }
