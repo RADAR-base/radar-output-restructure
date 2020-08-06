@@ -1,8 +1,10 @@
 package org.radarbase.output.source
 
 import org.apache.avro.file.SeekableInput
+import org.radarbase.output.accounting.TopicPartitionOffsetRange
 import java.io.Closeable
 import java.nio.file.Path
+import java.time.Instant
 
 /** Source storage type. */
 interface SourceStorage {
@@ -13,6 +15,12 @@ interface SourceStorage {
 
     /** Delete given file. Will not delete any directories. */
     fun delete(path: Path)
+    fun createTopicFile(topic: String, status: SimpleFileStatus): TopicFile {
+        val lastModified = status.lastModified ?: Instant.now()
+        val range = TopicPartitionOffsetRange.parseFilename(status.path.fileName.toString(), lastModified)
+        return TopicFile(topic, status.path, lastModified, range)
+    }
+
     /** Find records and topics. */
     val walker: SourceStorageWalker
 

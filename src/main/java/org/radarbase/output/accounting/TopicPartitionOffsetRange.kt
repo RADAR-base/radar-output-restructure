@@ -34,7 +34,13 @@ data class TopicPartitionOffsetRange(
             TopicPartition(topic, partition),
             OffsetRangeSet.Range(offsetFrom, offsetTo, lastModified))
 
-    override fun toString(): String = "$topic+$partition+${range.from}+${range.to} (${range.lastProcessed})"
+    override fun toString(): String {
+        return if (range.to == null) {
+            "$topic+$partition+${range.from} (${range.lastProcessed})"
+        } else {
+            "$topic+$partition+${range.from}+${range.to} (${range.lastProcessed})"
+        }
+    }
 
     fun mapRange(modification: (OffsetRangeSet.Range) -> OffsetRangeSet.Range) = copy(range = modification(range))
 

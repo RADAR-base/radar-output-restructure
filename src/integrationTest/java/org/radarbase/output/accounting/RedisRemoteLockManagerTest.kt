@@ -9,20 +9,20 @@ import org.junit.jupiter.api.Test
 import redis.clients.jedis.JedisPool
 
 internal class RedisRemoteLockManagerTest {
-    private lateinit var redisPool: JedisPool
+    private lateinit var redisHolder: RedisHolder
     private lateinit var lockManager1: RemoteLockManager
     private lateinit var lockManager2: RemoteLockManager
 
     @BeforeEach
     fun setUp() {
-        redisPool = JedisPool()
-        lockManager1 = RedisRemoteLockManager(redisPool, "locks")
-        lockManager2 = RedisRemoteLockManager(redisPool, "locks")
+        redisHolder = RedisHolder(JedisPool())
+        lockManager1 = RedisRemoteLockManager(redisHolder, "locks")
+        lockManager2 = RedisRemoteLockManager(redisHolder, "locks")
     }
 
     @AfterEach
     fun tearDown() {
-        redisPool.close()
+        redisHolder.close()
     }
 
     @Test

@@ -1,13 +1,12 @@
 package org.radarbase.output.accounting
 
 import org.slf4j.LoggerFactory
-import redis.clients.jedis.JedisPool
 import redis.clients.jedis.params.SetParams
 import java.time.Duration
 import java.util.*
 
 class RedisRemoteLockManager(
-        private val redisPool: JedisPool,
+        private val redisHolder: RedisHolder,
         private val keyPrefix: String
 ) : RemoteLockManager {
     private val uuid: String = UUID.randomUUID().toString()
@@ -18,8 +17,8 @@ class RedisRemoteLockManager(
 
     override fun acquireLock(name: String): RemoteLockManager.RemoteLock? {
         val lockKey = "$keyPrefix/$name.lock"
-        redisPool.resource.use { redis ->
-            return redis.set(lockKey, uuid, setParams)?.let {
+        return redisHolder.execute { redis ->
+            redis.set(lockKey, uuid, setParams)?.let {
                 RemoteLock(lockKey)
             }
         }
@@ -29,7 +28,7 @@ class RedisRemoteLockManager(
             private val lockKey: String
     ) : RemoteLockManager.RemoteLock {
         override fun close() {
-            redisPool.resource.use { redis ->
+            return redisHolder.execute { redis ->
                 if (redis.get(lockKey) == uuid) {
                     redis.del(lockKey)
                 }

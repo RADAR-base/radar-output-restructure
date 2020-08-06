@@ -1,7 +1,6 @@
 package org.radarbase.output.source
 
 import java.nio.file.Path
-import java.time.Instant
 
 class GeneralSourceStorageWalker(
         private val kafkaStorage: SourceStorage
@@ -11,7 +10,7 @@ class GeneralSourceStorageWalker(
                 val filename = status.path.fileName.toString()
                 when {
                     status.isDirectory && filename != "+tmp" -> walkRecords(topic, status.path)
-                    filename.endsWith(".avro") -> sequenceOf(TopicFile(topic, status.path, status.lastModified ?: Instant.now()))
+                    filename.endsWith(".avro") -> sequenceOf(kafkaStorage.createTopicFile(topic, status))
                     else -> emptySequence()
                 }
             }

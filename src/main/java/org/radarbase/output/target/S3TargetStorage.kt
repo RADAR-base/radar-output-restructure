@@ -16,12 +16,11 @@
 
 package org.radarbase.output.target
 
-import io.minio.ErrorCode
-import io.minio.MinioClient
-import io.minio.PutObjectOptions
+import io.minio.*
 import io.minio.errors.ErrorResponseException
 import org.radarbase.output.config.S3Config
-import org.radarbase.output.util.toKey
+import org.radarbase.output.util.bucketBuild
+import org.radarbase.output.util.objectBuild
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.io.InputStream
@@ -44,18 +43,18 @@ class S3TargetStorage(config: S3Config) : TargetStorage {
                 config.endpoint, config.bucket)
 
         // Check if the bucket already exists.
-        val isExist: Boolean = s3Client.bucketExists(bucket)
+        val isExist: Boolean = s3Client.bucketExists(BucketExistsArgs.Builder().bucketBuild(bucket))
         if (isExist) {
             logger.info("Bucket $bucket already exists.")
         } else {
-            s3Client.makeBucket(bucket)
+            s3Client.makeBucket(MakeBucketArgs.Builder().bucketBuild(bucket))
             logger.info("Bucket $bucket was created.")
         }
     }
 
     override fun status(path: Path): TargetStorage.PathStatus? {
         return try {
-            s3Client.statObject(bucket, path.toKey())
+            s3Client.statObject(StatObjectArgs.Builder().objectBuild(bucket, path))
                     .let { TargetStorage.PathStatus(it.length()) }
         } catch (ex: ErrorResponseException) {
             if (ex.errorResponse().errorCode() == ErrorCode.NO_SUCH_KEY || ex.errorResponse().errorCode() == ErrorCode.NO_SUCH_OBJECT) {
@@ -67,24 +66,28 @@ class S3TargetStorage(config: S3Config) : TargetStorage {
     }
 
     @Throws(IOException::class)
-    override fun newInputStream(path: Path): InputStream = s3Client.getObject(bucket, path.toKey())
+    override fun newInputStream(path: Path): InputStream = s3Client.getObject(
+            GetObjectArgs.Builder().objectBuild(bucket, path))
 
     @Throws(IOException::class)
     override fun move(oldPath: Path, newPath: Path) {
-        s3Client.copyObject(bucket, newPath.toKey(), null, null, bucket, oldPath.toKey(), null, null)
+        s3Client.copyObject(CopyObjectArgs.Builder().objectBuild(bucket, newPath) {
+            source(CopySource.Builder().objectBuild(bucket, oldPath))
+        })
         delete(oldPath)
     }
 
     @Throws(IOException::class)
     override fun store(localPath: Path, newPath: Path) {
-        s3Client.putObject(bucket, newPath.toKey(), localPath.toAbsolutePath().toString(),
-                PutObjectOptions(Files.size(localPath), -1))
+        s3Client.uploadObject(UploadObjectArgs.Builder().objectBuild(bucket, newPath) {
+            filename(localPath.toAbsolutePath().toString())
+        })
         Files.delete(localPath)
     }
 
     @Throws(IOException::class)
     override fun delete(path: Path) {
-        s3Client.removeObject(bucket, path.toKey())
+        s3Client.removeObject(RemoveObjectArgs.Builder().objectBuild(bucket, path))
     }
 
     override fun createDirectories(directory: Path) {

@@ -13,7 +13,7 @@ import java.time.Instant
 
 class OffsetRangeRedisTest {
     private lateinit var testFile: Path
-    private lateinit var redisPool: JedisPool
+    private lateinit var redisHolder: RedisHolder
     private lateinit var offsetPersistence: OffsetPersistenceFactory
     private val lastModified = Instant.now()
 
@@ -21,13 +21,13 @@ class OffsetRangeRedisTest {
     @Throws(IOException::class)
     fun setUp() {
         testFile = Paths.get("test/topic")
-        redisPool = JedisPool()
-        offsetPersistence = OffsetRedisPersistence(redisPool)
+        redisHolder = RedisHolder(JedisPool())
+        offsetPersistence = OffsetRedisPersistence(redisHolder)
     }
 
     @AfterEach
     fun tearDown() {
-        redisPool.resource.use { it.del(testFile.toString()) }
+        redisHolder.execute { it.del(testFile.toString()) }
     }
 
     @Test
@@ -40,7 +40,7 @@ class OffsetRangeRedisTest {
 
         assertEquals(true, offsetPersistence.read(testFile)?.isEmpty)
 
-        redisPool.resource.use { it.del(testFile.toString()) }
+        redisHolder.execute { it.del(testFile.toString()) }
 
         assertNull(offsetPersistence.read(testFile))
     }
@@ -74,7 +74,7 @@ class OffsetRangeRedisTest {
             rangeFile.add(TopicPartitionOffsetRange.parseFilename("a+0+4+4", lastModified))
         }
 
-        redisPool.resource.use { redis ->
+        redisHolder.execute { redis ->
             val range = redisOffsetReader.readValue<OffsetRedisPersistence.Companion.RedisOffsetRangeSet>(redis.get(testFile.toString()))
             assertEquals(OffsetRedisPersistence.Companion.RedisOffsetRangeSet(listOf(
                     OffsetRedisPersistence.Companion.RedisOffsetIntervals("a", 0, listOf(

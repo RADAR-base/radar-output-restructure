@@ -107,9 +107,9 @@ data class ServiceConfig(
 }
 
 data class CleanerConfig(
-        /** Whether to enable the cleaner */
+        /** Whether to enable the cleaner. */
         val enable: Boolean = false,
-        /** How often to run the cleaner */
+        /** How often to run the cleaner in seconds. */
         val interval: Long = 1260L,
         /** Age in days after an avro file can be removed. Must be strictly positive. */
         val age: Int = 7) {
@@ -318,17 +318,32 @@ data class S3Config(
         /** Secret key belonging to access token. */
         val secretKey: String,
         /** Bucket name. */
-        val bucket: String) {
-    fun createS3Client() = MinioClient(endpoint, accessToken, secretKey)
+        val bucket: String,
+        /** If no endOffset is in the filename, read it from object tags. */
+        val endOffsetFromTags: Boolean = false
+) {
+    fun createS3Client(): MinioClient = MinioClient.Builder()
+            .endpoint(endpoint)
+            .credentials(accessToken, secretKey)
+            .build()
 }
 
 data class AzureConfig(
+        /** URL to reach object store at. */
         val endpoint: String,
+        /** Name of the Azure Blob Storage container. */
         val container: String,
+        /** If no endOffset is in the filename, read it from object metadata. */
+        val endOffsetFromMetadata: Boolean = false,
+        /** Azure username. */
         val username: String?,
+        /** Azure password. */
         val password: String?,
+        /** Shared Azure Blob Storage account name. */
         val accountName: String?,
+        /** Shared Azure Blob Storage account key. */
         val accountKey: String?,
+        /** Azure SAS token for a configured service. */
         val sasToken: String?
 ) {
     fun createAzureClient(): BlobServiceClient = BlobServiceClientBuilder().apply {

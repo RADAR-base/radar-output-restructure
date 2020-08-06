@@ -24,8 +24,6 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.radarbase.output.util.PostponedWriter
 import org.radarbase.output.util.Timer.time
 import org.slf4j.LoggerFactory
-import redis.clients.jedis.JedisPool
-import redis.clients.jedis.exceptions.JedisException
 import java.io.IOException
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
@@ -34,24 +32,22 @@ import java.util.concurrent.TimeUnit
  * Accesses a OffsetRange json object a Redis entry.
  */
 class OffsetRedisPersistence(
-        private val redisPool: JedisPool
+        private val redisHolder: RedisHolder
 ) : OffsetPersistenceFactory {
 
     override fun read(path: Path): OffsetRangeSet? {
         return try {
-            redisPool.resource.use { jedis ->
-                jedis[path.toString()]?.let { value ->
-                    OffsetRangeSet().apply {
-                        redisOffsetReader.readValue<RedisOffsetRangeSet>(value)
-                                .partitions
-                                .forEach { (topic, partition, ranges) ->
-                                    addAll(TopicPartition(topic, partition), ranges)
-                                }
-                    }
+            redisHolder.execute { redis ->
+                redis[path.toString()]?.let { value ->
+                    redisOffsetReader.readValue<RedisOffsetRangeSet>(value)
+                            .partitions
+                            .fold(OffsetRangeSet(), { set, (topic, partition, ranges) ->
+                                set.apply { addAll(TopicPartition(topic, partition), ranges) }
+                            })
                 }
             }
-        } catch (ex: JedisException) {
-            logger.error("Error reading offsets file. Processing all offsets.")
+        } catch (ex: IOException) {
+            logger.error("Error reading offsets from Redis: {}. Processing all offsets.", ex.toString())
             null
         }
     }
@@ -70,18 +66,18 @@ class OffsetRedisPersistence(
 
         override fun doWrite(): Unit = time("accounting.offsets") {
             try {
-                redisPool.resource.use { jedis ->
-                    val offsets = RedisOffsetRangeSet(offsets.map { topicPartition, offsetIntervals ->
-                        RedisOffsetIntervals(
-                                topicPartition.topic,
-                                topicPartition.partition,
-                                offsetIntervals.toList())
-                    })
+                val offsets = RedisOffsetRangeSet(offsets.map { topicPartition, offsetIntervals ->
+                    RedisOffsetIntervals(
+                            topicPartition.topic,
+                            topicPartition.partition,
+                            offsetIntervals.toList())
+                })
 
-                    jedis.set(path.toString(), redisOffsetWriter.writeValueAsString(offsets))
+                redisHolder.execute { redis ->
+                    redis.set(path.toString(), redisOffsetWriter.writeValueAsString(offsets))
                 }
             } catch (e: IOException) {
-                logger.error("Failed to write offsets: {}", e.toString())
+                logger.error("Failed to write offsets to Redis: {}", e.toString())
             }
         }
     }
