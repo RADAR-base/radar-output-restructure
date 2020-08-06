@@ -28,10 +28,12 @@ class TimestampExtractionCheck(
                 return false
             }
             RestructureWorker.extractRecords(input) { records ->
-                records.all { record ->
-                    cachedRecords += 1
-                    containsRecord(file.topic, record)
-                }
+                records
+                        .mapIndexed { i, record ->
+                            cachedRecords += 1L
+                            containsRecord(file, file.range.range.from + i.toLong(), record)
+                        }
+                        .all { it }
             }
         }
         if (cachedRecords > batchSize) {
@@ -46,19 +48,28 @@ class TimestampExtractionCheck(
     }
 
 
-    private fun containsRecord(topic: String, record: GenericRecord): Boolean {
+    private fun containsRecord(topicFile: TopicFile, offset: Long, record: GenericRecord): Boolean {
         var suffix = 0
 
         do {
             val (path) = pathFactory.getRecordOrganization(
-                    topic, record, suffix)
+                    topicFile.topic, record, suffix)
 
             try {
                 when (cacheStore.contains(path, record)) {
-                    TimestampFileCacheStore.FindResult.FILE_NOT_FOUND -> return false
-                    TimestampFileCacheStore.FindResult.NOT_FOUND -> return false
+                    TimestampFileCacheStore.FindResult.FILE_NOT_FOUND -> {
+                        logger.warn("Target {} for record of {} (offset {}) has not been created yet.", path, topicFile.path, offset)
+                        return false
+                    }
+                    TimestampFileCacheStore.FindResult.NOT_FOUND -> {
+                        logger.warn("Target {} does not contain record of {} (offset {})", path, topicFile.path, offset)
+                        return false
+                    }
                     TimestampFileCacheStore.FindResult.FOUND -> return true
-                    TimestampFileCacheStore.FindResult.BAD_SCHEMA -> suffix += 1  // continue next suffix
+                    TimestampFileCacheStore.FindResult.BAD_SCHEMA -> {
+                        logger.debug("Schema of {} does not match schema of {} (offset {})", path, topicFile.path, offset)
+                        suffix += 1 // continue next suffix
+                    }
                 }
             } catch (ex: IOException) {
                 logger.error("Failed to read target file {} for checking data integrity", path, ex)

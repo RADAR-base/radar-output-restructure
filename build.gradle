@@ -30,6 +30,7 @@ ext {
     junitVersion = '5.6.1'
     minioVersion = '7.1.0'
     jedisVersion = '3.2.0'
+    slf4jVersion = '1.7.30'
     azureStorageVersion = '12.6.0'
 }
 
@@ -69,7 +70,9 @@ dependencies {
     implementation group: 'org.apache.hadoop', name: 'hadoop-common', version: hadoopVersion
 
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+    implementation group: 'org.slf4j', name: 'slf4j-api', version: slf4jVersion
 
+    runtimeOnly group: 'org.slf4j', name: 'slf4j-log4j12', version: slf4jVersion
     runtimeOnly group: 'org.apache.hadoop', name: 'hadoop-hdfs-client', version: hadoopVersion
     testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-api', version: junitVersion
     testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-params', version: junitVersion
