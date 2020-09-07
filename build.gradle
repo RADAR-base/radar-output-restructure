@@ -23,11 +23,11 @@ ext {
     issueUrl = "${githubUrl}/issues"
 
     avroVersion = '1.9.2'
-    jacksonVersion = '2.10.3'
+    jacksonVersion = '2.11.2'
     hadoopVersion = '3.1.2'
     jCommanderVersion = '1.78'
     almworksVersion = '1.1.1'
-    junitVersion = '5.6.1'
+    junitVersion = '5.6.2'
     minioVersion = '7.1.0'
     jedisVersion = '3.2.0'
     slf4jVersion = '1.7.30'
@@ -255,5 +255,5 @@ bintray {
 }
 
 wrapper {
-    gradleVersion '6.3'
+    gradleVersion '6.6.1'
 }
