@@ -62,8 +62,9 @@ class SourceDataCleaner(
         return try {
             lockManager.tryRunLocked(topic) {
                 Accountant(fileStoreFactory, topic).use { accountant ->
-                    val extractionCheck = TimestampExtractionCheck(sourceStorage, fileStoreFactory)
-                    deleteOldFiles(accountant, extractionCheck, topic, topicPath).toLong()
+                    TimestampExtractionCheck(sourceStorage, fileStoreFactory).use { extractionCheck ->
+                        deleteOldFiles(accountant, extractionCheck, topic, topicPath).toLong()
+                    }
                 }
             }
         } catch (ex: IOException) {
