@@ -47,7 +47,6 @@ class TimestampExtractionCheck(
         reader.close()
     }
 
-
     private fun containsRecord(topicFile: TopicFile, offset: Long, record: GenericRecord): Boolean {
         var suffix = 0
 

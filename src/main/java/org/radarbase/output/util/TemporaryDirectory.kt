@@ -46,15 +46,7 @@ constructor(root: Path, prefix: String) : Closeable {
     private fun doClose() {
         try {
             // Ignore errors the first time
-            Files.walk(path)
-                    .sorted(Comparator.reverseOrder())
-                    .forEach {
-                        try {
-                            Files.deleteIfExists(it)
-                        } catch (ex: Exception) {
-                            // do nothing
-                        }
-                    }
+            deleteTree()
         } catch (ex: IOException) {
             // ignore the first time
         }
@@ -68,20 +60,24 @@ constructor(root: Path, prefix: String) : Closeable {
                     Thread.currentThread().interrupt()
                 }
 
-                Files.walk(path)
-                        .sorted(Comparator.reverseOrder())
-                        .forEach {
-                            try {
-                                Files.deleteIfExists(it)
-                            } catch (ex: Exception) {
-                                logger.warn("Cannot delete temporary path {}: {}",
-                                        it, ex.toString())
-                            }
-                        }
+                deleteTree()
             }
         } catch (ex: IOException) {
             logger.warn("Cannot delete temporary directory {}: {}", path, ex.toString())
         }
+    }
+
+    private fun deleteTree() {
+        Files.walk(path)
+                .sorted(Comparator.reverseOrder())
+                .forEach {
+                    try {
+                        Files.deleteIfExists(it)
+                    } catch (ex: Exception) {
+                        logger.warn("Cannot delete temporary path {}: {}",
+                                it, ex.toString())
+                    }
+                }
     }
 
     override fun close() {
@@ -91,7 +87,6 @@ constructor(root: Path, prefix: String) : Closeable {
         } catch (ex: IllegalStateException) {
             // already shutting down
         }
-
     }
 
     companion object {
