@@ -22,16 +22,16 @@ ext {
     githubUrl = "https://github.com/${githubRepoName}"
     issueUrl = "${githubUrl}/issues"
 
-    avroVersion = '1.9.2'
-    jacksonVersion = '2.11.2'
-    hadoopVersion = '3.1.2'
+    avroVersion = '1.10.0'
+    jacksonVersion = '2.11.3'
+    hadoopVersion = '3.3.0'
     jCommanderVersion = '1.78'
-    almworksVersion = '1.1.1'
+    almworksVersion = '1.1.2'
     junitVersion = '5.6.2'
-    minioVersion = '7.1.0'
-    jedisVersion = '3.2.0'
+    minioVersion = '7.1.4'
+    jedisVersion = '3.3.0'
     slf4jVersion = '1.7.30'
-    azureStorageVersion = '12.6.0'
+    azureStorageVersion = '12.8.0'
 }
 
 repositories {
