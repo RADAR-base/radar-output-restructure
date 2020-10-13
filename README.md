@@ -60,12 +60,15 @@ When upgrading to version 0.6.0 from version 0.5.x or earlier, please follow the
 ## Docker usage
 
 This package is available as docker image [`radarbase/radar-output-restructure`](https://hub.docker.com/r/radarbase/radar-output-restructure). The entrypoint of the image is the current application. So in all the commands listed in usage, replace `radar-output-restructure` with for example:
-```shell
-docker run --rm -t --network hadoop -v "$PWD/output:/output" radarbase/radar-output-restructure:1.1.5-hdfs -n hdfs-namenode -o /output /myTopic
-```
-if your docker cluster is running in the `hadoop` network and your output directory should be `./output`.
 
-Docker image tags that are optimized for HDFS are suffixed with `-hdfs`. Otherwise, please use the image without that suffix.
+```shell
+docker run --rm -t --network hadoop -v "$PWD/output:/output" radarbase/radar-output-restructure:1.1.5 -n hdfs-namenode -o /output /myTopic
+```
+
+if your docker cluster is running in the `hadoop` network and your output directory should be `./output`. Note that to run this in production this should be run as a non-root user. If local output is used, specify the user that the data should be written as both in the local storage configuration `target: {local: {userId: <MyUid>, groupId: <MyGroupId>}}` and also in the docker command line or docker-compose configuration:
+```shell
+docker run --rm -t --network hadoop -v "$PWD/output:/output" --user <MyUserId> --group-add <MyGroupId> radarbase/radar-output-restructure:1.1.5 -n hdfs-namenode -o /output /myTopic
+```
 
 ## Command line usage
 
