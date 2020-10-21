@@ -27,17 +27,15 @@ class CsvAvroConverterFactory: RecordConverterFactory {
                 var count = 0
                 val lineMap = lines
                         .onEach { count += 1 }
-                        .mapIndexed { idx, line -> Pair(idx, ArrayWrapper(line.byIndex(fields))) }
-                        .distinctBy { (_, fields) -> fields }
-                        .map { (idx, _) -> idx }
-                        .toList()
+                        .mapIndexed { idx, line -> Pair(ArrayWrapper(line.byIndex(fields)), idx) }
+                        .toMap(HashMap())
 
                 if (lineMap.size == count) {
                     logger.debug("File {} is already deduplicated. Skipping.", fileName)
                     return false
                 }
 
-                Pair(header, lineMap
+                Pair(header, lineMap.values
                         .toIntArray()
                         .apply { sort() })
             }
