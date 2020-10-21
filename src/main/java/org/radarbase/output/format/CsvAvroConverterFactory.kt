@@ -19,23 +19,25 @@ class CsvAvroConverterFactory: RecordConverterFactory {
     override val formats: Collection<String> = setOf("csv")
 
     @Throws(IOException::class)
-    override fun deduplicate(fileName: String, source: Path, target: Path, compression: Compression, distinctFields: Set<String>, ignoreFields: Set<String>) {
+    override fun deduplicate(fileName: String, source: Path, target: Path, compression: Compression, distinctFields: Set<String>, ignoreFields: Set<String>): Boolean {
         val (header, lineIndexes) = Files.newInputStream(source).use { input ->
             processLines(input, compression) { header, lines ->
-                if (header == null) return
+                if (header == null) return false
                 val fields = fieldIndexes(header, distinctFields, ignoreFields)
                 var count = 0
                 val lineMap = lines
                         .onEach { count += 1 }
-                        .mapIndexed { i, line -> Pair(ArrayWrapper(line.byIndex(fields)), i) }
-                        .toMap(HashMap())
+                        .mapIndexed { idx, line -> Pair(idx, ArrayWrapper(line.byIndex(fields))) }
+                        .distinctBy { (_, fields) -> fields }
+                        .map { (idx, _) -> idx }
+                        .toList()
 
                 if (lineMap.size == count) {
                     logger.debug("File {} is already deduplicated. Skipping.", fileName)
-                    return
+                    return false
                 }
 
-                Pair(header, lineMap.values
+                Pair(header, lineMap
                         .toIntArray()
                         .apply { sort() })
             }
@@ -52,6 +54,7 @@ class CsvAvroConverterFactory: RecordConverterFactory {
                 })
             }
         }
+        return true
     }
 
     private fun writeLines(target: Path, fileName: String, compression: Compression, lines: Sequence<Array<String>>) {

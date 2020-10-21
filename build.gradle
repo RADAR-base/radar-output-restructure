@@ -5,7 +5,7 @@ plugins {
     id 'com.jfrog.bintray' version '1.8.5'
     id 'maven-publish'
     id 'org.jetbrains.kotlin.jvm'
-    id 'com.avast.gradle.docker-compose' version "0.10.10"
+    id 'com.avast.gradle.docker-compose' version "0.13.4"
 }
 
 group 'org.radarbase'
@@ -164,13 +164,18 @@ tasks.withType(Tar){
 }
 
 task downloadDependencies {
-    description "Pre-downloads dependencies"
-    configurations.compileClasspath.files
-    configurations.runtimeClasspath.files
+    doLast {
+        description "Pre-downloads dependencies"
+        configurations.compileClasspath.files
+        configurations.runtimeClasspath.files
+    }
+    outputs.upToDateWhen { false }
 }
 
 task copyDependencies(type: Copy) {
-    from configurations.runtimeClasspath.files
+    from {
+        configurations.runtimeClasspath.files
+    }
     into "$buildDir/third-party/"
 }
 
