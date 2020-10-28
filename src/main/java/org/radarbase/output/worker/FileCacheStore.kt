@@ -21,14 +21,12 @@ import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.util.TemporaryDirectory
-import org.radarbase.output.util.ThrowingConsumer.tryCatch
 import org.radarbase.output.util.Timer.time
 import org.radarbase.output.worker.FileCacheStore.WriteResponse.*
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.Flushable
 import java.io.IOException
-import java.io.UncheckedIOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.*
@@ -86,13 +84,9 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
         }
 
         return try {
-            if (fileCache.writeRecord(record, transaction)) {
-                if (existingCache != null) CACHE_AND_WRITE else NO_CACHE_AND_WRITE
-            } else {
-                // The file path was not in cache but the file exists and this write is
-                // unsuccessful because of different number of columns
-                if (existingCache != null) CACHE_AND_NO_WRITE else NO_CACHE_AND_NO_WRITE
-            }
+            WriteResponse.valueOf(
+                    isCacheHit = existingCache != null,
+                    isSuccessful = fileCache.writeRecord(record, transaction))
         } catch (ex: IOException) {
             logger.error("Failed to write record. Closing cache {}.", fileCache.path, ex)
             fileCache.markError()
@@ -141,7 +135,8 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
     @Throws(IOException::class)
     override fun flush() {
         try {
-            allCaches { it.close() }
+            caches.values.parallelStream()
+                    .forEach(FileCache::close)
             accountant.flush()
         } finally {
             caches.clear()
@@ -152,16 +147,6 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
     override fun close() {
         flush()
         tmpDir.close()
-    }
-
-    @Throws(IOException::class)
-    private fun allCaches(cacheHandler: (FileCache) -> Unit) {
-        try {
-            caches.values.parallelStream()
-                    .forEach(tryCatch(cacheHandler, "Failed to update caches."))
-        } catch (ex: UncheckedIOException) {
-            throw ex.cause ?: ex
-        }
     }
 
     /**
@@ -180,7 +165,18 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
         /** Cache miss and write was successful.  */
         NO_CACHE_AND_WRITE(false, true),
         /** Cache miss and write was unsuccessful because of a mismatch in number of columns.  */
-        NO_CACHE_AND_NO_WRITE(false, false)
+        NO_CACHE_AND_NO_WRITE(false, false);
+
+        companion object {
+            fun valueOf(isCacheHit: Boolean, isSuccessful: Boolean) = when {
+                isSuccessful && isCacheHit -> CACHE_AND_WRITE
+                isSuccessful -> NO_CACHE_AND_WRITE
+                // The file path was not in cache but the file exists and this write is
+                // unsuccessful because of different number of columns
+                isCacheHit -> CACHE_AND_NO_WRITE
+                else -> NO_CACHE_AND_NO_WRITE
+            }
+        }
     }
 
     companion object {

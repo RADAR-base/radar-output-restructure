@@ -10,26 +10,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM openjdk:14 AS builder
+FROM gradle:6.6.1-jdk11 AS builder
 
 RUN mkdir /code
 WORKDIR /code
 
-ENV GRADLE_OPTS -Dorg.gradle.daemon=false
-
-COPY ./gradle /code/gradle
-COPY ./gradlew /code/
-RUN ./gradlew --version
+ENV GRADLE_USER_HOME=/code/.gradlecache
 
 COPY ./build.gradle ./gradle.properties ./settings.gradle /code/
 
-RUN ./gradlew downloadDependencies copyDependencies startScripts
+RUN gradle downloadDependencies copyDependencies startScripts
 
 COPY ./src /code/src
 
-RUN ./gradlew jar
+RUN gradle jar
 
-FROM openjdk:14
+FROM openjdk:11-jre-slim
 
 MAINTAINER Joris Borgdorff <joris@thehyve.nl>, Yatharth Ranjan<yatharth.ranjan@kcl.ac.uk>
 

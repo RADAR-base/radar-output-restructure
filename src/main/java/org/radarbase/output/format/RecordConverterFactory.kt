@@ -54,9 +54,14 @@ interface RecordConverterFactory : Format {
     val hasHeader: Boolean
         get() = false
 
+    /**
+     * Deduplicate [source] with [fileName] and store the result in [target]. Returns `false` if no
+     * deduplication was performed because it was not necessary. In that case, [target] is not
+     * created.
+     */
     @Throws(IOException::class)
     fun deduplicate(fileName: String, source: Path, target: Path,
-                    compression: Compression, distinctFields: Set<String> = emptySet(), ignoreFields: Set<String> = emptySet()) {
+                    compression: Compression, distinctFields: Set<String> = emptySet(), ignoreFields: Set<String> = emptySet()): Boolean {
         val withHeader = hasHeader
 
         val (header, lines) = Files.newInputStream(source).use {
@@ -74,6 +79,8 @@ interface RecordConverterFactory : Format {
             writer ->
             writeFile(writer, header, lines)
         } } } }
+
+        return true
     }
 
     fun readTimeSeconds(source: InputStream, compression: Compression): Pair<Array<String>?, List<Double>>?

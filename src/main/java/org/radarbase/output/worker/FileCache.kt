@@ -133,11 +133,18 @@ class FileCache(
             if (deduplicate.enable == true) {
                 time("close.deduplicate") {
                     val dedupTmp = tmpPath.resolveSibling("${tmpPath.fileName}.dedup")
-                    converterFactory.deduplicate(fileName, tmpPath, dedupTmp, compression, deduplicate.distinctFields ?: emptySet(), deduplicate.ignoreFields ?: emptySet())
-                    try {
-                        Files.move(dedupTmp, tmpPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
-                    } catch (ex: AtomicMoveNotSupportedException) {
-                        Files.move(dedupTmp, tmpPath, StandardCopyOption.REPLACE_EXISTING)
+                    if (converterFactory.deduplicate(
+                                    fileName,
+                                    source = tmpPath,
+                                    target = dedupTmp,
+                                    compression = compression,
+                                    distinctFields = deduplicate.distinctFields ?: emptySet(),
+                                    ignoreFields = deduplicate.ignoreFields ?: emptySet())) {
+                        try {
+                            Files.move(dedupTmp, tmpPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+                        } catch (ex: AtomicMoveNotSupportedException) {
+                            Files.move(dedupTmp, tmpPath, StandardCopyOption.REPLACE_EXISTING)
+                        }
                     }
                 }
             }
