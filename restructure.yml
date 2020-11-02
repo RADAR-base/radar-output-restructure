@@ -58,8 +58,8 @@ target:
     container: MyTargetContainer
   # only actually needed if target type is local
   local:
-    userId: 1000  # write as regular user, use -1 to use current user (default).
-    groupId: 100  # write as regular group, use -1 to use current user (default).
+    userId: 1000  # write as user ID 1000, use -1 to use current user (default).
+    groupId: 100  # write as group ID 100, use -1 to use current user (default).
 
 # Redis configuration
 # @since: 0.7.0

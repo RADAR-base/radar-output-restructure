@@ -7,6 +7,12 @@ It supports data written by [RADAR HDFS sink connector](https://github.com/RADAR
 
 ## Upgrade instructions
 
+When upgrading to version 1.2.0, please follow the following instructions:
+
+  - When using local target storage, ensure that:
+    1. it is writable by the user 101, or change the runtime user using the docker command-line flag `--user` to a user that can write to the target storage and
+    2. local storage properties `userId` and `groupId` are set to values that can write to the target storage.
+
 When upgrading to version 1.0.0 or later from version 0.6.0 please follow the following instructions:
 
   - This package now relies on Redis for locking and offset management. Please install Redis or use
@@ -36,9 +42,11 @@ When upgrading to version 1.0.0 or later from version 0.6.0 please follow the fo
       target:
         type: local
         local:
-          # User ID to write data as
+          # User ID to write data as. This only works when explicitly setting
+          # the runtime user to root.
           userId: 123
-          # Group ID to write data as
+          # Group ID to write data as. This only works when explicitly setting
+          # the runtime user to root.
           groupId: 123
       ```
 
@@ -60,12 +68,10 @@ When upgrading to version 0.6.0 from version 0.5.x or earlier, please follow the
 ## Docker usage
 
 This package is available as docker image [`radarbase/radar-output-restructure`](https://hub.docker.com/r/radarbase/radar-output-restructure). The entrypoint of the image is the current application. So in all the commands listed in usage, replace `radar-output-restructure` with for example:
-```shell
-docker run --rm -t --network hadoop -v "$PWD/output:/output" radarbase/radar-output-restructure:1.1.5-hdfs -n hdfs-namenode -o /output /myTopic
-```
-if your docker cluster is running in the `hadoop` network and your output directory should be `./output`.
 
-Docker image tags that are optimized for HDFS are suffixed with `-hdfs`. Otherwise, please use the image without that suffix.
+```shell
+docker run --rm -t --network hadoop -v "$PWD/output:/output" radarbase/radar-output-restructure:1.1.5 -n hdfs-namenode -o /output /myTopic
+```
 
 ## Command line usage
 

@@ -31,7 +31,7 @@ data class RestructureConfig(
         /** Topic exceptional handling. */
         val topics: Map<String, TopicConfig> = emptyMap(),
         /** Source data resource configuration. */
-        val source: ResourceConfig = ResourceConfig("hdfs", hdfs = HdfsConfig()),
+        val source: ResourceConfig = ResourceConfig("s3"),
         /** Target data resource configration. */
         val target: ResourceConfig = ResourceConfig("local", local = LocalConfig()),
         /** Redis configuration for synchronization and storing offsets. */
@@ -284,10 +284,10 @@ data class ResourceConfig(
         sourceType = type.toResourceType()
 
         when(sourceType) {
-            ResourceType.S3 -> checkNotNull(s3)
-            ResourceType.HDFS -> checkNotNull(hdfs).also { it.validate() }
-            ResourceType.LOCAL -> checkNotNull(local)
-            ResourceType.AZURE -> checkNotNull(azure)
+            ResourceType.S3 -> checkNotNull(s3) { "No S3 configuration provided." }
+            ResourceType.HDFS -> checkNotNull(hdfs) { "No HDFS configuration provided." }.also { it.validate() }
+            ResourceType.LOCAL -> checkNotNull(local) { "No local configuration provided." }
+            ResourceType.AZURE -> checkNotNull(azure) { "No Azure configuration provided." }
         }
     }
 }
@@ -301,7 +301,7 @@ fun String.toResourceType() = when(toLowerCase()) {
     "hdfs" -> ResourceType.HDFS
     "local" -> ResourceType.LOCAL
     "azure" -> ResourceType.AZURE
-    else -> throw IllegalArgumentException("Unknown resource type $this, choose s3, hdfs or local")
+    else -> throw IllegalStateException("Unknown resource type $this, choose s3, hdfs or local")
 }
 
 data class LocalConfig(
