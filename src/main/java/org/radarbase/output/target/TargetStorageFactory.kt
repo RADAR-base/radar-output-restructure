@@ -8,6 +8,6 @@ class TargetStorageFactory(private val config: ResourceConfig) {
         ResourceType.S3 -> S3TargetStorage(config.s3!!)
         ResourceType.LOCAL -> LocalTargetStorage(config.local!!)
         ResourceType.AZURE -> AzureTargetStorage(config.azure!!)
-        else -> throw IllegalArgumentException("Cannot create storage driver for ${config.sourceType}")
+        else -> throw IllegalStateException("Cannot create storage driver for ${config.sourceType}")
     }
 }

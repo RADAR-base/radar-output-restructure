@@ -38,4 +38,11 @@ COPY --from=builder /code/build/third-party/* /usr/lib/
 COPY --from=builder /code/build/scripts/* /usr/bin/
 COPY --from=builder /code/build/libs/* /usr/lib/
 
+RUN mkdir /output \
+  && chown 101:101 /output
+
+VOLUME ["/output"]
+
+USER 101:101
+
 ENTRYPOINT ["radar-output-restructure"]
