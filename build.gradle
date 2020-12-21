@@ -19,7 +19,7 @@ ext {
     issueUrl = "${githubUrl}/issues"
 
     avroVersion = '1.10.1'
-    jacksonVersion = '2.12.0'
+    jacksonVersion = '2.11.4'
     hadoopVersion = '3.3.0'
     jCommanderVersion = '1.78'
     almworksVersion = '1.1.2'
@@ -48,7 +48,7 @@ configurations {
 
 dependencies {
     api group: 'org.apache.avro', name: 'avro', version: avroVersion
-    implementation group: 'com.fasterxml.jackson.core' , name: 'jackson-databind', version: jacksonVersion
+    api group: 'com.fasterxml.jackson.core' , name: 'jackson-databind', version: jacksonVersion
     implementation group: 'com.fasterxml.jackson.dataformat' , name: 'jackson-dataformat-yaml', version: jacksonVersion
     implementation group: 'com.fasterxml.jackson.dataformat' , name: 'jackson-dataformat-csv', version: jacksonVersion
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion")
