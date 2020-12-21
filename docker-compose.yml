@@ -10,7 +10,7 @@ services:
       - /data
 
   redis:
-    image: bitnami/redis
+    image: bitnami/redis:6.0
     ports:
       - "6379:6379"
     environment:

@@ -4,7 +4,7 @@ plugins {
     id 'com.jfrog.bintray' version '1.8.5'
     id 'maven-publish'
     id "org.jetbrains.dokka"
-    id 'com.avast.gradle.docker-compose' version "0.13.4"
+    id 'com.avast.gradle.docker-compose' version "0.14.0"
 }
 
 group 'org.radarbase'
@@ -18,16 +18,16 @@ ext {
     githubUrl = "https://github.com/${githubRepoName}"
     issueUrl = "${githubUrl}/issues"
 
-    avroVersion = '1.10.0'
-    jacksonVersion = '2.11.3'
+    avroVersion = '1.10.1'
+    jacksonVersion = '2.12.0'
     hadoopVersion = '3.3.0'
     jCommanderVersion = '1.78'
     almworksVersion = '1.1.2'
-    junitVersion = '5.6.2'
-    minioVersion = '7.1.4'
-    jedisVersion = '3.3.0'
+    junitVersion = '5.7.0'
+    minioVersion = '8.0.3'
+    jedisVersion = '3.4.0'
     slf4jVersion = '1.7.30'
-    azureStorageVersion = '12.8.0'
+    azureStorageVersion = '12.9.0'
 }
 
 repositories {
@@ -142,6 +142,7 @@ task integrationTest(type: Test) {
         showStandardStreams = true
         setExceptionFormat("full")
     }
+    outputs.upToDateWhen { false }
     shouldRunAfter test
 }
 
@@ -250,5 +251,5 @@ bintray {
 }
 
 wrapper {
-    gradleVersion '6.6.1'
+    gradleVersion '6.7.1'
 }

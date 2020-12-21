@@ -93,7 +93,7 @@ class SourceDataCleaner(
                 .take(maxFilesPerTopic)
                 .takeWhile { !isClosed.get() }
                 .count { file ->
-                    val extractionSuccessful = if (extractionCheck.isExtracted(file)) {
+                    if (extractionCheck.isExtracted(file)) {
                         logger.info("Removing {}", file.path)
                         Timer.time("cleaner.delete") {
                             sourceStorage.delete(file.path)
@@ -105,7 +105,6 @@ class SourceDataCleaner(
                         accountant.remove(file.range.mapRange { it.ensureToOffset() })
                         false
                     }
-                    extractionSuccessful
                 }
     }
 
@@ -122,4 +121,3 @@ class SourceDataCleaner(
         private val logger = LoggerFactory.getLogger(SourceDataCleaner::class.java)
     }
 }
-

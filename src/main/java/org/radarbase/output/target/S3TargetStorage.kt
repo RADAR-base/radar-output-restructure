@@ -55,9 +55,9 @@ class S3TargetStorage(config: S3Config) : TargetStorage {
     override fun status(path: Path): TargetStorage.PathStatus? {
         return try {
             s3Client.statObject(StatObjectArgs.Builder().objectBuild(bucket, path))
-                    .let { TargetStorage.PathStatus(it.length()) }
+                    .let { TargetStorage.PathStatus(it.size()) }
         } catch (ex: ErrorResponseException) {
-            if (ex.errorResponse().errorCode() == ErrorCode.NO_SUCH_KEY || ex.errorResponse().errorCode() == ErrorCode.NO_SUCH_OBJECT) {
+            if (ex.errorResponse().code() == "NoSuchKey" || ex.errorResponse().code() == "ResourceNotFound") {
                 null
             } else {
                 throw ex
