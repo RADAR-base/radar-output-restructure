@@ -1,7 +1,7 @@
 package org.radarbase.output
 
 import io.minio.*
-import io.minio.PutObjectOptions.MAX_PART_SIZE
+import io.minio.ObjectWriteArgs.MAX_PART_SIZE
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.radarbase.output.config.*

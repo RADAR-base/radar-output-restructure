@@ -2,7 +2,10 @@ pluginManagement {
     resolutionStrategy {
         eachPlugin {
             if ( requested.id.id == 'org.jetbrains.kotlin.jvm' ) {
-                useModule( "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion" )
+                useModule("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
+            }
+            if (requested.id.id == "org.jetbrains.dokka") {
+                useModule("org.jetbrains.dokka:dokka-gradle-plugin:$kotlinVersion")
             }
         }
     }

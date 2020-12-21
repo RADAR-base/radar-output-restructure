@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM gradle:6.6.1-jdk11 AS builder
+FROM gradle:6.7.1-jdk11 AS builder
 
 RUN mkdir /code
 WORKDIR /code
@@ -31,10 +31,18 @@ MAINTAINER Joris Borgdorff <joris@thehyve.nl>, Yatharth Ranjan<yatharth.ranjan@k
 
 LABEL description="RADAR-base output data restructuring"
 
+ENV RADAR_OUTPUT_RESTRUCTURE_OPTS=""
 ENV JAVA_OPTS="-Djava.security.egd=file:/dev/./urandom -XX:+UseG1GC -XX:MaxHeapFreeRatio=10 -XX:MinHeapFreeRatio=10"
 
 COPY --from=builder /code/build/third-party/* /usr/lib/
 COPY --from=builder /code/build/scripts/* /usr/bin/
 COPY --from=builder /code/build/libs/* /usr/lib/
+
+RUN mkdir /output \
+  && chown 101:101 /output
+
+VOLUME ["/output"]
+
+USER 101:101
 
 ENTRYPOINT ["radar-output-restructure"]

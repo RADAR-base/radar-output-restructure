@@ -94,7 +94,7 @@ class OffsetFilePersistence(
 
         override fun doWrite() = time("accounting.offsets") {
             try {
-                val tmpPath = createTempFile("offsets", ".csv").toPath()
+                val tmpPath = Files.createTempFile("offsets", ".csv")
 
                 Files.newBufferedWriter(tmpPath).use { writer ->
                     writer.append("offsetFrom,offsetTo,partition,topic\n")

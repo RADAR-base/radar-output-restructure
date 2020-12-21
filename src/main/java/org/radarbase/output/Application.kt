@@ -198,7 +198,7 @@ class Application(
                 logger.error("Failed to initialize plugins", ex)
                 exitProcess(1)
             } catch (e: IllegalStateException) {
-                logger.error("Cannot process configuration", e)
+                logger.error("Invalid configuration: {}", e.message)
                 exitProcess(1)
             }
 
