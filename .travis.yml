@@ -16,10 +16,10 @@ cache:
     - $HOME/.gradle/wrapper/
 
 env:
-  - DOCKER_COMPOSE_VERSION=1.25.4
+  - DOCKER_COMPOSE_VERSION=1.27.4
 
 before_install:
-  - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
+  - curl -L "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" > docker-compose
   - chmod +x docker-compose
   - sudo mv docker-compose /usr/local/bin
   - ./gradlew downloadDependencies
