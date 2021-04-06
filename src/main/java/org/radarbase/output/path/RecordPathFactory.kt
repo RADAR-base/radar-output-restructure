@@ -40,7 +40,7 @@ abstract class RecordPathFactory : Plugin {
                         .ofPattern(it)
                         .withZone(UTC)
             } catch (ex: IllegalArgumentException) {
-                logger.error("Cannot use time bin format {}, using {} instad", it, timeBinFormat, ex)
+                logger.error("Cannot use time bin format {}, using {} instead", it, timeBinFormat, ex)
             }
         }
     }
