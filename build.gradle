@@ -28,6 +28,7 @@ ext {
     jedisVersion = '3.4.0'
     slf4jVersion = '1.7.30'
     azureStorageVersion = '12.9.0'
+    radarSchemasVersion = '0.5.15'
 }
 
 repositories {
@@ -60,7 +61,7 @@ dependencies {
 
     implementation "io.minio:minio:$minioVersion"
     implementation("com.azure:azure-storage-blob:$azureStorageVersion")
-    implementation 'com.opencsv:opencsv:5.0'
+    implementation 'com.opencsv:opencsv:5.4'
 
     implementation group: 'org.apache.avro', name: 'avro-mapred', version: avroVersion
     implementation group: 'org.apache.hadoop', name: 'hadoop-common', version: hadoopVersion
@@ -71,6 +72,7 @@ dependencies {
 
     runtimeOnly group: 'org.slf4j', name: 'slf4j-log4j12', version: slf4jVersion
     runtimeOnly group: 'org.apache.hadoop', name: 'hadoop-hdfs-client', version: hadoopVersion
+    testImplementation group: 'org.radarcns', name: 'radar-schemas-commons', version: radarSchemasVersion
     testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-api', version: junitVersion
     testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-params', version: junitVersion
     testRuntimeOnly group: 'org.junit.jupiter', name: 'junit-jupiter-engine', version: junitVersion

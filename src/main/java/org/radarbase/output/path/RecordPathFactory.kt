@@ -53,8 +53,11 @@ abstract class RecordPathFactory : Plugin {
      * paths already existed and are incompatible.
      * @return organization of given record
      */
-    open fun getRecordOrganization(topic: String,
-                              record: GenericRecord, attempt: Int): RecordOrganization {
+    open fun getRecordOrganization(
+        topic: String,
+        record: GenericRecord,
+        attempt: Int,
+    ): RecordOrganization {
         val keyField = record.get("key") as? GenericRecord
         val valueField = record.get("value") as? GenericRecord
 
@@ -81,8 +84,13 @@ abstract class RecordPathFactory : Plugin {
      * paths already existed and are incompatible.
      * @return relative path corresponding to given parameters.
      */
-    abstract fun getRelativePath(topic: String, key: GenericRecord,
-                                 value: GenericRecord, time: Instant?, attempt: Int): Path
+    abstract fun getRelativePath(
+        topic: String,
+        key: GenericRecord,
+        value: GenericRecord,
+        time: Instant?,
+        attempt: Int,
+    ): Path
 
     /**
      * Get the category of a record, representing a partitioning for a given topic and user.

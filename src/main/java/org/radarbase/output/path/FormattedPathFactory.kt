@@ -40,7 +40,7 @@ open class FormattedPathFactory : RecordPathFactory() {
         val parameters = "\\$\\{([^}]*)}".toRegex()
             .findAll(format)
             .map { it.groupValues[1] }
-            .toList()
+            .toSet()
 
         timeParameters = parameters
             .filter { it.startsWith("time:") }
@@ -60,10 +60,23 @@ open class FormattedPathFactory : RecordPathFactory() {
                         " or the following: $knownParameters",
             )
         }
+        if ("topic" !in parameters) {
+            throw IllegalArgumentException("Path must include topic parameter.")
+        }
+        if ("filename" !in parameters && ("extension" !in parameters || "attempt" !in parameters)) {
+            throw IllegalArgumentException(
+                "Path must include filename parameter or extension and attempt parameters."
+            )
+        }
     }
 
-    override fun getRelativePath(topic: String, key: GenericRecord,
-                                 value: GenericRecord, time: Instant?, attempt: Int): Path {
+    override fun getRelativePath(
+        topic: String,
+        key: GenericRecord,
+        value: GenericRecord,
+        time: Instant?,
+        attempt: Int,
+    ): Path {
         val attemptSuffix = if (attempt == 0) "" else "_$attempt"
 
         val templatedParameters = mutableMapOf(
@@ -72,6 +85,8 @@ open class FormattedPathFactory : RecordPathFactory() {
             "sourceId" to sanitizeId(key.get("sourceId"), "unknown-source"),
             "topic" to topic,
             "filename" to getTimeBin(time) + attemptSuffix + extension,
+            "attempt" to attemptSuffix,
+            "extension" to extension,
         )
 
         templatedParameters += if (time != null) {
@@ -100,7 +115,9 @@ open class FormattedPathFactory : RecordPathFactory() {
             "topic",
             "projectId",
             "userId",
-            "sourceId"
+            "sourceId",
+            "attempt",
+            "extension",
         )
 
         private val logger = LoggerFactory.getLogger(FormattedPathFactory::class.java)
