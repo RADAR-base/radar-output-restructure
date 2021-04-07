@@ -11,6 +11,8 @@ import org.radarbase.output.Application.Companion.CACHE_SIZE_DEFAULT
 import org.radarbase.output.Plugin
 import org.radarbase.output.compression.Compression
 import org.radarbase.output.compression.CompressionFactory
+import org.radarbase.output.config.RestructureConfig.Companion.copyEnv
+import org.radarbase.output.config.RestructureConfig.Companion.copyOnChange
 import org.radarbase.output.format.FormatFactory
 import org.radarbase.output.format.RecordConverterFactory
 import org.radarbase.output.path.ObservationKeyPathFactory
@@ -22,26 +24,27 @@ import java.nio.file.Path
 import java.nio.file.Paths
 
 data class RestructureConfig(
-        /** Whether and how to run as a service. */
-        val service: ServiceConfig = ServiceConfig(enable = false),
-        /** Cleaner of old files. */
-        val cleaner: CleanerConfig = CleanerConfig(),
-        /** Work limits. */
-        val worker: WorkerConfig = WorkerConfig(),
-        /** Topic exceptional handling. */
-        val topics: Map<String, TopicConfig> = emptyMap(),
-        /** Source data resource configuration. */
-        val source: ResourceConfig = ResourceConfig("s3"),
-        /** Target data resource configration. */
-        val target: ResourceConfig = ResourceConfig("local", local = LocalConfig()),
-        /** Redis configuration for synchronization and storing offsets. */
-        val redis: RedisConfig = RedisConfig(),
-        /** Paths to use for processing. */
-        val paths: PathConfig = PathConfig(),
-        /** File compression to use for output files. */
-        val compression: CompressionConfig = CompressionConfig(),
-        /** File format to use for output files. */
-        val format: FormatConfig = FormatConfig()) {
+    /** Whether and how to run as a service. */
+    val service: ServiceConfig = ServiceConfig(enable = false),
+    /** Cleaner of old files. */
+    val cleaner: CleanerConfig = CleanerConfig(),
+    /** Work limits. */
+    val worker: WorkerConfig = WorkerConfig(),
+    /** Topic exceptional handling. */
+    val topics: Map<String, TopicConfig> = emptyMap(),
+    /** Source data resource configuration. */
+    val source: ResourceConfig = ResourceConfig("s3"),
+    /** Target data resource configration. */
+    val target: ResourceConfig = ResourceConfig("local", local = LocalConfig()),
+    /** Redis configuration for synchronization and storing offsets. */
+    val redis: RedisConfig = RedisConfig(),
+    /** Paths to use for processing. */
+    val paths: PathConfig = PathConfig(),
+    /** File compression to use for output files. */
+    val compression: CompressionConfig = CompressionConfig(),
+    /** File format to use for output files. */
+    val format: FormatConfig = FormatConfig(),
+) {
 
     fun validate() {
         source.validate()
@@ -69,6 +72,11 @@ data class RestructureConfig(
         args.noRestructure?.let { copy(worker = worker.copy(enable = !it)) }
     }
 
+    fun withEnv(): RestructureConfig = this
+        .copyOnChange(source, { it.withEnv("SOURCE_") }) { copy(source = it) }
+        .copyOnChange(target, { it.withEnv("TARGET_") }) { copy(target = it) }
+        .copyOnChange(redis, { it.withEnv() }) { copy(redis = it) }
+
     companion object {
         fun load(path: String?): RestructureConfig = YAMLConfigLoader.load(path, RESTRUCTURE_CONFIG_FILE_NAME) {
             logger.info("No config file found. Using default configuration.")
@@ -77,21 +85,38 @@ data class RestructureConfig(
 
         private val logger = LoggerFactory.getLogger(RestructureConfig::class.java)
         internal const val RESTRUCTURE_CONFIG_FILE_NAME = "restructure.yml"
+
+        inline fun <T> T.copyEnv(key: String, doCopy: T.(String) -> T): T = copyOnChange<T, String?>(
+            null,
+            modification = { System.getenv(key) },
+            doCopy = { doCopy(requireNotNull(it)) }
+        )
+
+        inline fun <T, V> T.copyOnChange(original: V, modification: (V) -> V, doCopy: T.(V) -> T): T {
+            val newValue = modification(original)
+            return if (newValue != original) {
+                doCopy(newValue)
+            } else this
+        }
     }
 }
 
 /** Redis configuration. */
 data class RedisConfig(
-        /**
-         * Full Redis URI. The protocol should be redis for plain text and rediss for TLS. It
-         * should contain at least a hostname and port, but it may also include username and
-         * password.
-         */
-        val uri: URI = URI.create("redis://localhost:6379"),
-        /**
-         * Prefix to use for creating a lock of a topic.
-         */
-        val lockPrefix: String = "radar-output/lock")
+    /**
+     * Full Redis URI. The protocol should be redis for plain text and rediss for TLS. It
+     * should contain at least a hostname and port, but it may also include username and
+     * password.
+     */
+    val uri: URI = URI.create("redis://localhost:6379"),
+    /**
+     * Prefix to use for creating a lock of a topic.
+     */
+    val lockPrefix: String = "radar-output/lock",
+) {
+    fun withEnv(): RedisConfig = this
+        .copyEnv("REDIS_URI") { copy(uri = URI.create(it)) }
+}
 
 data class ServiceConfig(
         /** Whether to enable the service mode of this application. */
@@ -207,7 +232,7 @@ private inline fun <reified T: Plugin> String.toPluginInstance(properties: Map<S
 
 data class TopicConfig(
         /** Topic-specific deduplication handling. */
-        val deduplication: DeduplicationConfig? = null,
+        val deduplication: DeduplicationConfig = DeduplicationConfig(),
         /** Whether to exclude the topic from being processed. */
         val exclude: Boolean = false,
         /**
@@ -215,27 +240,28 @@ data class TopicConfig(
          * in the service.
          */
         val excludeFromDelete: Boolean = false) {
-    fun deduplication(deduplicationDefault: DeduplicationConfig): DeduplicationConfig {
-        return deduplication
-                ?.run { if (enable == null) copy(enable = deduplicationDefault.enable) else this }
-                ?.run { if (distinctFields == null) copy(distinctFields = deduplicationDefault.distinctFields) else this }
-                ?.run { if (ignoreFields == null) copy(distinctFields = deduplicationDefault.ignoreFields) else this }
-                ?: deduplicationDefault
-    }
+    fun deduplication(deduplicationDefault: DeduplicationConfig): DeduplicationConfig = deduplication
+        .withDefaults(deduplicationDefault)
 }
 
 data class DeduplicationConfig(
-        /** Whether to enable deduplication. */
-        val enable: Boolean? = null,
-        /**
-         * Only deduplicate using given fields. Fields not specified here are ignored
-         * for determining duplication.
-         */
-        val distinctFields: Set<String>? = null,
-        /**
-         * Ignore given fields for determining whether a row is identical to another.
-         */
-        val ignoreFields: Set<String>? = null)
+    /** Whether to enable deduplication. */
+    val enable: Boolean? = null,
+    /**
+     * Only deduplicate using given fields. Fields not specified here are ignored
+     * for determining duplication.
+     */
+    val distinctFields: Set<String>? = null,
+    /**
+     * Ignore given fields for determining whether a row is identical to another.
+     */
+    val ignoreFields: Set<String>? = null,
+) {
+    fun withDefaults(deduplicationDefaults: DeduplicationConfig): DeduplicationConfig = deduplicationDefaults
+        .copyOnChange<DeduplicationConfig, Boolean?>(null, { enable }) { copy(enable = it) }
+        .copyOnChange<DeduplicationConfig, Set<String>?>(null, { distinctFields }) { copy(distinctFields = it) }
+        .copyOnChange<DeduplicationConfig, Set<String>?>(null, { ignoreFields }) { copy(ignoreFields = it) }
+}
 
 data class HdfsConfig(
         /** HDFS name nodes to use. */
@@ -290,6 +316,13 @@ data class ResourceConfig(
             ResourceType.AZURE -> checkNotNull(azure) { "No Azure configuration provided." }
         }
     }
+
+    fun withEnv(prefix: String): ResourceConfig = when (sourceType) {
+        ResourceType.S3 -> copyOnChange(s3, { it?.withEnv(prefix) }) { copy(s3 = it) }
+        ResourceType.HDFS -> this
+        ResourceType.LOCAL -> this
+        ResourceType.AZURE -> copyOnChange(azure, { it?.withEnv(prefix) }) { copy(azure = it) }
+    }
 }
 
 enum class ResourceType {
@@ -305,46 +338,53 @@ fun String.toResourceType() = when(toLowerCase()) {
 }
 
 data class LocalConfig(
-        /** User ID (uid) to write data as. Only valid on Unix-based filesystems. */
-        val userId: Int = -1,
-        /** Group ID (gid) to write data as. Only valid on Unix-based filesystems. */
-        val groupId: Int = -1)
+    /** User ID (uid) to write data as. Only valid on Unix-based filesystems. */
+    val userId: Int = -1,
+    /** Group ID (gid) to write data as. Only valid on Unix-based filesystems. */
+    val groupId: Int = -1,
+)
 
 data class S3Config(
-        /** URL to reach object store at. */
-        val endpoint: String,
-        /** Access token for writing data with. */
-        val accessToken: String,
-        /** Secret key belonging to access token. */
-        val secretKey: String,
-        /** Bucket name. */
-        val bucket: String,
-        /** If no endOffset is in the filename, read it from object tags. */
-        val endOffsetFromTags: Boolean = false
+    /** URL to reach object store at. */
+    val endpoint: String,
+    /** Access token for writing data with. */
+    val accessToken: String,
+    /** Secret key belonging to access token. */
+    val secretKey: String,
+    /** Bucket name. */
+    val bucket: String,
+    /** If no endOffset is in the filename, read it from object tags. */
+    val endOffsetFromTags: Boolean = false,
 ) {
     fun createS3Client(): MinioClient = MinioClient.Builder()
             .endpoint(endpoint)
             .credentials(accessToken, secretKey)
             .build()
+
+    fun withEnv(prefix: String): S3Config = this
+        .copyEnv("${prefix}S3_ACCESS_TOKEN") { copy(accessToken = it) }
+        .copyEnv("${prefix}S3_SECRET_KEY") { copy(secretKey = it) }
+        .copyEnv("${prefix}S3_BUCKET") { copy(bucket = it) }
+        .copyEnv("${prefix}S3_ENDPOINT") { copy(endpoint = it) }
 }
 
 data class AzureConfig(
-        /** URL to reach object store at. */
-        val endpoint: String,
-        /** Name of the Azure Blob Storage container. */
-        val container: String,
-        /** If no endOffset is in the filename, read it from object metadata. */
-        val endOffsetFromMetadata: Boolean = false,
-        /** Azure username. */
-        val username: String?,
-        /** Azure password. */
-        val password: String?,
-        /** Shared Azure Blob Storage account name. */
-        val accountName: String?,
-        /** Shared Azure Blob Storage account key. */
-        val accountKey: String?,
-        /** Azure SAS token for a configured service. */
-        val sasToken: String?
+    /** URL to reach object store at. */
+    val endpoint: String,
+    /** Name of the Azure Blob Storage container. */
+    val container: String,
+    /** If no endOffset is in the filename, read it from object metadata. */
+    val endOffsetFromMetadata: Boolean = false,
+    /** Azure username. */
+    val username: String?,
+    /** Azure password. */
+    val password: String?,
+    /** Shared Azure Blob Storage account name. */
+    val accountName: String?,
+    /** Shared Azure Blob Storage account key. */
+    val accountKey: String?,
+    /** Azure SAS token for a configured service. */
+    val sasToken: String?,
 ) {
     fun createAzureClient(): BlobServiceClient = BlobServiceClientBuilder().apply {
         endpoint(endpoint)
@@ -355,6 +395,13 @@ data class AzureConfig(
             else -> logger.warn("No Azure credentials supplied. Assuming a public blob storage.")
         }
     }.buildClient()
+
+    fun withEnv(prefix: String): AzureConfig = this
+        .copyEnv("${prefix}AZURE_USERNAME") { copy(username = it) }
+        .copyEnv("${prefix}AZURE_PASSWORD") { copy(password = it) }
+        .copyEnv("${prefix}AZURE_ACCOUNT_NAME") { copy(accountName = it) }
+        .copyEnv("${prefix}AZURE_ACCOUNT_KEY") { copy(accountKey = it) }
+        .copyEnv("${prefix}AZURE_SAS_TOKEN") { copy(sasToken = it) }
 
     companion object {
         private val logger = LoggerFactory.getLogger(AzureConfig::class.java)
