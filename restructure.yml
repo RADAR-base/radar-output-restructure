@@ -132,9 +132,10 @@ paths:
   # Output directory in target
   output: /output
   # Output path construction factory
-  #factory: org.radarbase.output.path.MonthlyObservationKeyPathFactory
+  factory: org.radarbase.output.path.FormattedPathFactory
   # Additional properties
-  # properties: {}
+  # properties:
+  #   format: ${projectId}/${userId}/${topic}/${time:mm}/${time:YYYYmmDD_HH'00'}${attempt}${extension}
 
 # Individual topic configuration
 topics:

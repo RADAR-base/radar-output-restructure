@@ -146,6 +146,21 @@ target:
     groupId: 100  # write as regular group, use -1 to use current user (default).
 ```
 
+Secrets can be provided as environment variables as well:
+
+| Environment variable | Corresponding value |
+| --- | --- |
+| `SOURCE_S3_ACCESS_TOKEN` | `source.s3.accessToken` |
+| `SOURCE_S3_SECRET_KEY` | `source.s3.secretKey` |
+| `SOURCE_AZURE_USERNAME` | `source.azure.username` |
+| `SOURCE_AZURE_PASSWORD` | `source.azure.password` |
+| `SOURCE_AZURE_ACCOUNT_NAME` | `source.azure.accountName` |
+| `SOURCE_AZURE_ACCOUNT_KEY` | `source.azure.accountKey` |
+| `SOURCE_AZURE_SAS_TOKEN` | `source.azure.sasToken` |
+| `REDIS_URL` | `redis.url` |
+
+Replace `SOURCE` with `TARGET` in the variables above to configure the target storage.
+
 ### Cleaner
 
 Source files can be automatically be removed by a cleaner process. This checks whether the file has already been extracted and is older than a configured age. This feature is not enabled by default. It can be configured in the `cleaner` configuration section:

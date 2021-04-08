@@ -5,7 +5,7 @@ pluginManagement {
                 useModule("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
             }
             if (requested.id.id == "org.jetbrains.dokka") {
-                useModule("org.jetbrains.dokka:dokka-gradle-plugin:$kotlinVersion")
+                useModule("org.jetbrains.dokka:dokka-gradle-plugin:$dokkaVersion")
             }
         }
     }

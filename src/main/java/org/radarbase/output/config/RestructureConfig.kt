@@ -15,7 +15,7 @@ import org.radarbase.output.config.RestructureConfig.Companion.copyEnv
 import org.radarbase.output.config.RestructureConfig.Companion.copyOnChange
 import org.radarbase.output.format.FormatFactory
 import org.radarbase.output.format.RecordConverterFactory
-import org.radarbase.output.path.ObservationKeyPathFactory
+import org.radarbase.output.path.FormattedPathFactory
 import org.radarbase.output.path.RecordPathFactory
 import org.slf4j.LoggerFactory
 import java.net.URI
@@ -119,26 +119,26 @@ data class RedisConfig(
 }
 
 data class ServiceConfig(
-        /** Whether to enable the service mode of this application. */
-        val enable: Boolean,
-        /** Polling interval in seconds. */
-        val interval: Long = 300L,
-        /** Age in days after an avro file can be removed. Ignored if not strictly positive. */
-        val deleteAfterDays: Int = -1) {
-
+    /** Whether to enable the service mode of this application. */
+    val enable: Boolean,
+    /** Polling interval in seconds. */
+    val interval: Long = 300L,
+    /** Age in days after an avro file can be removed. Ignored if not strictly positive. */
+    val deleteAfterDays: Int = -1,
+) {
     fun validate() {
         check(interval > 0) { "Cleaner interval must be strictly positive" }
     }
 }
 
 data class CleanerConfig(
-        /** Whether to enable the cleaner. */
-        val enable: Boolean = false,
-        /** How often to run the cleaner in seconds. */
-        val interval: Long = 1260L,
-        /** Age in days after an avro file can be removed. Must be strictly positive. */
-        val age: Int = 7) {
-
+    /** Whether to enable the cleaner. */
+    val enable: Boolean = false,
+    /** How often to run the cleaner in seconds. */
+    val interval: Long = 1260L,
+    /** Age in days after an avro file can be removed. Must be strictly positive. */
+    val age: Int = 7,
+) {
     fun validate() {
         check(age > 0) { "Cleaner file age must be strictly positive" }
         check(interval > 0) { "Cleaner interval must be strictly positive" }
@@ -146,31 +146,31 @@ data class CleanerConfig(
 }
 
 data class WorkerConfig(
-        /** Whether to enable restructuring */
-        val enable: Boolean = true,
-        /** Number of threads to use for processing files. */
-        val numThreads: Int = 1,
-        /**
-         * Maximum number of files to process for a given topic. Limit this to ensure that a single
-         * processing iteration including lock takes a limited amount of time.
-         */
-        val maxFilesPerTopic: Int? = null,
-        /**
-         * Number of files to simultaneously keep in cache, including open writer. A higher size will
-         * decrease overhead but increase memory usage and open file descriptors.
-         */
-        val cacheSize: Int = CACHE_SIZE_DEFAULT,
-        /**
-         * Number of offsets to simultaneously keep in cache. A higher size will
-         * decrease overhead but increase memory usage.
-         */
-        val cacheOffsetsSize: Long = 500_000,
-        /**
-         * Minimum time since the file was last modified in seconds. Avoids
-         * synchronization issues that may occur in a source file that is being
-         * appended to.
-         */
-        val minimumFileAge: Long = 60
+    /** Whether to enable restructuring */
+    val enable: Boolean = true,
+    /** Number of threads to use for processing files. */
+    val numThreads: Int = 1,
+    /**
+     * Maximum number of files to process for a given topic. Limit this to ensure that a single
+     * processing iteration including lock takes a limited amount of time.
+     */
+    val maxFilesPerTopic: Int? = null,
+    /**
+     * Number of files to simultaneously keep in cache, including open writer. A higher size will
+     * decrease overhead but increase memory usage and open file descriptors.
+     */
+    val cacheSize: Int = CACHE_SIZE_DEFAULT,
+    /**
+     * Number of offsets to simultaneously keep in cache. A higher size will
+     * decrease overhead but increase memory usage.
+     */
+    val cacheOffsetsSize: Long = 500_000,
+    /**
+     * Minimum time since the file was last modified in seconds. Avoids
+     * synchronization issues that may occur in a source file that is being
+     * appended to.
+     */
+    val minimumFileAge: Long = 60,
 ) {
     init {
         check(cacheSize >= 1) { "Maximum files per topic must be strictly positive" }
@@ -187,23 +187,23 @@ interface PluginConfig {
 }
 
 data class PathConfig(
-        override val factory: String = ObservationKeyPathFactory::class.qualifiedName!!,
-        override val properties: Map<String, String> = emptyMap(),
-        /** Input paths referencing the source resource. */
-        val inputs: List<Path> = emptyList(),
-        /** Temporary directory for processing output files before uploading. */
-        val temp: Path = Files.createTempDirectory("radar-output-restructure"),
-        /** Output path on the target resource. */
-        val output: Path = Paths.get("output")
+    override val factory: String = FormattedPathFactory::class.qualifiedName!!,
+    override val properties: Map<String, String> = emptyMap(),
+    /** Input paths referencing the source resource. */
+    val inputs: List<Path> = emptyList(),
+    /** Temporary directory for processing output files before uploading. */
+    val temp: Path = Files.createTempDirectory("radar-output-restructure"),
+    /** Output path on the target resource. */
+    val output: Path = Paths.get("output"),
 ) : PluginConfig {
     fun createFactory(): RecordPathFactory = factory.toPluginInstance(properties)
 }
 
 data class CompressionConfig(
-        override val factory: String = CompressionFactory::class.qualifiedName!!,
-        override val properties: Map<String, String> = emptyMap(),
-        /** Compression type. Currently one of gzip, zip or none. */
-        val type: String = "none"
+    override val factory: String = CompressionFactory::class.qualifiedName!!,
+    override val properties: Map<String, String> = emptyMap(),
+    /** Compression type. Currently one of gzip, zip or none. */
+    val type: String = "none",
 ) : PluginConfig {
     fun createFactory(): CompressionFactory = factory.toPluginInstance(properties)
     fun createCompression(): Compression = createFactory()[type]
@@ -231,15 +231,16 @@ private inline fun <reified T: Plugin> String.toPluginInstance(properties: Map<S
 }
 
 data class TopicConfig(
-        /** Topic-specific deduplication handling. */
-        val deduplication: DeduplicationConfig = DeduplicationConfig(),
-        /** Whether to exclude the topic from being processed. */
-        val exclude: Boolean = false,
-        /**
-         * Whether to exclude the topic from being deleted, if this configuration has been set
-         * in the service.
-         */
-        val excludeFromDelete: Boolean = false) {
+    /** Topic-specific deduplication handling. */
+    val deduplication: DeduplicationConfig = DeduplicationConfig(),
+    /** Whether to exclude the topic from being processed. */
+    val exclude: Boolean = false,
+    /**
+     * Whether to exclude the topic from being deleted, if this configuration has been set
+     * in the service.
+     */
+    val excludeFromDelete: Boolean = false,
+) {
     fun deduplication(deduplicationDefault: DeduplicationConfig): DeduplicationConfig = deduplication
         .withDefaults(deduplicationDefault)
 }
@@ -264,10 +265,11 @@ data class DeduplicationConfig(
 }
 
 data class HdfsConfig(
-        /** HDFS name nodes to use. */
-        val nameNodes: List<String> = emptyList(),
-        /** Additional HDFS configuration parameters. */
-        val properties: Map<String, String> = emptyMap()) {
+    /** HDFS name nodes to use. */
+    val nameNodes: List<String> = emptyList(),
+    /** Additional HDFS configuration parameters. */
+    val properties: Map<String, String> = emptyMap(),
+) {
 
     val configuration: Configuration = Configuration()
 
@@ -296,20 +298,20 @@ data class HdfsConfig(
 }
 
 data class ResourceConfig(
-        /** Resource type. One of s3, hdfs or local. */
-        val type: String,
-        val s3: S3Config? = null,
-        val hdfs: HdfsConfig? = null,
-        val local: LocalConfig? = null,
-        val azure: AzureConfig? = null) {
-
+    /** Resource type. One of s3, hdfs or local. */
+    val type: String,
+    val s3: S3Config? = null,
+    val hdfs: HdfsConfig? = null,
+    val local: LocalConfig? = null,
+    val azure: AzureConfig? = null,
+) {
     @JsonIgnore
     lateinit var sourceType: ResourceType
 
     fun validate() {
         sourceType = type.toResourceType()
 
-        when(sourceType) {
+        when (sourceType) {
             ResourceType.S3 -> checkNotNull(s3) { "No S3 configuration provided." }
             ResourceType.HDFS -> checkNotNull(hdfs) { "No HDFS configuration provided." }.also { it.validate() }
             ResourceType.LOCAL -> checkNotNull(local) { "No local configuration provided." }
@@ -357,9 +359,9 @@ data class S3Config(
     val endOffsetFromTags: Boolean = false,
 ) {
     fun createS3Client(): MinioClient = MinioClient.Builder()
-            .endpoint(endpoint)
-            .credentials(accessToken, secretKey)
-            .build()
+        .endpoint(endpoint)
+        .credentials(accessToken, secretKey)
+        .build()
 
     fun withEnv(prefix: String): S3Config = this
         .copyEnv("${prefix}S3_ACCESS_TOKEN") { copy(accessToken = it) }
