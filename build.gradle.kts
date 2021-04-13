@@ -1,7 +1,7 @@
+import com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
 import org.jetbrains.dokka.gradle.DokkaTask
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-import com.avast.gradle.dockercompose.ComposeSettings
 
 plugins {
     kotlin("jvm")
@@ -9,7 +9,7 @@ plugins {
     `maven-publish`
     signing
     id("org.jetbrains.dokka") version "1.4.30"
-    id("com.avast.gradle.docker-compose") version "0.14.2"
+    id("com.avast.gradle.docker-compose") version "0.14.3"
     id("com.github.ben-manes.versions") version "0.38.0"
 }
 
@@ -28,6 +28,9 @@ application {
 
 repositories {
     mavenCentral()
+    // Temporary until Dokka is fully published on maven central.
+    // https://github.com/Kotlin/kotlinx.html/issues/81
+    maven(url = "https://maven.pkg.jetbrains.space/public/p/kotlinx-html/maven")
 }
 
 sourceSets {
@@ -85,7 +88,7 @@ dependencies {
     runtimeOnly("org.apache.hadoop:hadoop-hdfs-client:$hadoopVersion")
 
     val radarSchemasVersion: String by project
-    testImplementation("org.radarcns:radar-schemas-commons:$radarSchemasVersion")
+    testImplementation("org.radarbase:radar-schemas-commons:$radarSchemasVersion")
 
     val junitVersion: String by project
     testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")
@@ -94,8 +97,8 @@ dependencies {
     testImplementation("org.hamcrest:hamcrest-all:1.3")
     testImplementation("com.nhaarman.mockitokotlin2:mockito-kotlin:2.2.0")
 
-    val kotlinVersion: String by project
-    dokkaHtmlPlugin("org.jetbrains.dokka:kotlin-as-java-plugin:$kotlinVersion")
+    val dokkaVersion: String by project
+    dokkaHtmlPlugin("org.jetbrains.dokka:kotlin-as-java-plugin:$dokkaVersion")
 }
 
 tasks.withType<KotlinCompile> {
@@ -180,10 +183,6 @@ val dokkaJar by tasks.registering(Jar::class) {
     archiveClassifier.set("javadoc")
     from("$buildDir/dokka/javadoc/")
     dependsOn(tasks.dokkaJavadoc)
-}
-
-tasks.withType<DokkaTask> {
-    logging.level = LogLevel.QUIET
 }
 
 tasks.withType<Jar> {
@@ -272,6 +271,19 @@ tasks.withType<Sign> {
     onlyIf { gradle.taskGraph.hasTask("${project.path}:publish") }
 }
 
+fun isNonStable(version: String): Boolean {
+    val stableKeyword = listOf("RELEASE", "FINAL", "GA").any { version.toUpperCase().contains(it) }
+    val regex = "^[0-9,.v-]+(-r)?$".toRegex()
+    val isStable = stableKeyword || regex.matches(version)
+    return isStable.not()
+}
+
+tasks.named<DependencyUpdatesTask>("dependencyUpdates").configure {
+    rejectVersionIf {
+        isNonStable(candidate.version)
+    }
+}
+
 tasks.wrapper {
-    gradleVersion = "6.8.3"
+    gradleVersion = "7.0"
 }
