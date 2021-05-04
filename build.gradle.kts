@@ -8,9 +8,10 @@ plugins {
     application
     `maven-publish`
     signing
-    id("org.jetbrains.dokka") version "1.4.30"
+    id("org.jetbrains.dokka") version "1.4.32"
     id("com.avast.gradle.docker-compose") version "0.14.3"
     id("com.github.ben-manes.versions") version "0.38.0"
+    id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
 }
 
 group = "org.radarbase"
@@ -28,9 +29,6 @@ application {
 
 repositories {
     mavenCentral()
-    // Temporary until Dokka is fully published on maven central.
-    // https://github.com/Kotlin/kotlinx.html/issues/81
-    maven(url = "https://maven.pkg.jetbrains.space/public/p/kotlinx-html/maven")
 }
 
 sourceSets {
@@ -236,28 +234,6 @@ publishing {
             }
         }
     }
-
-    repositories {
-        fun Project.propertyOrEnv(propertyName: String, envName: String): String? {
-            return if (hasProperty(propertyName)) {
-                property(propertyName)?.toString()
-            } else {
-                System.getenv(envName)
-            }
-        }
-
-        maven {
-            name = "OSSRH"
-            credentials {
-                username = propertyOrEnv("ossrh.user", "OSSRH_USER")
-                password = propertyOrEnv("ossrh.password", "OSSRH_PASSWORD")
-            }
-
-            val releasesRepoUrl = uri("https://oss.sonatype.org/service/local/staging/deploy/maven2/")
-            val snapshotsRepoUrl = uri("https://oss.sonatype.org/content/repositories/snapshots/")
-            url = if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl
-        }
-    }
 }
 
 signing {
@@ -268,7 +244,24 @@ signing {
 }
 
 tasks.withType<Sign> {
-    onlyIf { gradle.taskGraph.hasTask("${project.path}:publish") }
+    onlyIf { gradle.taskGraph.hasTask(project.tasks["publish"]) }
+}
+
+fun Project.propertyOrEnv(propertyName: String, envName: String): String? {
+    return if (hasProperty(propertyName)) {
+        property(propertyName)?.toString()
+    } else {
+        System.getenv(envName)
+    }
+}
+
+nexusPublishing {
+    repositories {
+        sonatype {
+            username.set(propertyOrEnv("ossrh.user", "OSSRH_USER"))
+            password.set(propertyOrEnv("ossrh.password", "OSSRH_PASSWORD"))
+        }
+    }
 }
 
 fun isNonStable(version: String): Boolean {
