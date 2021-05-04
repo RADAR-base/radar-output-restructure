@@ -20,7 +20,7 @@ version = "1.2.0"
 
 description = "RADAR-base output restructuring"
 val website = "https://radar-base.org"
-val githubRepoName = "RADAR-base/Restructure-HDFS-topic"
+val githubRepoName = "RADAR-base/radar-output-restructure"
 val githubUrl = "https://github.com/${githubRepoName}"
 val issueUrl = "${githubUrl}/issues"
 
@@ -119,7 +119,7 @@ distributions {
 }
 
 tasks.startScripts {
-    classpath = files("lib/PlaceHolderForPluginPath")
+    classpath = classpath?.let { it + files("lib/PlaceHolderForPluginPath") }
 
     doLast {
         val windowsScriptFile = file(getWindowsScript())
