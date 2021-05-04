@@ -24,7 +24,6 @@ class AzureSourceStorage(
             .asSequence()
             .map { SimpleFileStatus(Paths.get(it.name), it.isPrefix ?: false, it.properties?.lastModified?.toInstant()) }
 
-
     override fun createTopicFile(topic: String, status: SimpleFileStatus): TopicFile {
         var topicFile = super.createTopicFile(topic, status)
 

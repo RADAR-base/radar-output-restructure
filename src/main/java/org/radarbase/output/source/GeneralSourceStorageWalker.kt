@@ -16,8 +16,8 @@ class GeneralSourceStorageWalker(
             }
 
     private fun findTopicPaths(path: Path): Sequence<Path> {
-        val fileStatuses = kafkaStorage.list(path)
-        val avroFile = fileStatuses.find {  !it.isDirectory && it.path.fileName.toString().endsWith(".avro", true) }
+        val fileStatuses = kafkaStorage.list(path).toList()
+        val avroFile = fileStatuses.find { !it.isDirectory && it.path.fileName.toString().endsWith(".avro", true) }
 
         return if (avroFile != null) {
             sequenceOf(avroFile.path.parent.parent)
