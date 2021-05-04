@@ -2,6 +2,7 @@ import com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
 import org.jetbrains.dokka.gradle.DokkaTask
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import java.time.Duration
 
 plugins {
     kotlin("jvm")
@@ -147,9 +148,15 @@ tasks.withType<Test> {
     }
 }
 
+dockerCompose {
+    waitForTcpPortsTimeout = Duration.ofSeconds(30)
+    environment["SERVICES_HOST"] = "localhost"
+    captureContainersOutputToFiles = project.file("build/container-logs")
+    isRequiredBy(integrationTest)
+}
+
 val check by tasks
 check.dependsOn(integrationTest)
-project.dockerCompose.isRequiredBy(integrationTest)
 
 tasks.withType<Tar> {
     compression = Compression.GZIP
