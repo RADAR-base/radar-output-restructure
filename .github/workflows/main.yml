@@ -98,9 +98,7 @@ jobs:
           file: ./Dockerfile
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
-          load: ${{ github.event_name == 'pull_request' }}
-          push: ${{ github.event_name != 'pull_request' }}
-          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          load: true
           tags: ${{ steps.docker_meta.outputs.tags }}
           # Use runtime labels from docker_meta as well as fixed labels
           labels: |
@@ -110,12 +108,13 @@ jobs:
             org.opencontainers.image.vendor=RADAR-base
             org.opencontainers.image.licenses=Apache-2.0
 
-      # If the image was pushed, we need to pull it again to inspect it
-      - name: Pull image
-        if: ${{ github.event_name != 'pull_request' }}
-        run: docker pull ${{ env.DOCKER_IMAGE }}:${{ steps.docker_meta.outputs.version }}
-
       - name: Inspect image
         run: |
           docker image inspect ${{ env.DOCKER_IMAGE }}:${{ steps.docker_meta.outputs.version }}
           docker run --rm ${{ env.DOCKER_IMAGE }}:${{ steps.docker_meta.outputs.version }} curl --help
+
+      # If the image was pushed, we need to pull it again to inspect it
+      - name: Push image
+        if: ${{ github.event_name != 'pull_request' }}
+        run: docker push ${{ env.DOCKER_IMAGE }}:${{ steps.docker_meta.outputs.version }}
+
