@@ -10,20 +10,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM gradle:6.7.1-jdk11 AS builder
+FROM gradle:7.0-jdk11 AS builder
 
 RUN mkdir /code
 WORKDIR /code
 
 ENV GRADLE_USER_HOME=/code/.gradlecache
 
-COPY ./build.gradle ./gradle.properties ./settings.gradle /code/
+COPY ./build.gradle.kts ./gradle.properties ./settings.gradle.kts /code/
 
-RUN gradle downloadDependencies copyDependencies startScripts
+RUN gradle downloadDependencies copyDependencies startScripts --no-watch-fs
 
 COPY ./src /code/src
 
-RUN gradle jar
+RUN gradle jar --no-watch-fs
 
 FROM openjdk:11-jre-slim
 
