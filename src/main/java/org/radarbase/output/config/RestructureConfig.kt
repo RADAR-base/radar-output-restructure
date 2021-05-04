@@ -6,7 +6,6 @@ import com.azure.storage.blob.BlobServiceClientBuilder
 import com.azure.storage.common.StorageSharedKeyCredential
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.minio.MinioClient
-import org.apache.hadoop.conf.Configuration
 import org.radarbase.output.Application.Companion.CACHE_SIZE_DEFAULT
 import org.radarbase.output.Plugin
 import org.radarbase.output.compression.Compression
@@ -34,7 +33,7 @@ data class RestructureConfig(
     val topics: Map<String, TopicConfig> = emptyMap(),
     /** Source data resource configuration. */
     val source: ResourceConfig = ResourceConfig("s3"),
-    /** Target data resource configration. */
+    /** Target data resource configuration. */
     val target: ResourceConfig = ResourceConfig("local", local = LocalConfig()),
     /** Redis configuration for synchronization and storing offsets. */
     val redis: RedisConfig = RedisConfig(),
@@ -270,28 +269,6 @@ data class HdfsConfig(
     /** Additional HDFS configuration parameters. */
     val properties: Map<String, String> = emptyMap(),
 ) {
-
-    val configuration: Configuration = Configuration()
-
-    init {
-        configuration["fs.hdfs.impl.disable.cache"] = "true"
-        if (nameNodes.size == 1) {
-            configuration["fs.defaultFS"] = "hdfs://${nameNodes.first()}:8020"
-        }
-        if (nameNodes.size >= 2) {
-            val clusterId = "radarCluster"
-            configuration["fs.defaultFS"] = "hdfs://$clusterId"
-            configuration["dfs.nameservices"] = clusterId
-            configuration["dfs.ha.namenodes.$clusterId"] = nameNodes.indices.joinToString(",") { "nn$it" }
-
-            nameNodes.forEachIndexed { i, hostname ->
-                configuration["dfs.namenode.rpc-address.$clusterId.nn$i"] = "$hostname:8020"
-            }
-
-            configuration["dfs.client.failover.proxy.provider.$clusterId"] = "org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider"
-        }
-    }
-
     fun validate() {
         check(nameNodes.isNotEmpty()) { "Cannot use HDFS without any name nodes." }
     }

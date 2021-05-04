@@ -10,3 +10,5 @@ pluginManagement {
 }
 
 rootProject.name = "radar-output-restructure"
+
+include(":radar-hdfs-restructure")
