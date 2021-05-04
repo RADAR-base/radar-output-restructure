@@ -186,11 +186,12 @@ class Application(
 
             val application = try {
                 Application(RestructureConfig
-                        .load(commandLineArgs.configFile)
-                        .apply {
-                            addArgs(commandLineArgs)
-                            validate()
-                        })
+                    .load(commandLineArgs.configFile)
+                    .withEnv()
+                    .apply {
+                        addArgs(commandLineArgs)
+                        validate()
+                    })
             } catch (ex: IllegalArgumentException) {
                 logger.error("Illegal argument", ex)
                 exitProcess(1)
