@@ -305,12 +305,12 @@ data class ResourceConfig(
     val local: LocalConfig? = null,
     val azure: AzureConfig? = null,
 ) {
-    @JsonIgnore
-    lateinit var sourceType: ResourceType
+    @get:JsonIgnore
+    val sourceType: ResourceType by lazy {
+        requireNotNull(type.toResourceType()) { "Unknown resource type $type, choose s3, hdfs or local" }
+    }
 
     fun validate() {
-        sourceType = type.toResourceType()
-
         when (sourceType) {
             ResourceType.S3 -> checkNotNull(s3) { "No S3 configuration provided." }
             ResourceType.HDFS -> checkNotNull(hdfs) { "No HDFS configuration provided." }.also { it.validate() }
@@ -336,7 +336,7 @@ fun String.toResourceType() = when(toLowerCase()) {
     "hdfs" -> ResourceType.HDFS
     "local" -> ResourceType.LOCAL
     "azure" -> ResourceType.AZURE
-    else -> throw IllegalStateException("Unknown resource type $this, choose s3, hdfs or local")
+    else -> null
 }
 
 data class LocalConfig(
