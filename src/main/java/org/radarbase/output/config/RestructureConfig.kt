@@ -363,9 +363,9 @@ data class S3Config(
     fun createS3Client(): MinioClient = MinioClient.Builder().apply {
         endpoint(endpoint)
         if (accessToken.isNullOrBlank() || secretKey.isNullOrBlank()) {
-            credentials(accessToken, secretKey)
-        } else {
             credentialsProvider(IamAwsProvider(null, null))
+        } else {
+            credentials(accessToken, secretKey)
         }
     }.build()
 
