@@ -16,7 +16,7 @@ plugins {
 }
 
 group = "org.radarbase"
-version = "1.2.0"
+version = "1.2.1"
 
 description = "RADAR-base output restructuring"
 val website = "https://radar-base.org"
