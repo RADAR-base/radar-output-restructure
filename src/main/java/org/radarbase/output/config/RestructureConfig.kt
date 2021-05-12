@@ -6,6 +6,7 @@ import com.azure.storage.blob.BlobServiceClientBuilder
 import com.azure.storage.common.StorageSharedKeyCredential
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.minio.MinioClient
+import io.minio.credentials.IamAwsProvider
 import org.apache.hadoop.conf.Configuration
 import org.radarbase.output.Application.Companion.CACHE_SIZE_DEFAULT
 import org.radarbase.output.Plugin
@@ -361,8 +362,10 @@ data class S3Config(
 
     fun createS3Client(): MinioClient = MinioClient.Builder().apply {
         endpoint(endpoint)
-        if (!accessToken.isNullOrBlank() && !secretKey.isNullOrBlank()) {
+        if (accessToken.isNullOrBlank() || secretKey.isNullOrBlank()) {
             credentials(accessToken, secretKey)
+        } else {
+            credentialsProvider(IamAwsProvider(null, null))
         }
     }.build()
 
