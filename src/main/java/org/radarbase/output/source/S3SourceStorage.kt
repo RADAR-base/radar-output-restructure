@@ -1,6 +1,7 @@
 package org.radarbase.output.source
 
 import io.minio.*
+import io.minio.errors.ErrorResponseException
 import io.minio.messages.Tags
 import org.apache.avro.file.SeekableFileInput
 import org.apache.avro.file.SeekableInput
@@ -9,6 +10,7 @@ import org.radarbase.output.util.TemporaryDirectory
 import org.radarbase.output.util.bucketBuild
 import org.radarbase.output.util.objectBuild
 import org.slf4j.LoggerFactory
+import java.io.FileNotFoundException
 import java.io.IOException
 import java.nio.file.*
 
@@ -111,6 +113,11 @@ class S3SourceStorage(
                 try {
                     return attempt(i)
                 } catch (ex: Exception) {
+                    if (ex is ErrorResponseException &&
+                        (ex.errorResponse().code() == "NoSuchKey" || ex.errorResponse().code() == "ResourceNotFound")
+                    ) {
+                        throw FileNotFoundException()
+                    }
                     logger.warn("Temporarily failed to do S3 operation: {}", ex.toString())
                     if (i < 2) {
                         logger.warn("Temporarily failed to do S3 operation: {}, retrying after 1 second.", ex.toString())

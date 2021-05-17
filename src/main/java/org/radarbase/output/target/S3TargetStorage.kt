@@ -23,6 +23,7 @@ import org.radarbase.output.source.S3SourceStorage.Companion.faultTolerant
 import org.radarbase.output.util.bucketBuild
 import org.radarbase.output.util.objectBuild
 import org.slf4j.LoggerFactory
+import java.io.FileNotFoundException
 import java.io.IOException
 import java.io.InputStream
 import java.nio.file.Files
@@ -55,17 +56,13 @@ class S3TargetStorage(config: S3Config) : TargetStorage {
 
     override fun status(path: Path): TargetStorage.PathStatus? {
         val statRequest = StatObjectArgs.Builder().objectBuild(bucket, path)
-        return faultTolerant {
-            try {
-              s3Client.statObject(statRequest)
-                  .let { TargetStorage.PathStatus(it.size()) }
-            } catch (ex: ErrorResponseException) {
-                if (ex.errorResponse().code() == "NoSuchKey" || ex.errorResponse().code() == "ResourceNotFound") {
-                    null
-                } else {
-                    throw ex
-                }
+        return try {
+            faultTolerant {
+                s3Client.statObject(statRequest)
+                    .let { TargetStorage.PathStatus(it.size()) }
             }
+        } catch (ex: FileNotFoundException) {
+            null
         }
     }
 
