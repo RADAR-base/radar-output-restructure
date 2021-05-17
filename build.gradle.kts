@@ -1,6 +1,5 @@
 import com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
-import org.jetbrains.dokka.gradle.DokkaTask
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.time.Duration
 
@@ -65,10 +64,8 @@ allprojects {
             classpath = classpath?.let { it + files("lib/PlaceHolderForPluginPath") }
 
             doLast {
-                val windowsScriptFile = file(getWindowsScript())
-                val unixScriptFile    = file(getUnixScript())
-                windowsScriptFile.writeText(windowsScriptFile.readText().replace("PlaceHolderForPluginPath", "radar-output-plugins\\*"))
-                unixScriptFile.writeText(unixScriptFile.readText().replace("PlaceHolderForPluginPath", "radar-output-plugins/*"))
+                windowsScript.writeText(windowsScript.readText().replace("PlaceHolderForPluginPath", "radar-output-plugins\\*"))
+                unixScript.writeText(unixScript.readText().replace("PlaceHolderForPluginPath", "radar-output-plugins/*"))
             }
         }
 
@@ -77,7 +74,7 @@ allprojects {
             testLogging {
                 events("passed", "skipped", "failed")
                 showStandardStreams = true
-                setExceptionFormat(FULL)
+                exceptionFormat = FULL
             }
         }
 
@@ -129,6 +126,8 @@ configurations["integrationTestRuntimeOnly"].extendsFrom(
 dependencies {
     val avroVersion: String by project
     api("org.apache.avro:avro:$avroVersion")
+    val snappyVersion: String by project
+    runtimeOnly("org.xerial.snappy:snappy-java:$snappyVersion")
 
     val jacksonVersion: String by project
     implementation("com.fasterxml.jackson:jackson-bom:$jacksonVersion")
@@ -230,7 +229,7 @@ publishing {
                 licenses {
                     license {
                         name.set("The Apache Software License, Version 2.0")
-                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                        url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
                         distribution.set("repo")
                     }
                 }
