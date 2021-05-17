@@ -121,7 +121,7 @@ class S3SourceStorage(
                     logger.warn("Temporarily failed to do S3 operation: {}", ex.toString())
                     if (i < 2) {
                         logger.warn("Temporarily failed to do S3 operation: {}, retrying after 1 second.", ex.toString())
-                        Thread.sleep(i * 1000L)
+                        Thread.sleep((i + 1) * 1000L)
                     } else {
                         logger.error("Failed to do S3 operation: {}", ex.toString())
                         exception = ex
