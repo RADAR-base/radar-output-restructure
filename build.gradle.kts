@@ -14,91 +14,11 @@ plugins {
     id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
 }
 
-allprojects {
-    apply(plugin = "application")
+group = "org.radarbase"
+version = "2.0.0-SNAPSHOT"
 
-    group = "org.radarbase"
-    version = "2.0.0-SNAPSHOT"
-
-    repositories {
-        mavenCentral()
-    }
-
-    application {
-        mainClass.set("org.radarbase.output.Application")
-    }
-
-    tasks.register("downloadDependencies") {
-        doLast {
-            description = "Pre-downloads dependencies"
-            configurations.compileClasspath.get().files
-            configurations.runtimeClasspath.get().files
-        }
-        outputs.upToDateWhen { false }
-    }
-
-    tasks.register<Copy>("copyDependencies") {
-        from(configurations.runtimeClasspath.get().files)
-        into("$buildDir/third-party/")
-    }
-
-
-    fun isNonStable(version: String): Boolean {
-        val stableKeyword = listOf("RELEASE", "FINAL", "GA").any { version.toUpperCase().contains(it) }
-        val regex = "^[0-9,.v-]+(-r)?$".toRegex()
-        val isStable = stableKeyword || regex.matches(version)
-        return isStable.not()
-    }
-
-    afterEvaluate {
-        tasks.withType<KotlinCompile> {
-            kotlinOptions {
-                jvmTarget = "11"
-                apiVersion = "1.4"
-                languageVersion = "1.4"
-            }
-        }
-
-
-        tasks.startScripts {
-            classpath = classpath?.let { it + files("lib/PlaceHolderForPluginPath") }
-
-            doLast {
-                windowsScript.writeText(windowsScript.readText().replace("PlaceHolderForPluginPath", "radar-output-plugins\\*"))
-                unixScript.writeText(unixScript.readText().replace("PlaceHolderForPluginPath", "radar-output-plugins/*"))
-            }
-        }
-
-        tasks.withType<Test> {
-            useJUnitPlatform()
-            testLogging {
-                events("passed", "skipped", "failed")
-                showStandardStreams = true
-                exceptionFormat = FULL
-            }
-        }
-
-
-        tasks.withType<Tar> {
-            compression = Compression.GZIP
-            archiveExtension.set("tar.gz")
-        }
-
-        tasks.withType<Jar> {
-            manifest {
-                attributes(
-                    "Implementation-Title" to project.name,
-                    "Implementation-Version" to project.version
-                )
-            }
-        }
-
-        tasks.named<DependencyUpdatesTask>("dependencyUpdates").configure {
-            rejectVersionIf {
-                isNonStable(candidate.version)
-            }
-        }
-    }
+repositories {
+    mavenCentral()
 }
 
 description = "RADAR-base output restructuring"
@@ -172,6 +92,10 @@ dependencies {
     dokkaHtmlPlugin("org.jetbrains.dokka:kotlin-as-java-plugin:$dokkaVersion")
 }
 
+application {
+    mainClass.set("org.radarbase.output.Application")
+}
+
 distributions {
     main {
         contents {
@@ -182,25 +106,13 @@ distributions {
     }
 }
 
-val integrationTest by tasks.registering(Test::class) {
-    description = "Runs integration tests."
-    group = "verification"
-
-    testClassesDirs = sourceSets["integrationTest"].output.classesDirs
-    classpath = sourceSets["integrationTest"].runtimeClasspath
-    outputs.upToDateWhen { false }
-    shouldRunAfter("test")
+tasks.withType<KotlinCompile> {
+    kotlinOptions {
+        jvmTarget = "11"
+        apiVersion = "1.4"
+        languageVersion = "1.4"
+    }
 }
-
-dockerCompose {
-    waitForTcpPortsTimeout = Duration.ofSeconds(30)
-    environment["SERVICES_HOST"] = "localhost"
-    captureContainersOutputToFiles = project.file("build/container-logs")
-    isRequiredBy(integrationTest)
-}
-
-val check by tasks
-check.dependsOn(integrationTest)
 
 // custom tasks for creating source/javadoc jars
 val sourcesJar by tasks.registering(Jar::class) {
@@ -213,6 +125,29 @@ val dokkaJar by tasks.registering(Jar::class) {
     archiveClassifier.set("javadoc")
     from("$buildDir/dokka/javadoc/")
     dependsOn(tasks.dokkaJavadoc)
+}
+
+tasks.withType<Tar> {
+    compression = Compression.GZIP
+    archiveExtension.set("tar.gz")
+}
+
+tasks.withType<Jar> {
+    manifest {
+        attributes(
+            "Implementation-Title" to project.name,
+            "Implementation-Version" to project.version
+        )
+    }
+}
+
+tasks.startScripts {
+    classpath = classpath?.let { it + files("lib/PlaceHolderForPluginPath") }
+
+    doLast {
+        windowsScript.writeText(windowsScript.readText().replace("PlaceHolderForPluginPath", "radar-output-plugins\\*"))
+        unixScript.writeText(unixScript.readText().replace("PlaceHolderForPluginPath", "radar-output-plugins/*"))
+    }
 }
 
 publishing {
@@ -284,6 +219,62 @@ nexusPublishing {
             username.set(propertyOrEnv("ossrh.user", "OSSRH_USER"))
             password.set(propertyOrEnv("ossrh.password", "OSSRH_PASSWORD"))
         }
+    }
+}
+
+val integrationTest by tasks.registering(Test::class) {
+    description = "Runs integration tests."
+    group = "verification"
+
+    testClassesDirs = sourceSets["integrationTest"].output.classesDirs
+    classpath = sourceSets["integrationTest"].runtimeClasspath
+    outputs.upToDateWhen { false }
+    shouldRunAfter("test")
+}
+
+dockerCompose {
+    waitForTcpPortsTimeout = Duration.ofSeconds(30)
+    environment["SERVICES_HOST"] = "localhost"
+    captureContainersOutputToFiles = project.file("build/container-logs")
+    isRequiredBy(integrationTest)
+}
+
+val check by tasks
+check.dependsOn(integrationTest)
+
+tasks.withType<Test> {
+    useJUnitPlatform()
+    testLogging {
+        events("passed", "skipped", "failed")
+        showStandardStreams = true
+        exceptionFormat = FULL
+    }
+}
+
+tasks.register("downloadDependencies") {
+    doLast {
+        description = "Pre-downloads dependencies"
+        configurations.compileClasspath.get().files
+        configurations.runtimeClasspath.get().files
+    }
+    outputs.upToDateWhen { false }
+}
+
+tasks.register<Copy>("copyDependencies") {
+    from(configurations.runtimeClasspath.get().files)
+    into("$buildDir/third-party/")
+}
+
+fun isNonStable(version: String): Boolean {
+    val stableKeyword = listOf("RELEASE", "FINAL", "GA").any { version.toUpperCase().contains(it) }
+    val regex = "^[0-9,.v-]+(-r)?$".toRegex()
+    val isStable = stableKeyword || regex.matches(version)
+    return isStable.not()
+}
+
+tasks.named<DependencyUpdatesTask>("dependencyUpdates").configure {
+    rejectVersionIf {
+        isNonStable(candidate.version)
     }
 }
 
