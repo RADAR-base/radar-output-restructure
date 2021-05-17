@@ -3,15 +3,14 @@ package org.radarbase.output.source
 import io.minio.*
 import org.apache.avro.file.SeekableFileInput
 import org.apache.avro.file.SeekableInput
+import org.eclipse.jetty.util.MultiException
 import org.radarbase.output.config.S3Config
 import org.radarbase.output.util.TemporaryDirectory
 import org.radarbase.output.util.bucketBuild
 import org.radarbase.output.util.objectBuild
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
+import java.nio.file.*
 
 class S3SourceStorage(
         private val s3Client: MinioClient,
@@ -22,17 +21,19 @@ class S3SourceStorage(
     private val bucket = config.bucket
     private val readEndOffset = config.endOffsetFromTags
 
-    override fun list(path: Path): Sequence<SimpleFileStatus> = s3Client.listObjects(
-            ListObjectsArgs.Builder().bucketBuild(bucket) {
-                prefix("$path/")
-                recursive(false)
-                useUrlEncodingType(false)
-            })
+    override fun list(path: Path): Sequence<SimpleFileStatus> {
+        val listRequest = ListObjectsArgs.Builder().bucketBuild(bucket) {
+            prefix("$path/")
+            recursive(false)
+            useUrlEncodingType(false)
+        }
+        return tryRetry { s3Client.listObjects(listRequest) }
             .asSequence()
             .map {
                 val item = it.get()
                 SimpleFileStatus(Paths.get(item.objectName()), item.isDir, if (item.isDir) null else item.lastModified().toInstant())
             }
+    }
 
     override fun createTopicFile(topic: String, status: SimpleFileStatus): TopicFile {
         var topicFile = super.createTopicFile(topic, status)
@@ -56,7 +57,8 @@ class S3SourceStorage(
     }
 
     override fun delete(path: Path) {
-        s3Client.removeObject(RemoveObjectArgs.Builder().objectBuild(bucket, path))
+        val removeRequest = RemoveObjectArgs.Builder().objectBuild(bucket, path)
+        tryRetry { s3Client.removeObject(removeRequest) }
     }
 
     override fun createReader(): SourceStorage.SourceStorageReader = S3SourceStorageReader()
@@ -68,10 +70,13 @@ class S3SourceStorage(
             val tempFile = Files.createTempFile(tempDir.path, "${file.topic}-${file.path.fileName}", ".avro")
 
             try {
-                Files.newOutputStream(tempFile).use { out ->
-                    s3Client.getObject(GetObjectArgs.Builder().objectBuild(bucket, file.path)).copyTo(out)
+                tryRetry {
+                    Files.newOutputStream(tempFile, StandardOpenOption.TRUNCATE_EXISTING).use { out ->
+                        s3Client.getObject(GetObjectArgs.Builder().objectBuild(bucket, file.path))
+                            .copyTo(out)
+                    }
                 }
-            } catch (ex: IOException) {
+            } catch (ex: Exception) {
                 try {
                     Files.delete(tempFile)
                 } catch (ex: IOException) {
@@ -94,5 +99,26 @@ class S3SourceStorage(
 
     companion object {
         private val logger = LoggerFactory.getLogger(S3SourceStorage::class.java)
+
+        fun <T> tryRetry(attempt: (Int) -> T): T = tryRepeat(3, attempt)
+
+        fun <T> tryRepeat(numberOfAttempts: Int, attempt: (Int) -> T): T {
+            val exceptions = MultiException()
+            repeat(numberOfAttempts) { i ->
+                try {
+                    return attempt(i)
+                } catch (ex: Exception) {
+                    logger.warn("Temporarily failed to do S3 operation: {}", ex.toString())
+                    if (i < numberOfAttempts - 1) {
+                        logger.warn("Temporarily failed to do S3 operation: {}, retrying after 1 second.", ex.toString())
+                        Thread.sleep(1000L)
+                    } else {
+                        logger.error("Failed to do S3 operation: {}", ex.toString())
+                    }
+                    exceptions.add(ex)
+                }
+            }
+            throw exceptions
+        }
     }
 }

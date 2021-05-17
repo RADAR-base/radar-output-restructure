@@ -19,6 +19,7 @@ package org.radarbase.output.target
 import io.minio.*
 import io.minio.errors.ErrorResponseException
 import org.radarbase.output.config.S3Config
+import org.radarbase.output.source.S3SourceStorage.Companion.tryRepeat
 import org.radarbase.output.util.bucketBuild
 import org.radarbase.output.util.objectBuild
 import org.slf4j.LoggerFactory
@@ -53,41 +54,49 @@ class S3TargetStorage(config: S3Config) : TargetStorage {
     }
 
     override fun status(path: Path): TargetStorage.PathStatus? {
-        return try {
-            s3Client.statObject(StatObjectArgs.Builder().objectBuild(bucket, path))
-                    .let { TargetStorage.PathStatus(it.size()) }
-        } catch (ex: ErrorResponseException) {
-            if (ex.errorResponse().code() == "NoSuchKey" || ex.errorResponse().code() == "ResourceNotFound") {
-                null
-            } else {
-                throw ex
+        val statRequest = StatObjectArgs.Builder().objectBuild(bucket, path)
+        return tryRetry {
+            try {
+              s3Client.statObject(statRequest)
+                  .let { TargetStorage.PathStatus(it.size()) }
+            } catch (ex: ErrorResponseException) {
+                if (ex.errorResponse().code() == "NoSuchKey" || ex.errorResponse().code() == "ResourceNotFound") {
+                    null
+                } else {
+                    throw ex
+                }
             }
         }
     }
 
     @Throws(IOException::class)
-    override fun newInputStream(path: Path): InputStream = s3Client.getObject(
-            GetObjectArgs.Builder().objectBuild(bucket, path))
+    override fun newInputStream(path: Path): InputStream {
+        val getRequest = GetObjectArgs.Builder().objectBuild(bucket, path)
+        return tryRetry { s3Client.getObject(getRequest) }
+    }
 
     @Throws(IOException::class)
     override fun move(oldPath: Path, newPath: Path) {
-        s3Client.copyObject(CopyObjectArgs.Builder().objectBuild(bucket, newPath) {
+        val copyRequest = CopyObjectArgs.Builder().objectBuild(bucket, newPath) {
             source(CopySource.Builder().objectBuild(bucket, oldPath))
-        })
+        }
+        tryRetry { s3Client.copyObject(copyRequest) }
         delete(oldPath)
     }
 
     @Throws(IOException::class)
     override fun store(localPath: Path, newPath: Path) {
-        s3Client.uploadObject(UploadObjectArgs.Builder().objectBuild(bucket, newPath) {
+        val uploadRequest = UploadObjectArgs.Builder().objectBuild(bucket, newPath) {
             filename(localPath.toAbsolutePath().toString())
-        })
+        }
+        tryRetry { s3Client.uploadObject(uploadRequest) }
         Files.delete(localPath)
     }
 
     @Throws(IOException::class)
     override fun delete(path: Path) {
-        s3Client.removeObject(RemoveObjectArgs.Builder().objectBuild(bucket, path))
+        val removeRequest = RemoveObjectArgs.Builder().objectBuild(bucket, path)
+        tryRetry { s3Client.removeObject(removeRequest) }
     }
 
     override fun createDirectories(directory: Path) {
