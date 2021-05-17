@@ -49,6 +49,8 @@ dependencies {
     val snappyVersion: String by project
     runtimeOnly("org.xerial.snappy:snappy-java:$snappyVersion")
 
+    implementation(kotlin("reflect"))
+
     val jacksonVersion: String by project
     implementation("com.fasterxml.jackson:jackson-bom:$jacksonVersion")
     implementation("com.fasterxml.jackson.core:jackson-databind")
