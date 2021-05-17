@@ -5,6 +5,9 @@ on:
   release:
     types: [published]
 
+env:
+  DOCKER_IMAGE: radarbase/radar-output-restructure
+
 jobs:
   upload:
     # The type of runner that the job will run on

@@ -18,7 +18,7 @@ allprojects {
     apply(plugin = "application")
 
     group = "org.radarbase"
-    version = "1.2.0"
+    version = "2.0.0-SNAPSHOT"
 
     repositories {
         mavenCentral()
@@ -288,5 +288,5 @@ nexusPublishing {
 }
 
 tasks.wrapper {
-    gradleVersion = "7.0"
+    gradleVersion = "7.0.2"
 }

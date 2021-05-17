@@ -6,6 +6,7 @@ import com.azure.storage.blob.BlobServiceClientBuilder
 import com.azure.storage.common.StorageSharedKeyCredential
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.minio.MinioClient
+import io.minio.credentials.IamAwsProvider
 import org.radarbase.output.Application.Companion.CACHE_SIZE_DEFAULT
 import org.radarbase.output.Plugin
 import org.radarbase.output.compression.Compression
@@ -282,12 +283,12 @@ data class ResourceConfig(
     val local: LocalConfig? = null,
     val azure: AzureConfig? = null,
 ) {
-    @JsonIgnore
-    lateinit var sourceType: ResourceType
+    @get:JsonIgnore
+    val sourceType: ResourceType by lazy {
+        requireNotNull(type.toResourceType()) { "Unknown resource type $type, choose s3, hdfs or local" }
+    }
 
     fun validate() {
-        sourceType = type.toResourceType()
-
         when (sourceType) {
             ResourceType.S3 -> checkNotNull(s3) { "No S3 configuration provided." }
             ResourceType.HDFS -> checkNotNull(hdfs) { "No HDFS configuration provided." }.also { it.validate() }
@@ -313,7 +314,7 @@ fun String.toResourceType() = when(toLowerCase()) {
     "hdfs" -> ResourceType.HDFS
     "local" -> ResourceType.LOCAL
     "azure" -> ResourceType.AZURE
-    else -> throw IllegalStateException("Unknown resource type $this, choose s3, hdfs or local")
+    else -> null
 }
 
 data class LocalConfig(
@@ -327,18 +328,23 @@ data class S3Config(
     /** URL to reach object store at. */
     val endpoint: String,
     /** Access token for writing data with. */
-    val accessToken: String,
+    val accessToken: String?,
     /** Secret key belonging to access token. */
-    val secretKey: String,
+    val secretKey: String?,
     /** Bucket name. */
     val bucket: String,
     /** If no endOffset is in the filename, read it from object tags. */
     val endOffsetFromTags: Boolean = false,
 ) {
-    fun createS3Client(): MinioClient = MinioClient.Builder()
-        .endpoint(endpoint)
-        .credentials(accessToken, secretKey)
-        .build()
+
+    fun createS3Client(): MinioClient = MinioClient.Builder().apply {
+        endpoint(endpoint)
+        if (accessToken.isNullOrBlank() || secretKey.isNullOrBlank()) {
+            credentialsProvider(IamAwsProvider(null, null))
+        } else {
+            credentials(accessToken, secretKey)
+        }
+    }.build()
 
     fun withEnv(prefix: String): S3Config = this
         .copyEnv("${prefix}S3_ACCESS_TOKEN") { copy(accessToken = it) }
