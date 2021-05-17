@@ -1,6 +1,7 @@
 package org.radarbase.output.source
 
 import io.minio.*
+import io.minio.messages.Tags
 import org.apache.avro.file.SeekableFileInput
 import org.apache.avro.file.SeekableInput
 import org.eclipse.jetty.util.MultiException
@@ -40,7 +41,7 @@ class S3SourceStorage(
 
         if (readEndOffset && topicFile.range.range.to == null) {
             try {
-                val tags = s3Client.getObjectTags(GetObjectTagsArgs.Builder().objectBuild(bucket, status.path))
+                val tags = getObjectTags(status.path)
                 val endOffset = tags.get()["endOffset"]?.toLongOrNull()
                 if (endOffset != null) {
                     topicFile = topicFile.copy(
@@ -54,6 +55,11 @@ class S3SourceStorage(
         }
 
         return topicFile
+    }
+
+    private fun getObjectTags(path: Path): Tags {
+        val tagRequest = GetObjectTagsArgs.Builder().objectBuild(bucket, path)
+        return faultTolerant { s3Client.getObjectTags(tagRequest) }
     }
 
     override fun delete(path: Path) {
@@ -100,16 +106,14 @@ class S3SourceStorage(
     companion object {
         private val logger = LoggerFactory.getLogger(S3SourceStorage::class.java)
 
-        fun <T> faultTolerant(attempt: (Int) -> T): T = tryRepeat(3, attempt)
-
-        fun <T> tryRepeat(numberOfAttempts: Int, attempt: (Int) -> T): T {
+        fun <T> faultTolerant(attempt: (Int) -> T): T {
             val exceptions = MultiException()
-            repeat(numberOfAttempts) { i ->
+            repeat(3) { i ->
                 try {
                     return attempt(i)
                 } catch (ex: Exception) {
                     logger.warn("Temporarily failed to do S3 operation: {}", ex.toString())
-                    if (i < numberOfAttempts - 1) {
+                    if (i < 2) {
                         logger.warn("Temporarily failed to do S3 operation: {}, retrying after 1 second.", ex.toString())
                         Thread.sleep(1000L)
                     } else {
