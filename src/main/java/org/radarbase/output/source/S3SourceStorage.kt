@@ -27,7 +27,7 @@ class S3SourceStorage(
             recursive(false)
             useUrlEncodingType(false)
         }
-        return tryRetry { s3Client.listObjects(listRequest) }
+        return faultTolerant { s3Client.listObjects(listRequest) }
             .asSequence()
             .map {
                 val item = it.get()
@@ -58,7 +58,7 @@ class S3SourceStorage(
 
     override fun delete(path: Path) {
         val removeRequest = RemoveObjectArgs.Builder().objectBuild(bucket, path)
-        tryRetry { s3Client.removeObject(removeRequest) }
+        faultTolerant { s3Client.removeObject(removeRequest) }
     }
 
     override fun createReader(): SourceStorage.SourceStorageReader = S3SourceStorageReader()
@@ -70,7 +70,7 @@ class S3SourceStorage(
             val tempFile = Files.createTempFile(tempDir.path, "${file.topic}-${file.path.fileName}", ".avro")
 
             try {
-                tryRetry {
+                faultTolerant {
                     Files.newOutputStream(tempFile, StandardOpenOption.TRUNCATE_EXISTING).use { out ->
                         s3Client.getObject(GetObjectArgs.Builder().objectBuild(bucket, file.path))
                             .copyTo(out)
@@ -100,7 +100,7 @@ class S3SourceStorage(
     companion object {
         private val logger = LoggerFactory.getLogger(S3SourceStorage::class.java)
 
-        fun <T> tryRetry(attempt: (Int) -> T): T = tryRepeat(3, attempt)
+        fun <T> faultTolerant(attempt: (Int) -> T): T = tryRepeat(3, attempt)
 
         fun <T> tryRepeat(numberOfAttempts: Int, attempt: (Int) -> T): T {
             val exceptions = MultiException()
