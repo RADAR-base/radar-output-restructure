@@ -19,9 +19,11 @@ package org.radarbase.output.target
 import io.minio.*
 import io.minio.errors.ErrorResponseException
 import org.radarbase.output.config.S3Config
+import org.radarbase.output.source.S3SourceStorage.Companion.faultTolerant
 import org.radarbase.output.util.bucketBuild
 import org.radarbase.output.util.objectBuild
 import org.slf4j.LoggerFactory
+import java.io.FileNotFoundException
 import java.io.IOException
 import java.io.InputStream
 import java.nio.file.Files
@@ -29,65 +31,69 @@ import java.nio.file.Path
 
 class S3TargetStorage(config: S3Config) : TargetStorage {
     private val bucket: String = config.bucket
-    private val s3Client: MinioClient
+    private val s3Client: MinioClient = try {
+        config.createS3Client()
+    } catch (ex: IllegalArgumentException) {
+        logger.warn("Invalid S3 configuration", ex)
+        throw ex
+    }
 
     init {
-        s3Client = try {
-            config.createS3Client()
-        } catch (ex: IllegalArgumentException) {
-            logger.warn("Invalid S3 configuration", ex)
-            throw ex
-        }
-
         logger.info("Object storage configured with endpoint {} in bucket {}",
                 config.endpoint, config.bucket)
 
         // Check if the bucket already exists.
-        val isExist: Boolean = s3Client.bucketExists(BucketExistsArgs.Builder().bucketBuild(bucket))
+        val bucketExistsRequest = BucketExistsArgs.Builder().bucketBuild(bucket)
+        val isExist: Boolean = faultTolerant { s3Client.bucketExists(bucketExistsRequest) }
         if (isExist) {
             logger.info("Bucket $bucket already exists.")
         } else {
-            s3Client.makeBucket(MakeBucketArgs.Builder().bucketBuild(bucket))
+            val makeBucketRequest = MakeBucketArgs.Builder().bucketBuild(bucket)
+            faultTolerant { s3Client.makeBucket(makeBucketRequest) }
             logger.info("Bucket $bucket was created.")
         }
     }
 
     override fun status(path: Path): TargetStorage.PathStatus? {
+        val statRequest = StatObjectArgs.Builder().objectBuild(bucket, path)
         return try {
-            s3Client.statObject(StatObjectArgs.Builder().objectBuild(bucket, path))
+            faultTolerant {
+                s3Client.statObject(statRequest)
                     .let { TargetStorage.PathStatus(it.size()) }
-        } catch (ex: ErrorResponseException) {
-            if (ex.errorResponse().code() == "NoSuchKey" || ex.errorResponse().code() == "ResourceNotFound") {
-                null
-            } else {
-                throw ex
             }
+        } catch (ex: FileNotFoundException) {
+            null
         }
     }
 
     @Throws(IOException::class)
-    override fun newInputStream(path: Path): InputStream = s3Client.getObject(
-            GetObjectArgs.Builder().objectBuild(bucket, path))
+    override fun newInputStream(path: Path): InputStream {
+        val getRequest = GetObjectArgs.Builder().objectBuild(bucket, path)
+        return faultTolerant { s3Client.getObject(getRequest) }
+    }
 
     @Throws(IOException::class)
     override fun move(oldPath: Path, newPath: Path) {
-        s3Client.copyObject(CopyObjectArgs.Builder().objectBuild(bucket, newPath) {
+        val copyRequest = CopyObjectArgs.Builder().objectBuild(bucket, newPath) {
             source(CopySource.Builder().objectBuild(bucket, oldPath))
-        })
+        }
+        faultTolerant { s3Client.copyObject(copyRequest) }
         delete(oldPath)
     }
 
     @Throws(IOException::class)
     override fun store(localPath: Path, newPath: Path) {
-        s3Client.uploadObject(UploadObjectArgs.Builder().objectBuild(bucket, newPath) {
+        val uploadRequest = UploadObjectArgs.Builder().objectBuild(bucket, newPath) {
             filename(localPath.toAbsolutePath().toString())
-        })
+        }
+        faultTolerant { s3Client.uploadObject(uploadRequest) }
         Files.delete(localPath)
     }
 
     @Throws(IOException::class)
     override fun delete(path: Path) {
-        s3Client.removeObject(RemoveObjectArgs.Builder().objectBuild(bucket, path))
+        val removeRequest = RemoveObjectArgs.Builder().objectBuild(bucket, path)
+        faultTolerant { s3Client.removeObject(removeRequest) }
     }
 
     override fun createDirectories(directory: Path) {
