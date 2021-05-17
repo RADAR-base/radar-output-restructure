@@ -1,11 +1,11 @@
 # Restructure Kafka connector output files
 
-[![Build Status](https://travis-ci.org/RADAR-base/Restructure-HDFS-topic.svg?branch=master)](https://travis-ci.org/RADAR-base/Restructure-HDFS-topic)
-
 Data streamed by a Kafka Connector will be converted to a RADAR-base oriented output directory, by organizing it by project, user and collection date.
-It supports data written by [RADAR HDFS sink connector](https://github.com/RADAR-base/RADAR-HDFS-Sink-Connector) is streamed to files based on topic name only. This package transforms that output to a local directory structure as follows: `projectId/userId/topic/date_hour.csv`. The date and hour are extracted from the `time` field of each record, and is formatted in UTC time. This package is included in the [RADAR-Docker](https://github.com/RADAR-base/RADAR-Docker) repository, in the `dcompose/radar-cp-hadoop-stack/bin/hdfs-restructure` script.
+It supports data written by [RADAR S3 sink connector](https://github.com/RADAR-base/RADAR-S3-Connector) is streamed to files based on topic name only. This package transforms that output to a local directory structure as follows: `projectId/userId/topic/date_hour.csv`. The date and hour are extracted from the `time` field of each record, and is formatted in UTC time. This package is included in the [RADAR-Docker](https://github.com/RADAR-base/RADAR-Docker) repository, in the `dcompose/radar-cp-hadoop-stack/bin/hdfs-restructure` script.
 
 ## Upgrade instructions
+
+Since version 2.0.0, HDFS is no longer supported, only AWS S3 or Azure Blob Storage, and local file system compatible.
 
 When upgrading to version 1.2.0, please follow the following instructions:
 
@@ -70,20 +70,10 @@ When upgrading to version 0.6.0 from version 0.5.x or earlier, please follow the
 This package is available as docker image [`radarbase/radar-output-restructure`](https://hub.docker.com/r/radarbase/radar-output-restructure). The entrypoint of the image is the current application. So in all the commands listed in usage, replace `radar-output-restructure` with for example:
 
 ```shell
-docker run --rm -t --network hadoop -v "$PWD/output:/output" radarbase/radar-output-restructure:1.2.0 -n hdfs-namenode -o /output /myTopic
+docker run --rm -t --network s3 -v "$PWD/output:/output" radarbase/radar-output-restructure:2.0.0 -o /output /myTopic
 ```
 
 ## Command line usage
-
-When the application is installed, it can be used as follows:
-
-```shell
-radar-output-restructure --nameservice <hdfs_node> --output-directory <output_folder> <input_path_1> [<input_path_2> ...]
-```
-or you can use the short form as well:
-```shell
-radar-output-restructure -n <hdfs_node> -o <output_folder> <input_path_1> [<input_path_2> ...]
-```
 
 To display the usage and all available options you can use the help option as follows:
 ```shell
@@ -97,7 +87,7 @@ Each argument, as well as much more, can be supplied in a config file. The defau
 
 By default, this will output the data in CSV format. If JSON format is preferred, use the following instead:
 ```shell
-radar-output-restructure --format json --nameservice <hdfs_node> --output-directory <output_folder>  <input_path_1> [<input_path_2> ...]
+radar-output-restructure --format json --output-directory <output_folder>  <input_path_1> [<input_path_2> ...]
 ```
 
 By default, files records are not deduplicated after writing. To enable this behaviour, specify the option `--deduplicate` or `-d`. This set to false by default because of an issue with Biovotion data. Please see - [issue #16](https://github.com/RADAR-base/Restructure-HDFS-topic/issues/16) before enabling it. Deduplication can also be enabled or disabled per topic using the config file. If lines should be deduplicated using a subset of fields, e.g. only `sourceId` and `time` define a unique record and only the last record with duplicate values should be kept, then specify `topics: <topicName>: deduplication: distinctFields: [key.sourceId, value.time]`.
@@ -106,7 +96,7 @@ By default, files records are not deduplicated after writing. To enable this beh
 
 Another option is to output the data in compressed form. All files will get the `gz` suffix, and can be decompressed with a GZIP decoder. Note that for a very small number of records, this may actually increase the file size. Zip compression is also available.
 ```
-radar-output-restructure --compression gzip  --nameservice <hdfs_node> --output-directory <output_folder> <input_path_1> [<input_path_2> ...]
+radar-output-restructure --compression gzip --output-directory <output_folder> <input_path_1> [<input_path_2> ...]
 ```
 
 ### Redis
@@ -115,26 +105,26 @@ This package assumes a Redis service running. See the example `restructure.yml` 
 
 ### Source and target
 
-The `source` and `target` properties contain resource descriptions. The source can have two types, `hdfs` and `s3`:
+The `source` and `target` properties contain resource descriptions. The source can have two types, `azure` and `s3`:
 
 ```yaml
 source:
-  type: s3  # hdfs or s3
+  type: s3  # azure or s3
   s3:
     endpoint: http://localhost:9000  # using AWS S3 endpoint is also possible.
     bucket: radar
     accessToken: minioadmin
     secretKey: minioadmin
   # only actually needed if source type is hdfs
-  hdfs:
-    nameNodes: [hdfs-namenode-1, hdfs-namenode-2]
+  azure:
+    # azure options
 ```
 
-The target is similar, but it does not support HDFS, but the local file system (`local`) or `s3`.
+The target is similar, and in addition supports the local file system (`local`).
 
 ```yaml
 target:
-  type: s3  # s3 or local
+  type: s3  # s3, local or azure
   s3:
     endpoint: http://localhost:9000
     bucket: out
@@ -179,7 +169,7 @@ The cleaner can also be enabled with the `--cleaner` command-line flag. To run t
 
 ### Service
 
-To run the output generator as a service that will regularly poll the HDFS directory, add the `--service` flag and optionally the `--interval` flag to adjust the polling interval or use the corresponding configuration file parameters.
+To run the output generator as a service that will regularly poll the source directory, add the `--service` flag and optionally the `--interval` flag to adjust the polling interval or use the corresponding configuration file parameters.
 
 ## Local build
 
@@ -192,7 +182,7 @@ This package requires at least Java JDK 8. Build the distribution with
 and install the package into `/usr/local` with for example
 ```shell
 sudo mkdir -p /usr/local
-sudo tar -xzf build/distributions/radar-output-restructure-1.2.0.tar.gz -C /usr/local --strip-components=1
+sudo tar -xzf build/distributions/radar-output-restructure-2.0.0.tar.gz -C /usr/local --strip-components=1
 ```
 
 Now the `radar-output-restructure` command should be available.
