@@ -4,7 +4,6 @@ import io.minio.*
 import io.minio.messages.Tags
 import org.apache.avro.file.SeekableFileInput
 import org.apache.avro.file.SeekableInput
-import org.eclipse.jetty.util.MultiException
 import org.radarbase.output.config.S3Config
 import org.radarbase.output.util.TemporaryDirectory
 import org.radarbase.output.util.bucketBuild
@@ -107,7 +106,7 @@ class S3SourceStorage(
         private val logger = LoggerFactory.getLogger(S3SourceStorage::class.java)
 
         fun <T> faultTolerant(attempt: (Int) -> T): T {
-            val exceptions = MultiException()
+            var exception: Exception? = null
             repeat(3) { i ->
                 try {
                     return attempt(i)
@@ -118,11 +117,11 @@ class S3SourceStorage(
                         Thread.sleep(1000L)
                     } else {
                         logger.error("Failed to do S3 operation: {}", ex.toString())
+                        exception = ex
                     }
-                    exceptions.add(ex)
                 }
             }
-            throw exceptions
+            throw checkNotNull(exception)
         }
     }
 }
