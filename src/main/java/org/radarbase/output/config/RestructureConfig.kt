@@ -22,6 +22,7 @@ import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.time.Duration
 
 data class RestructureConfig(
     /** Whether and how to run as a service. */
@@ -44,6 +45,8 @@ data class RestructureConfig(
     val compression: CompressionConfig = CompressionConfig(),
     /** File format to use for output files. */
     val format: FormatConfig = FormatConfig(),
+    /** Snapshot */
+    val snapshot: SnapshotConfig = SnapshotConfig(),
 ) {
 
     fun validate() {
@@ -195,6 +198,8 @@ data class PathConfig(
     val temp: Path = Files.createTempDirectory("radar-output-restructure"),
     /** Output path on the target resource. */
     val output: Path = Paths.get("output"),
+    /** Output path on the target resource. */
+    val snapshots: Path = Paths.get("snapshots"),
 ) : PluginConfig {
     fun createFactory(): RecordPathFactory = factory.toPluginInstance(properties)
 }
@@ -392,3 +397,11 @@ data class AzureConfig(
         private val logger = LoggerFactory.getLogger(AzureConfig::class.java)
     }
 }
+
+data class SnapshotConfig(
+    val enable: Boolean = false,
+    val frequency: Duration = Duration.ofDays(31),
+    val numberOfSnapshots: Int = 12,
+    val sourceFormat: String = "\${projectId}",
+    val targetFormat: String = "\${projectId}",
+)
