@@ -5,7 +5,7 @@ It supports data written by [RADAR S3 sink connector](https://github.com/RADAR-b
 
 ## Upgrade instructions
 
-Since version 2.0.0, HDFS is no longer supported, only AWS S3 or Azure Blob Storage, and local file system compatible.
+Since version 2.0.0, HDFS is no longer supported, only AWS S3 or Azure Blob Storage, and local file system compatible. If HDFS is still needed, please implement a HDFS source storage factory with constructor `org.radarbase.output.source.HdfsSourceStorageFactory(resourceConfig: ResourceConfig, tempPath: Path)` with method `createSourceStorage(): SourceStorage`. This implementation may be added as a separate JAR in the `lib/radar-output-plugins/` directory of where the distribution is installed.
 
 When upgrading to version 1.2.0, please follow the following instructions:
 
