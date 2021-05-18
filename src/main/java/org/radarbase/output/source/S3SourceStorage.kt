@@ -118,10 +118,14 @@ class S3SourceStorage(
                     ) {
                         throw FileNotFoundException()
                     }
-                    logger.warn("Temporarily failed to do S3 operation: {}", ex.toString())
                     if (i < 2) {
-                        logger.warn("Temporarily failed to do S3 operation: {}, retrying after 1 second.", ex.toString())
-                        Thread.sleep((i + 1) * 1000L)
+                        val timeout = i + 1
+                        logger.warn(
+                            "Temporarily failed to do S3 operation: {}, retrying after {} second(s).",
+                            ex.toString(),
+                            timeout,
+                        )
+                        Thread.sleep(timeout * 1000L)
                     } else {
                         logger.error("Failed to do S3 operation: {}", ex.toString())
                         exception = ex
