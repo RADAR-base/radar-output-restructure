@@ -1,6 +1,8 @@
 package org.radarbase.output.source
 
 import io.minio.*
+import io.minio.errors.ErrorResponseException
+import io.minio.messages.Tags
 import org.apache.avro.file.SeekableFileInput
 import org.apache.avro.file.SeekableInput
 import org.radarbase.output.config.S3Config
@@ -8,10 +10,9 @@ import org.radarbase.output.util.TemporaryDirectory
 import org.radarbase.output.util.bucketBuild
 import org.radarbase.output.util.objectBuild
 import org.slf4j.LoggerFactory
+import java.io.FileNotFoundException
 import java.io.IOException
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
+import java.nio.file.*
 
 class S3SourceStorage(
         private val s3Client: MinioClient,
@@ -22,24 +23,26 @@ class S3SourceStorage(
     private val bucket = config.bucket
     private val readEndOffset = config.endOffsetFromTags
 
-    override fun list(path: Path): Sequence<SimpleFileStatus> = s3Client.listObjects(
-            ListObjectsArgs.Builder().bucketBuild(bucket) {
-                prefix("$path/")
-                recursive(false)
-                useUrlEncodingType(false)
-            })
+    override fun list(path: Path): Sequence<SimpleFileStatus> {
+        val listRequest = ListObjectsArgs.Builder().bucketBuild(bucket) {
+            prefix("$path/")
+            recursive(false)
+            useUrlEncodingType(false)
+        }
+        return faultTolerant { s3Client.listObjects(listRequest) }
             .asSequence()
             .map {
                 val item = it.get()
                 SimpleFileStatus(Paths.get(item.objectName()), item.isDir, if (item.isDir) null else item.lastModified().toInstant())
             }
+    }
 
     override fun createTopicFile(topic: String, status: SimpleFileStatus): TopicFile {
         var topicFile = super.createTopicFile(topic, status)
 
         if (readEndOffset && topicFile.range.range.to == null) {
             try {
-                val tags = s3Client.getObjectTags(GetObjectTagsArgs.Builder().objectBuild(bucket, status.path))
+                val tags = getObjectTags(status.path)
                 val endOffset = tags.get()["endOffset"]?.toLongOrNull()
                 if (endOffset != null) {
                     topicFile = topicFile.copy(
@@ -55,8 +58,14 @@ class S3SourceStorage(
         return topicFile
     }
 
+    private fun getObjectTags(path: Path): Tags {
+        val tagRequest = GetObjectTagsArgs.Builder().objectBuild(bucket, path)
+        return faultTolerant { s3Client.getObjectTags(tagRequest) }
+    }
+
     override fun delete(path: Path) {
-        s3Client.removeObject(RemoveObjectArgs.Builder().objectBuild(bucket, path))
+        val removeRequest = RemoveObjectArgs.Builder().objectBuild(bucket, path)
+        faultTolerant { s3Client.removeObject(removeRequest) }
     }
 
     override fun createReader(): SourceStorage.SourceStorageReader = S3SourceStorageReader()
@@ -68,10 +77,13 @@ class S3SourceStorage(
             val tempFile = Files.createTempFile(tempDir.path, "${file.topic}-${file.path.fileName}", ".avro")
 
             try {
-                Files.newOutputStream(tempFile).use { out ->
-                    s3Client.getObject(GetObjectArgs.Builder().objectBuild(bucket, file.path)).copyTo(out)
+                faultTolerant {
+                    Files.newOutputStream(tempFile, StandardOpenOption.TRUNCATE_EXISTING).use { out ->
+                        s3Client.getObject(GetObjectArgs.Builder().objectBuild(bucket, file.path))
+                            .copyTo(out)
+                    }
                 }
-            } catch (ex: IOException) {
+            } catch (ex: Exception) {
                 try {
                     Files.delete(tempFile)
                 } catch (ex: IOException) {
@@ -94,5 +106,33 @@ class S3SourceStorage(
 
     companion object {
         private val logger = LoggerFactory.getLogger(S3SourceStorage::class.java)
+
+        fun <T> faultTolerant(attempt: (Int) -> T): T {
+            var exception: Exception? = null
+            repeat(3) { i ->
+                try {
+                    return attempt(i)
+                } catch (ex: Exception) {
+                    if (ex is ErrorResponseException &&
+                        (ex.errorResponse().code() == "NoSuchKey" || ex.errorResponse().code() == "ResourceNotFound")
+                    ) {
+                        throw FileNotFoundException()
+                    }
+                    if (i < 2) {
+                        val timeout = i + 1
+                        logger.warn(
+                            "Temporarily failed to do S3 operation: {}, retrying after {} second(s).",
+                            ex.toString(),
+                            timeout,
+                        )
+                        Thread.sleep(timeout * 1000L)
+                    } else {
+                        logger.error("Failed to do S3 operation: {}", ex.toString())
+                        exception = ex
+                    }
+                }
+            }
+            throw checkNotNull(exception)
+        }
     }
 }

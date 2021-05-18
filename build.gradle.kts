@@ -1,6 +1,5 @@
 import com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
-import org.jetbrains.dokka.gradle.DokkaTask
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.time.Duration
 
@@ -16,21 +15,17 @@ plugins {
 }
 
 group = "org.radarbase"
-version = "1.2.1"
+version = "2.0.0"
+
+repositories {
+    mavenCentral()
+}
 
 description = "RADAR-base output restructuring"
 val website = "https://radar-base.org"
 val githubRepoName = "RADAR-base/radar-output-restructure"
 val githubUrl = "https://github.com/${githubRepoName}"
 val issueUrl = "${githubUrl}/issues"
-
-application {
-    mainClass.set("org.radarbase.output.Application")
-}
-
-repositories {
-    mavenCentral()
-}
 
 sourceSets {
     create("integrationTest") {
@@ -51,13 +46,18 @@ configurations["integrationTestRuntimeOnly"].extendsFrom(
 dependencies {
     val avroVersion: String by project
     api("org.apache.avro:avro:$avroVersion")
+    val snappyVersion: String by project
+    runtimeOnly("org.xerial.snappy:snappy-java:$snappyVersion")
+
+    implementation(kotlin("reflect"))
 
     val jacksonVersion: String by project
-    implementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-csv:$jacksonVersion")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion")
-    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:$jacksonVersion")
+    implementation("com.fasterxml.jackson:jackson-bom:$jacksonVersion")
+    implementation("com.fasterxml.jackson.core:jackson-databind")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-csv")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
 
     val jedisVersion: String by project
     implementation("redis.clients:jedis:$jedisVersion")
@@ -75,16 +75,11 @@ dependencies {
     implementation("com.azure:azure-storage-blob:$azureStorageVersion")
     implementation("com.opencsv:opencsv:5.4")
 
-    implementation("org.apache.avro:avro-mapred:$avroVersion")
-
-    val hadoopVersion: String by project
-    implementation("org.apache.hadoop:hadoop-common:$hadoopVersion")
-
     val slf4jVersion: String by project
     implementation("org.slf4j:slf4j-api:$slf4jVersion")
 
-    runtimeOnly("org.slf4j:slf4j-log4j12:$slf4jVersion")
-    runtimeOnly("org.apache.hadoop:hadoop-hdfs-client:$hadoopVersion")
+    val log4jVersion: String by project
+    runtimeOnly("org.apache.logging.log4j:log4j-slf4j-impl:$log4jVersion")
 
     val radarSchemasVersion: String by project
     testImplementation("org.radarbase:radar-schemas-commons:$radarSchemasVersion")
@@ -100,12 +95,8 @@ dependencies {
     dokkaHtmlPlugin("org.jetbrains.dokka:kotlin-as-java-plugin:$dokkaVersion")
 }
 
-tasks.withType<KotlinCompile> {
-    kotlinOptions {
-        jvmTarget = "11"
-        apiVersion = "1.4"
-        languageVersion = "1.4"
-    }
+application {
+    mainClass.set("org.radarbase.output.Application")
 }
 
 distributions {
@@ -118,63 +109,12 @@ distributions {
     }
 }
 
-tasks.startScripts {
-    classpath = classpath?.let { it + files("lib/PlaceHolderForPluginPath") }
-
-    doLast {
-        val windowsScriptFile = file(getWindowsScript())
-        val unixScriptFile    = file(getUnixScript())
-        windowsScriptFile.writeText(windowsScriptFile.readText().replace("PlaceHolderForPluginPath", "radar-output-plugins\\*"))
-        unixScriptFile.writeText(unixScriptFile.readText().replace("PlaceHolderForPluginPath", "radar-output-plugins/*"))
+tasks.withType<KotlinCompile> {
+    kotlinOptions {
+        jvmTarget = "11"
+        apiVersion = "1.4"
+        languageVersion = "1.4"
     }
-}
-
-val integrationTest by tasks.registering(Test::class) {
-    description = "Runs integration tests."
-    group = "verification"
-
-    testClassesDirs = sourceSets["integrationTest"].output.classesDirs
-    classpath = sourceSets["integrationTest"].runtimeClasspath
-    outputs.upToDateWhen { false }
-    shouldRunAfter("test")
-}
-
-tasks.withType<Test> {
-    useJUnitPlatform()
-    testLogging {
-        events("passed", "skipped", "failed")
-        showStandardStreams = true
-        setExceptionFormat(FULL)
-    }
-}
-
-dockerCompose {
-    waitForTcpPortsTimeout = Duration.ofSeconds(30)
-    environment["SERVICES_HOST"] = "localhost"
-    captureContainersOutputToFiles = project.file("build/container-logs")
-    isRequiredBy(integrationTest)
-}
-
-val check by tasks
-check.dependsOn(integrationTest)
-
-tasks.withType<Tar> {
-    compression = Compression.GZIP
-    archiveExtension.set("tar.gz")
-}
-
-tasks.register("downloadDependencies") {
-    doLast {
-        description = "Pre-downloads dependencies"
-        configurations.compileClasspath.get().files
-        configurations.runtimeClasspath.get().files
-    }
-    outputs.upToDateWhen { false }
-}
-
-tasks.register<Copy>("copyDependencies") {
-    from(configurations.runtimeClasspath.get().files)
-    into("$buildDir/third-party/")
 }
 
 // custom tasks for creating source/javadoc jars
@@ -190,12 +130,26 @@ val dokkaJar by tasks.registering(Jar::class) {
     dependsOn(tasks.dokkaJavadoc)
 }
 
+tasks.withType<Tar> {
+    compression = Compression.GZIP
+    archiveExtension.set("tar.gz")
+}
+
 tasks.withType<Jar> {
     manifest {
         attributes(
             "Implementation-Title" to project.name,
             "Implementation-Version" to project.version
         )
+    }
+}
+
+tasks.startScripts {
+    classpath = classpath?.let { it + files("lib/PlaceHolderForPluginPath") }
+
+    doLast {
+        windowsScript.writeText(windowsScript.readText().replace("PlaceHolderForPluginPath", "radar-output-plugins\\*"))
+        unixScript.writeText(unixScript.readText().replace("PlaceHolderForPluginPath", "radar-output-plugins/*"))
     }
 }
 
@@ -213,7 +167,7 @@ publishing {
                 licenses {
                     license {
                         name.set("The Apache Software License, Version 2.0")
-                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                        url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
                         distribution.set("repo")
                     }
                 }
@@ -271,6 +225,49 @@ nexusPublishing {
     }
 }
 
+val integrationTest by tasks.registering(Test::class) {
+    description = "Runs integration tests."
+    group = "verification"
+
+    testClassesDirs = sourceSets["integrationTest"].output.classesDirs
+    classpath = sourceSets["integrationTest"].runtimeClasspath
+    outputs.upToDateWhen { false }
+    shouldRunAfter("test")
+}
+
+dockerCompose {
+    waitForTcpPortsTimeout = Duration.ofSeconds(30)
+    environment["SERVICES_HOST"] = "localhost"
+    captureContainersOutputToFiles = project.file("build/container-logs")
+    isRequiredBy(integrationTest)
+}
+
+val check by tasks
+check.dependsOn(integrationTest)
+
+tasks.withType<Test> {
+    useJUnitPlatform()
+    testLogging {
+        events("passed", "skipped", "failed")
+        showStandardStreams = true
+        exceptionFormat = FULL
+    }
+}
+
+tasks.register("downloadDependencies") {
+    doLast {
+        description = "Pre-downloads dependencies"
+        configurations.compileClasspath.get().files
+        configurations.runtimeClasspath.get().files
+    }
+    outputs.upToDateWhen { false }
+}
+
+tasks.register<Copy>("copyDependencies") {
+    from(configurations.runtimeClasspath.get().files)
+    into("$buildDir/third-party/")
+}
+
 fun isNonStable(version: String): Boolean {
     val stableKeyword = listOf("RELEASE", "FINAL", "GA").any { version.toUpperCase().contains(it) }
     val regex = "^[0-9,.v-]+(-r)?$".toRegex()
@@ -285,5 +282,5 @@ tasks.named<DependencyUpdatesTask>("dependencyUpdates").configure {
 }
 
 tasks.wrapper {
-    gradleVersion = "7.0"
+    gradleVersion = "7.0.2"
 }
