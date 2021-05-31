@@ -8,10 +8,10 @@ plugins {
     application
     `maven-publish`
     signing
-    id("org.jetbrains.dokka") version "1.4.32"
-    id("com.avast.gradle.docker-compose") version "0.14.3"
-    id("com.github.ben-manes.versions") version "0.38.0"
-    id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
+    id("org.jetbrains.dokka")
+    id("com.avast.gradle.docker-compose")
+    id("com.github.ben-manes.versions")
+    id("io.github.gradle-nexus.publish-plugin")
 }
 
 group = "org.radarbase"
@@ -69,10 +69,29 @@ dependencies {
     implementation("com.almworks.integers:integers:$almworksVersion")
 
     val minioVersion: String by project
-    implementation("io.minio:minio:$minioVersion")
+    implementation("io.minio:minio:$minioVersion") {
+        val guavaVersion: String by project
+        runtimeOnly("com.google.guava:guava:$guavaVersion")
+
+        val okhttpVersion: String by project
+        runtimeOnly("com.squareup.okhttp3:okhttp:$okhttpVersion")
+    }
 
     val azureStorageVersion: String by project
-    implementation("com.azure:azure-storage-blob:$azureStorageVersion")
+    implementation("com.azure:azure-storage-blob:$azureStorageVersion") {
+        val nettyVersion: String by project
+        implementation("io.netty:netty-handler:$nettyVersion")
+        implementation("io.netty:netty-handler-proxy:$nettyVersion")
+        implementation("io.netty:netty-resolver-dns:$nettyVersion")
+        implementation("io.netty:netty-transport-native-epoll:$nettyVersion")
+        implementation("io.netty:netty-codec-http:$nettyVersion")
+        implementation("io.netty:netty-codec-http2:$nettyVersion")
+        implementation("io.netty:netty-resolver-dns-native-macos:$nettyVersion")
+        implementation("io.netty:netty-transport-native-kqueue:$nettyVersion")
+
+        val nettyReactorVersion: String by project
+        implementation("io.projectreactor.netty:reactor-netty:$nettyReactorVersion")
+    }
     implementation("com.opencsv:opencsv:5.4")
 
     val slf4jVersion: String by project
@@ -269,7 +288,7 @@ tasks.register<Copy>("copyDependencies") {
 }
 
 fun isNonStable(version: String): Boolean {
-    val stableKeyword = listOf("RELEASE", "FINAL", "GA").any { version.toUpperCase().contains(it) }
+    val stableKeyword = listOf("RELEASE", "FINAL", "GA", "JRE").any { version.toUpperCase().contains(it) }
     val regex = "^[0-9,.v-]+(-r)?$".toRegex()
     val isStable = stableKeyword || regex.matches(version)
     return isStable.not()
