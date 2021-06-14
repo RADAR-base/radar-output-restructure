@@ -141,10 +141,13 @@ data class CleanerConfig(
     val interval: Long = 1260L,
     /** Age in days after an avro file can be removed. Must be strictly positive. */
     val age: Int = 7,
+    /** Maximum number of files to clean in a given topic. */
+    val maxFilesPerTopic: Int? = null,
 ) {
     fun validate() {
         check(age > 0) { "Cleaner file age must be strictly positive" }
         check(interval > 0) { "Cleaner interval must be strictly positive" }
+        if (maxFilesPerTopic != null) check(maxFilesPerTopic > 0) { "Maximum files per topic must be strictly positive" }
     }
 }
 
@@ -176,9 +179,9 @@ data class WorkerConfig(
     val minimumFileAge: Long = 60,
 ) {
     init {
-        check(cacheSize >= 1) { "Maximum files per topic must be strictly positive" }
-        maxFilesPerTopic?.let { check(it >= 1) { "Maximum files per topic must be strictly positive" } }
-        check(numThreads >= 1) { "Number of threads should be at least 1" }
+        check(cacheSize > 0) { "Maximum files per topic must be strictly positive" }
+        if (maxFilesPerTopic != null) check(maxFilesPerTopic > 0) { "Maximum files per topic must be strictly positive" }
+        check(numThreads > 0) { "Number of threads should be at least 1" }
     }
 }
 

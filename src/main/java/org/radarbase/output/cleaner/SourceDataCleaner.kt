@@ -23,7 +23,7 @@ class SourceDataCleaner(
             .mapNotNullTo(HashSet()) { (topic, conf) ->
                 topic.takeIf { conf.excludeFromDelete }
             }
-    private val maxFilesPerTopic: Int = fileStoreFactory.config.worker.maxFilesPerTopic ?: Int.MAX_VALUE
+    private val maxFilesPerTopic: Int = fileStoreFactory.config.cleaner.maxFilesPerTopic ?: Int.MAX_VALUE
     private val deleteThreshold: Instant? = Instant.now()
             .minus(fileStoreFactory.config.cleaner.age.toLong(), ChronoUnit.DAYS)
 
