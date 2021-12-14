@@ -92,7 +92,8 @@ dependencies {
         val nettyReactorVersion: String by project
         implementation("io.projectreactor.netty:reactor-netty:$nettyReactorVersion")
     }
-    implementation("com.opencsv:opencsv:5.4")
+    val opencsvVersion: String by project
+    implementation("com.opencsv:opencsv:$opencsvVersion")
 
     val slf4jVersion: String by project
     implementation("org.slf4j:slf4j-api:$slf4jVersion")
@@ -107,8 +108,9 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")
     testImplementation("org.junit.jupiter:junit-jupiter-params:$junitVersion")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:$junitVersion")
-    testImplementation("org.hamcrest:hamcrest-all:1.3")
-    testImplementation("com.nhaarman.mockitokotlin2:mockito-kotlin:2.2.0")
+    testImplementation("org.hamcrest:hamcrest:2.2")
+    val mockitoKotlinVersion: String by project
+    testImplementation("org.mockito.kotlin:mockito-kotlin:$mockitoKotlinVersion")
 
     val dokkaVersion: String by project
     dokkaHtmlPlugin("org.jetbrains.dokka:kotlin-as-java-plugin:$dokkaVersion")
@@ -130,9 +132,9 @@ distributions {
 
 tasks.withType<KotlinCompile> {
     kotlinOptions {
-        jvmTarget = "11"
-        apiVersion = "1.4"
-        languageVersion = "1.4"
+        jvmTarget = "17"
+        apiVersion = "1.6"
+        languageVersion = "1.6"
     }
 }
 
@@ -255,9 +257,9 @@ val integrationTest by tasks.registering(Test::class) {
 }
 
 dockerCompose {
-    waitForTcpPortsTimeout = Duration.ofSeconds(30)
-    environment["SERVICES_HOST"] = "localhost"
-    captureContainersOutputToFiles = project.file("build/container-logs")
+    waitForTcpPortsTimeout.set(Duration.ofSeconds(30))
+    environment.put("SERVICES_HOST", "localhost")
+    captureContainersOutputToFiles.set(project.file("build/container-logs"))
     isRequiredBy(integrationTest)
 }
 
@@ -301,5 +303,5 @@ tasks.named<DependencyUpdatesTask>("dependencyUpdates").configure {
 }
 
 tasks.wrapper {
-    gradleVersion = "7.0.2"
+    gradleVersion = "7.3.1"
 }

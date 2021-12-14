@@ -23,6 +23,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
+import java.util.*
 
 data class RestructureConfig(
     /** Whether and how to run as a service. */
@@ -54,7 +55,7 @@ data class RestructureConfig(
         target.validate()
         cleaner.validate()
         service.validate()
-        check(worker.enable || cleaner.enable) { "Either restructuring or cleaning needs to be enabled."}
+        check(worker.enable || cleaner.enable) { "Either restructuring or cleaning needs to be enabled." }
     }
 
     /** Override configuration using command line arguments. */
@@ -67,9 +68,14 @@ data class RestructureConfig(
         args.tmpDir?.let { copy(paths = paths.copy(temp = Paths.get(it))) }
         args.inputPaths?.let { inputs -> copy(paths = paths.copy(inputs = inputs.map { Paths.get(it) })) }
         args.outputDirectory?.let { copy(paths = paths.copy(output = Paths.get(it))) }
-        args.hdfsName?.let { copy(source = source.copy(hdfs = source.hdfs?.copy(nameNodes = listOf(it)) ?: HdfsConfig(nameNodes = listOf(it)))) }
+        args.hdfsName?.let {
+            copy(source = source.copy(hdfs = source.hdfs?.copy(nameNodes = listOf(it))
+                ?: HdfsConfig(nameNodes = listOf(it))))
+        }
         args.format?.let { copy(format = format.copy(type = it)) }
-        args.deduplicate?.let { copy(format = format.copy(deduplication = format.deduplication.copy(enable = it))) }
+        args.deduplicate?.let {
+            copy(format = format.copy(deduplication = format.deduplication.copy(enable = it)))
+        }
         args.compression?.let { copy(compression = compression.copy(type = it)) }
         args.clean?.let { copy(cleaner = cleaner.copy(enable = it)) }
         args.noRestructure?.let { copy(worker = worker.copy(enable = !it)) }
@@ -81,21 +87,27 @@ data class RestructureConfig(
         .copyOnChange(redis, { it.withEnv() }) { copy(redis = it) }
 
     companion object {
-        fun load(path: String?): RestructureConfig = YAMLConfigLoader.load(path, RESTRUCTURE_CONFIG_FILE_NAME) {
-            logger.info("No config file found. Using default configuration.")
-            RestructureConfig()
-        }
+        fun load(path: String?): RestructureConfig =
+            YAMLConfigLoader.load(path, RESTRUCTURE_CONFIG_FILE_NAME) {
+                logger.info("No config file found. Using default configuration.")
+                RestructureConfig()
+            }
 
         private val logger = LoggerFactory.getLogger(RestructureConfig::class.java)
         internal const val RESTRUCTURE_CONFIG_FILE_NAME = "restructure.yml"
 
-        inline fun <T> T.copyEnv(key: String, doCopy: T.(String) -> T): T = copyOnChange<T, String?>(
-            null,
-            modification = { System.getenv(key) },
-            doCopy = { doCopy(requireNotNull(it)) }
-        )
+        inline fun <T> T.copyEnv(key: String, doCopy: T.(String) -> T): T =
+            copyOnChange<T, String?>(
+                null,
+                modification = { System.getenv(key) },
+                doCopy = { doCopy(requireNotNull(it)) }
+            )
 
-        inline fun <T, V> T.copyOnChange(original: V, modification: (V) -> V, doCopy: T.(V) -> T): T {
+        inline fun <T, V> T.copyOnChange(
+            original: V,
+            modification: (V) -> V,
+            doCopy: T.(V) -> T
+        ): T {
             val newValue = modification(original)
             return if (newValue != original) {
                 doCopy(newValue)
@@ -188,6 +200,7 @@ data class WorkerConfig(
 interface PluginConfig {
     /** Factory class to use. */
     val factory: String
+
     /** Additional plugin-specific properties. */
     val properties: Map<String, String>
 }
@@ -218,21 +231,23 @@ data class CompressionConfig(
 }
 
 data class FormatConfig(
-        override val factory: String = FormatFactory::class.qualifiedName!!,
-        override val properties: Map<String, String> = emptyMap(),
-        /** Output format. One of csv or json. */
-        val type: String = "csv",
-        /** Whether and how to remove duplicate entries. */
-        val deduplication: DeduplicationConfig = DeduplicationConfig(enable = false, distinctFields = emptySet(), ignoreFields = emptySet())
+    override val factory: String = FormatFactory::class.qualifiedName!!,
+    override val properties: Map<String, String> = emptyMap(),
+    /** Output format. One of csv or json. */
+    val type: String = "csv",
+    /** Whether and how to remove duplicate entries. */
+    val deduplication: DeduplicationConfig = DeduplicationConfig(enable = false,
+        distinctFields = emptySet(),
+        ignoreFields = emptySet())
 ) : PluginConfig {
     fun createFactory(): FormatFactory = factory.toPluginInstance(properties)
     fun createConverter(): RecordConverterFactory = createFactory()[type]
 }
 
-private inline fun <reified T: Plugin> String.toPluginInstance(properties: Map<String, String>): T {
+private inline fun <reified T : Plugin> String.toPluginInstance(properties: Map<String, String>): T {
     return try {
         (Class.forName(this).getConstructor().newInstance() as T)
-                .also { it.init(properties) }
+            .also { it.init(properties) }
     } catch (ex: ReflectiveOperationException) {
         throw IllegalStateException("Cannot map class $this to ${T::class.java.name}")
     }
@@ -249,8 +264,9 @@ data class TopicConfig(
      */
     val excludeFromDelete: Boolean = false,
 ) {
-    fun deduplication(deduplicationDefault: DeduplicationConfig): DeduplicationConfig = deduplication
-        .withDefaults(deduplicationDefault)
+    fun deduplication(deduplicationDefault: DeduplicationConfig): DeduplicationConfig =
+        deduplication
+            .withDefaults(deduplicationDefault)
 }
 
 data class DeduplicationConfig(
@@ -266,10 +282,15 @@ data class DeduplicationConfig(
      */
     val ignoreFields: Set<String>? = null,
 ) {
-    fun withDefaults(deduplicationDefaults: DeduplicationConfig): DeduplicationConfig = deduplicationDefaults
-        .copyOnChange<DeduplicationConfig, Boolean?>(null, { enable }) { copy(enable = it) }
-        .copyOnChange<DeduplicationConfig, Set<String>?>(null, { distinctFields }) { copy(distinctFields = it) }
-        .copyOnChange<DeduplicationConfig, Set<String>?>(null, { ignoreFields }) { copy(ignoreFields = it) }
+    fun withDefaults(deduplicationDefaults: DeduplicationConfig): DeduplicationConfig =
+        deduplicationDefaults
+            .copyOnChange<DeduplicationConfig, Boolean?>(null, { enable }) { copy(enable = it) }
+            .copyOnChange<DeduplicationConfig, Set<String>?>(null, { distinctFields }) {
+                copy(distinctFields = it)
+            }
+            .copyOnChange<DeduplicationConfig, Set<String>?>(null, { ignoreFields }) {
+                copy(ignoreFields = it)
+            }
 }
 
 data class HdfsConfig(
@@ -317,7 +338,7 @@ enum class ResourceType {
     S3, HDFS, LOCAL, AZURE
 }
 
-fun String.toResourceType() = when(toLowerCase()) {
+fun String.toResourceType() = when (lowercase()) {
     "s3" -> ResourceType.S3
     "hdfs" -> ResourceType.HDFS
     "local" -> ResourceType.LOCAL
@@ -382,8 +403,10 @@ data class AzureConfig(
     fun createAzureClient(): BlobServiceClient = BlobServiceClientBuilder().apply {
         endpoint(endpoint)
         when {
-            !username.isNullOrEmpty() && !password.isNullOrEmpty() -> credential(BasicAuthenticationCredential(username, password))
-            !accountName.isNullOrEmpty() && !accountKey.isNullOrEmpty() -> credential(StorageSharedKeyCredential(accountName, accountKey))
+            !username.isNullOrEmpty() && !password.isNullOrEmpty() -> credential(
+                BasicAuthenticationCredential(username, password))
+            !accountName.isNullOrEmpty() && !accountKey.isNullOrEmpty() -> credential(
+                StorageSharedKeyCredential(accountName, accountKey))
             !sasToken.isNullOrEmpty() -> sasToken(sasToken)
             else -> logger.warn("No Azure credentials supplied. Assuming a public blob storage.")
         }

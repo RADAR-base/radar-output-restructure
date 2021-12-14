@@ -10,11 +10,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM gradle:7.0-jdk11 AS builder
+FROM gradle:7.3-jdk17 AS builder
 
 RUN mkdir /code
 WORKDIR /code
-
 ENV GRADLE_USER_HOME=/code/.gradlecache
 
 COPY ./build.gradle.kts ./gradle.properties ./settings.gradle.kts /code/
@@ -25,7 +24,7 @@ COPY ./src /code/src
 
 RUN gradle jar --no-watch-fs
 
-FROM openjdk:11-jre-slim
+FROM azul/zulu-openjdk-alpine:17-jre-headless
 
 MAINTAINER Joris Borgdorff <joris@thehyve.nl>, Yatharth Ranjan<yatharth.ranjan@kcl.ac.uk>
 

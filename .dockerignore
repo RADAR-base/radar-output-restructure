@@ -1,6 +1,9 @@
-.git/
-build/
-src/test/
-out/
-.gradle/
-.idea/
+/.git*
+/build/
+/src/test/
+/src/integrationTest/
+/out/
+/.gradle*
+/.idea/
+/gradle/
+/gradlew*

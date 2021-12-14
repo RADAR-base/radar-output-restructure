@@ -16,7 +16,6 @@
 
 package org.radarbase.output.data
 
-import com.nhaarman.mockitokotlin2.mock
 import org.apache.avro.SchemaBuilder
 import org.apache.avro.generic.GenericData.Record
 import org.apache.avro.generic.GenericRecordBuilder
@@ -25,6 +24,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.mockito.kotlin.mock
 import org.radarbase.output.Application
 import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.TopicPartition
