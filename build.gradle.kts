@@ -78,20 +78,7 @@ dependencies {
     }
 
     val azureStorageVersion: String by project
-    implementation("com.azure:azure-storage-blob:$azureStorageVersion") {
-        val nettyVersion: String by project
-        implementation("io.netty:netty-handler:$nettyVersion")
-        implementation("io.netty:netty-handler-proxy:$nettyVersion")
-        implementation("io.netty:netty-resolver-dns:$nettyVersion")
-        implementation("io.netty:netty-transport-native-epoll:$nettyVersion")
-        implementation("io.netty:netty-codec-http:$nettyVersion")
-        implementation("io.netty:netty-codec-http2:$nettyVersion")
-        implementation("io.netty:netty-resolver-dns-native-macos:$nettyVersion")
-        implementation("io.netty:netty-transport-native-kqueue:$nettyVersion")
-
-        val nettyReactorVersion: String by project
-        implementation("io.projectreactor.netty:reactor-netty:$nettyReactorVersion")
-    }
+    implementation("com.azure:azure-storage-blob:$azureStorageVersion")
     val opencsvVersion: String by project
     implementation("com.opencsv:opencsv:$opencsvVersion")
 
