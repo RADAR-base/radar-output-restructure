@@ -1,7 +1,5 @@
 package org.radarbase.output.cleaner
 
-import com.nhaarman.mockitokotlin2.doReturn
-import com.nhaarman.mockitokotlin2.mock
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericRecord
@@ -12,6 +10,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
+import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.mock
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.compression.IdentityCompression
 import org.radarbase.output.config.LocalConfig

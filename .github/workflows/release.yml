@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-java@v1
         with:
-          java-version: 11
+          java-version: 17
 
       - name: Gradle cache
         uses: actions/cache@v2
@@ -71,7 +71,12 @@ jobs:
         with:
           images: ${{ env.DOCKER_IMAGE }}
           tags: |
-            type=match,pattern=v(.*),group=1
+            # output 0.1.2
+            type=semver,pattern={{version}}
+            # output 0.1
+            type=semver,pattern={{major}}.{{minor}}
+            # disabled if major zero
+            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
 
       # Setup docker build environment
       - name: Set up QEMU

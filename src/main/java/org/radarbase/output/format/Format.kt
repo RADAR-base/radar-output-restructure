@@ -16,14 +16,12 @@
 
 package org.radarbase.output.format
 
-import java.util.*
-
 interface Format {
     val formats: Collection<String>
 
     val extension: String
 
     open fun matchesFilename(name: String): Boolean {
-        return name.toLowerCase(Locale.US).endsWith(extension.toLowerCase(Locale.US))
+        return name.lowercase().endsWith(extension.lowercase())
     }
 }

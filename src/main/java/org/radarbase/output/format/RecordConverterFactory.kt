@@ -154,12 +154,12 @@ interface RecordConverterFactory : Format {
         fun writeFile(writer: Writer, header: String?, lines: Collection<String>) {
             if (header != null) {
                 writer.write(header)
-                writer.write('\n'.toInt())
+                writer.write('\n'.code)
             }
 
             for (line in lines) {
                 writer.write(line)
-                writer.write('\n'.toInt())
+                writer.write('\n'.code)
             }
         }
     }

@@ -8,14 +8,14 @@ plugins {
     application
     `maven-publish`
     signing
-    id("org.jetbrains.dokka") version "1.4.32"
-    id("com.avast.gradle.docker-compose") version "0.14.3"
-    id("com.github.ben-manes.versions") version "0.38.0"
-    id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
+    id("org.jetbrains.dokka")
+    id("com.avast.gradle.docker-compose")
+    id("com.github.ben-manes.versions")
+    id("io.github.gradle-nexus.publish-plugin")
 }
 
 group = "org.radarbase"
-version = "2.0.0"
+version = "2.0.1"
 
 repositories {
     mavenCentral()
@@ -69,11 +69,18 @@ dependencies {
     implementation("com.almworks.integers:integers:$almworksVersion")
 
     val minioVersion: String by project
-    implementation("io.minio:minio:$minioVersion")
+    implementation("io.minio:minio:$minioVersion") {
+        val guavaVersion: String by project
+        runtimeOnly("com.google.guava:guava:$guavaVersion")
+
+        val okhttpVersion: String by project
+        runtimeOnly("com.squareup.okhttp3:okhttp:$okhttpVersion")
+    }
 
     val azureStorageVersion: String by project
     implementation("com.azure:azure-storage-blob:$azureStorageVersion")
-    implementation("com.opencsv:opencsv:5.4")
+    val opencsvVersion: String by project
+    implementation("com.opencsv:opencsv:$opencsvVersion")
 
     val slf4jVersion: String by project
     implementation("org.slf4j:slf4j-api:$slf4jVersion")
@@ -88,8 +95,9 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")
     testImplementation("org.junit.jupiter:junit-jupiter-params:$junitVersion")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:$junitVersion")
-    testImplementation("org.hamcrest:hamcrest-all:1.3")
-    testImplementation("com.nhaarman.mockitokotlin2:mockito-kotlin:2.2.0")
+    testImplementation("org.hamcrest:hamcrest:2.2")
+    val mockitoKotlinVersion: String by project
+    testImplementation("org.mockito.kotlin:mockito-kotlin:$mockitoKotlinVersion")
 
     val dokkaVersion: String by project
     dokkaHtmlPlugin("org.jetbrains.dokka:kotlin-as-java-plugin:$dokkaVersion")
@@ -111,9 +119,9 @@ distributions {
 
 tasks.withType<KotlinCompile> {
     kotlinOptions {
-        jvmTarget = "11"
-        apiVersion = "1.4"
-        languageVersion = "1.4"
+        jvmTarget = "17"
+        apiVersion = "1.6"
+        languageVersion = "1.6"
     }
 }
 
@@ -236,9 +244,9 @@ val integrationTest by tasks.registering(Test::class) {
 }
 
 dockerCompose {
-    waitForTcpPortsTimeout = Duration.ofSeconds(30)
-    environment["SERVICES_HOST"] = "localhost"
-    captureContainersOutputToFiles = project.file("build/container-logs")
+    waitForTcpPortsTimeout.set(Duration.ofSeconds(30))
+    environment.put("SERVICES_HOST", "localhost")
+    captureContainersOutputToFiles.set(project.file("build/container-logs"))
     isRequiredBy(integrationTest)
 }
 
@@ -269,7 +277,7 @@ tasks.register<Copy>("copyDependencies") {
 }
 
 fun isNonStable(version: String): Boolean {
-    val stableKeyword = listOf("RELEASE", "FINAL", "GA").any { version.toUpperCase().contains(it) }
+    val stableKeyword = listOf("RELEASE", "FINAL", "GA", "JRE").any { version.toUpperCase().contains(it) }
     val regex = "^[0-9,.v-]+(-r)?$".toRegex()
     val isStable = stableKeyword || regex.matches(version)
     return isStable.not()
@@ -282,5 +290,5 @@ tasks.named<DependencyUpdatesTask>("dependencyUpdates").configure {
 }
 
 tasks.wrapper {
-    gradleVersion = "7.0.2"
+    gradleVersion = "7.3.1"
 }

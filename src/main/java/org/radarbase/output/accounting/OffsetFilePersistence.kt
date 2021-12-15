@@ -101,15 +101,15 @@ class OffsetFilePersistence(
                     offsets.forEach { topicPartition, offsetIntervals ->
                         offsetIntervals.forEach { offsetFrom, offsetTo, lastModified ->
                             writer.write(offsetFrom.toString())
-                            writer.write(','.toInt())
+                            writer.write(','.code)
                             writer.write(offsetTo.toString())
-                            writer.write(','.toInt())
+                            writer.write(','.code)
                             writer.write(topicPartition.partition.toString())
-                            writer.write(','.toInt())
+                            writer.write(','.code)
                             writer.write(topicPartition.topic)
-                            writer.write(','.toInt())
+                            writer.write(','.code)
                             writer.write(lastModified.toString())
-                            writer.write('\n'.toInt())
+                            writer.write('\n'.code)
                         }
                     }
                 }
