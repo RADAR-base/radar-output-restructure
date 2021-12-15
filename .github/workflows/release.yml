@@ -70,12 +70,10 @@ jobs:
         uses: crazy-max/ghaction-docker-meta@v2
         with:
           images: ${{ env.DOCKER_IMAGE }}
+          # output 2.1.2, 2.1 and 2
           tags: |
-            # output 0.1.2
             type=semver,pattern={{version}}
-            # output 0.1
             type=semver,pattern={{major}}.{{minor}}
-            # disabled if major zero
             type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
 
       # Setup docker build environment
