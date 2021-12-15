@@ -19,8 +19,7 @@ package org.radarbase.output.data
 import org.apache.avro.SchemaBuilder
 import org.apache.avro.generic.GenericData.Record
 import org.apache.avro.generic.GenericRecordBuilder
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -162,8 +161,8 @@ class FileCacheTest {
 
     @Test
     @Throws(IOException::class)
-    fun compareTo(@TempDir tmp3: Path) {
-        val file3 = tmp3.resolve("file3")
+    fun compareTo() {
+        val file3 = path.parent.resolve("g")
         FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant).use { cache1 ->
             FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant).use { cache2 ->
                 FileCache(factory, "topic", file3, exampleRecord, tmpDir, accountant).use { cache3 ->
