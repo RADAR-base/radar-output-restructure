@@ -14,7 +14,8 @@ FROM gradle:7.3-jdk17 AS builder
 
 RUN mkdir /code
 WORKDIR /code
-ENV GRADLE_USER_HOME=/code/.gradlecache
+ENV GRADLE_USER_HOME=/code/.gradlecache \
+   GRADLE_OPTS=-Djdk.lang.Process.launchMechanism=vfork
 
 COPY ./build.gradle.kts ./gradle.properties ./settings.gradle.kts /code/
 
