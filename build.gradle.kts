@@ -15,7 +15,7 @@ plugins {
 }
 
 group = "org.radarbase"
-version = "2.0.1"
+version = "2.0.2-SNAPSHOT"
 
 repositories {
     mavenCentral()
@@ -52,7 +52,7 @@ dependencies {
     implementation(kotlin("reflect"))
 
     val jacksonVersion: String by project
-    implementation("com.fasterxml.jackson:jackson-bom:$jacksonVersion")
+    api(platform("com.fasterxml.jackson:jackson-bom:$jacksonVersion"))
     implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-csv")
@@ -78,7 +78,10 @@ dependencies {
     }
 
     val azureStorageVersion: String by project
-    implementation("com.azure:azure-storage-blob:$azureStorageVersion")
+    implementation("com.azure:azure-storage-blob:$azureStorageVersion") {
+        val nettyVersion: String by project
+        implementation(platform("io.netty:netty-bom:$nettyVersion"))
+    }
     val opencsvVersion: String by project
     implementation("com.opencsv:opencsv:$opencsvVersion")
 
@@ -101,6 +104,12 @@ dependencies {
 
     val dokkaVersion: String by project
     dokkaHtmlPlugin("org.jetbrains.dokka:kotlin-as-java-plugin:$dokkaVersion")
+
+    val jsoupVersion: String by project
+    dokkaPlugin("org.jsoup:jsoup:$jsoupVersion")
+    dokkaRuntime("org.jsoup:jsoup:$jsoupVersion")
+    dokkaPlugin(platform("com.fasterxml.jackson:jackson-bom:$jacksonVersion"))
+    dokkaRuntime(platform("com.fasterxml.jackson:jackson-bom:$jacksonVersion"))
 }
 
 application {
@@ -290,5 +299,5 @@ tasks.named<DependencyUpdatesTask>("dependencyUpdates").configure {
 }
 
 tasks.wrapper {
-    gradleVersion = "7.3.1"
+    gradleVersion = "7.3.3"
 }
