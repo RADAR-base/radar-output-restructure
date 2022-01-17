@@ -1,0 +1,10 @@
+# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.
+version: v1.22.1
+# ignores vulnerabilities until expiry date; change duration by modifying expiry date
+ignore:
+  SNYK-JAVA-IONETTY-1042268:
+    - '*':
+        reason: Cannot resolve for Azure
+        expires: 2023-01-02T13:02:10.075Z
+        created: 2022-01-03T13:02:10.078Z
+patch: {}
