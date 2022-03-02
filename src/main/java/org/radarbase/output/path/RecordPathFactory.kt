@@ -16,7 +16,9 @@
 
 package org.radarbase.output.path
 
+import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
+import org.apache.avro.generic.GenericRecordBuilder
 import org.radarbase.output.Plugin
 import org.radarbase.output.util.TimeUtil
 import org.slf4j.LoggerFactory
@@ -58,7 +60,7 @@ abstract class RecordPathFactory : Plugin {
         record: GenericRecord,
         attempt: Int,
     ): RecordOrganization {
-        val keyField = record.get("key") as? GenericRecord
+        val keyField = record.get("key")
         val valueField = record.get("value") as? GenericRecord
 
         if (keyField == null || valueField == null) {
@@ -66,11 +68,21 @@ abstract class RecordPathFactory : Plugin {
             throw IllegalArgumentException("Failed to process $record; no key or value")
         }
 
-        val time = TimeUtil.getDate(keyField, valueField)
+        val keyRecord: GenericRecord = if (keyField is GenericRecord) {
+            keyField
+        } else {
+            GenericRecordBuilder(observationKeySchema)
+                .set("projectId", valueField.getOrNull("projectId"))
+                .set("userId", keyField.toString())
+                .set("sourceId", valueField.getOrNull("sourceId") ?: "unknown")
+                .build()
+        }
 
-        val relativePath = getRelativePath(topic, keyField, valueField, time, attempt)
+        val time = TimeUtil.getDate(keyRecord, valueField)
+
+        val relativePath = getRelativePath(topic, keyRecord, valueField, time, attempt)
         val outputPath = root.resolve(relativePath)
-        val category = getCategory(keyField, valueField)
+        val category = getCategory(keyRecord, valueField)
         return RecordOrganization(outputPath, category, time)
     }
 
@@ -127,5 +139,21 @@ abstract class RecordPathFactory : Plugin {
                 ?.let { ILLEGAL_CHARACTER_PATTERN.matcher(it.toString()).replaceAll("") }
                 ?.takeIf { it.isNotEmpty() }
                 ?: defaultValue
+
+        private val observationKeySchema = Schema.Parser().parse("""
+            {
+              "namespace": "org.radarcns.kafka",
+              "type": "record",
+              "name": "ObservationKey",
+              "doc": "Key of an observation.",
+              "fields": [
+                {"name": "projectId", "type": ["null", "string"], "doc": "Project identifier. Null if unknown or the user is not enrolled in a project.", "default": null},
+                {"name": "userId", "type": "string", "doc": "User Identifier created during the enrolment."},
+                {"name": "sourceId", "type": "string", "doc": "Unique identifier associated with the source."}
+              ]
+            }
+        """.trimIndent())
+
+        private fun GenericRecord.getOrNull(fieldName: String): Any? = if (hasField(fieldName)) get(fieldName) else null
     }
 }
