@@ -3,6 +3,8 @@ package org.radarbase.output.util
 import com.fasterxml.jackson.databind.JsonNode
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
+import org.radarbase.output.path.RecordPathFactory.Companion.getFieldOrNull
+import org.radarbase.output.path.RecordPathFactory.Companion.getOrNull
 import java.math.RoundingMode
 import java.time.*
 import java.time.format.DateTimeParseException
@@ -21,73 +23,74 @@ object TimeUtil {
     fun getDate(key: GenericRecord?,
                 value: GenericRecord?): Instant? {
         value?.timeOrNull("time")
-                ?.let { return it }
+            ?.let { return it }
 
         key?.run {
             timeOrNull("timeStart")
-                    ?.let { return it }
+                ?.let { return it }
 
-
-            schema.getField("start")
-                    ?.takeIf { it.schema().type == Schema.Type.LONG }
-                    ?.let { return Instant.ofEpochMilli(get(it.pos()) as Long) }
+            getFieldOrNull("start")
+                ?.takeIf { it.hasType(Schema.Type.LONG) }
+                ?.let { get(it.pos()) as? Long }
+                ?.let { return Instant.ofEpochMilli(it) }
         }
 
         value?.run {
             dateTimeOrNull("dateTime")
-                    ?.let { return it }
+                ?.let { return it }
 
             dateOrNull("date")
-                    ?.let { return it }
+                ?.let { return it }
 
             timeOrNull("timeReceived")
-                    ?.let { return it }
+                ?.let { return it }
             timeOrNull("timeCompleted")
-                    ?.let { return it }
+                ?.let { return it }
         }
 
         return null
     }
 
     fun getDate(key: JsonNode?, value: JsonNode?): Double? {
-        value?.get("time")
+        value?.getOrNull("time")
+            ?.takeIf { it.isNumber }
+            ?.let { return it.asDouble() }
+
+        key?.run {
+            getOrNull("timeStart")
                 ?.takeIf { it.isNumber }
                 ?.let { return it.asDouble() }
 
-        key?.run {
-            get("timeStart")
-                    ?.takeIf { it.isNumber }
-                    ?.let { return it.asDouble() }
-
-            get("start")
-                    ?.takeIf { it.isNumber }
-                    ?.let { return it.asLong() / 1000.0 }
+            getOrNull("start")
+                ?.takeIf { it.isNumber }
+                ?.let { return it.asLong() / 1000.0 }
         }
 
         value?.run {
-            get("dateTime")
-                    ?.takeIf { it.isTextual }
-                    ?.let { node -> return node.asText().parseDateTime()?.toDouble() }
+            getOrNull("dateTime")
+                ?.takeIf { it.isTextual }
+                ?.let { node -> return node.asText().parseDateTime()?.toDouble() }
 
-            get("date")
-                    ?.takeIf { it.isTextual }
-                    ?.let { node -> return node.asText().parseDate()?.toDouble() }
+            getOrNull("date")
+                ?.takeIf { it.isTextual }
+                ?.let { node -> return node.asText().parseDate()?.toDouble() }
 
-            get("timeReceived")
-                    ?.takeIf { it.isNumber }
-                    ?.let { return it.asDouble() }
+            getOrNull("timeReceived")
+                ?.takeIf { it.isNumber }
+                ?.let { return it.asDouble() }
 
-            get("timeCompleted")
-                    ?.takeIf { it.isNumber }
-                    ?.let { return it.asDouble() }
+            getOrNull("timeCompleted")
+                ?.takeIf { it.isNumber }
+                ?.let { return it.asDouble() }
         }
 
         return null
     }
 
-    private fun GenericRecord.timeOrNull(fieldName: String): Instant? = schema.getField(fieldName)
-            ?.takeIf { it.schema().type == Schema.Type.DOUBLE }
-            ?.let { (get(it.pos()) as Double).toInstant() }
+    private fun GenericRecord.timeOrNull(fieldName: String): Instant? = getFieldOrNull(fieldName)
+        ?.takeIf { it.hasType(Schema.Type.DOUBLE) }
+        ?.let { (get(it.pos()) as? Double) }
+        ?.toInstant()
 
     /**
      * Parse the dateTime field of a record, if present.
@@ -96,9 +99,11 @@ object TimeUtil {
      * @return `Instant` representing the dateTime or `null` if the field cannot be
      * found or parsed.
      */
-    private fun GenericRecord.dateTimeOrNull(fieldName: String): Instant? = schema.getField(fieldName)
-            ?.takeIf { it.schema().type == Schema.Type.STRING }
-            ?.let { get(it.pos()).toString().parseDateTime() }
+    private fun GenericRecord.dateTimeOrNull(fieldName: String): Instant? = getFieldOrNull(fieldName)
+        ?.takeIf { it.hasType(Schema.Type.STRING) }
+        ?.let { get(it.pos()) }
+        ?.toString()
+        ?.parseDateTime()
 
     /**
      * Parse the date field of a record, if present.
@@ -107,9 +112,11 @@ object TimeUtil {
      * @return `Instant` representing the start of given date or `null` if the field
      * cannot be found or parsed.
      */
-    private fun GenericRecord.dateOrNull(fieldName: String): Instant? = schema.getField(fieldName)
-            ?.takeIf { it.schema().type == Schema.Type.STRING }
-            ?.let { get(it.pos()).toString().parseDate() }
+    private fun GenericRecord.dateOrNull(fieldName: String): Instant? = getFieldOrNull(fieldName)
+        ?.takeIf { it.hasType(Schema.Type.STRING) }
+        ?.let { get(it.pos()) }
+        ?.toString()
+        ?.parseDate()
 
     private fun Double.toInstant(): Instant {
         val time = toBigDecimal()
@@ -122,8 +129,8 @@ object TimeUtil {
 
     fun String.parseDate(): Instant? = try {
         LocalDate.parse(this)
-                .atStartOfDay(ZoneOffset.UTC)
-                .toInstant()
+            .atStartOfDay(ZoneOffset.UTC)
+            .toInstant()
     } catch (ex: DateTimeParseException) {
         null
     }
@@ -142,6 +149,15 @@ object TimeUtil {
             + (nano.toBigDecimal().divide(NANO_MULTIPLIER, 9, RoundingMode.HALF_UP))
             ).toDouble()
 
+    private fun JsonNode.getOrNull(fieldName: String): JsonNode? = fields().asSequence()
+        .find { (name, _) -> name.equals(fieldName, ignoreCase = true) }
+        ?.value
+
+    private fun Schema.Field.hasType(type: Schema.Type): Boolean {
+        val s = schema()
+        return s.type == type
+            || (s.type == Schema.Type.UNION && s.types.any { it.type == type })
+    }
 
     fun Temporal.durationSince(): Duration = Duration.between(this, Instant.now())
 }
