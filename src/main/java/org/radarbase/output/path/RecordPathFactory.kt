@@ -146,6 +146,12 @@ abstract class RecordPathFactory : Plugin {
             }
         """.trimIndent())
 
-        private fun GenericRecord.getOrNull(fieldName: String): Any? = if (hasField(fieldName)) get(fieldName) else null
+        fun GenericRecord.getFieldOrNull(fieldName: String): Schema.Field? {
+            return schema.fields
+                .find { it.name().equals(fieldName, ignoreCase = true) }
+        }
+
+        fun GenericRecord.getOrNull(fieldName: String): Any? = getFieldOrNull(fieldName)
+                ?.let { get(it.pos()) }
     }
 }
