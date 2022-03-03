@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM gradle:6.6.1-jdk11 AS builder
+FROM --platform=$BUILDPLATFORM gradle:6.6.1-jdk11 AS builder
 
 RUN mkdir /code
 WORKDIR /code
