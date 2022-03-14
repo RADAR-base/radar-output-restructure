@@ -7,4 +7,9 @@ ignore:
         reason: Cannot resolve for Azure
         expires: 2023-01-02T13:02:10.075Z
         created: 2022-01-03T13:02:10.078Z
+  SNYK-JAVA-ORGJETBRAINSKOTLIN-2393744:
+    - '*':
+        reason: Not using Kotlin Files interface
+        expires: 2022-12-13T08:35:54.696Z
+        created: 2022-03-14T08:35:54.706Z
 patch: {}
