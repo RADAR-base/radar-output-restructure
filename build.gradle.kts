@@ -299,5 +299,5 @@ tasks.named<DependencyUpdatesTask>("dependencyUpdates").configure {
 }
 
 tasks.wrapper {
-    gradleVersion = "7.4"
+    gradleVersion = "7.4.1"
 }
