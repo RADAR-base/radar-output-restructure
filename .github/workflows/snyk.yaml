@@ -8,9 +8,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
+      - uses: snyk/actions/setup@master
+
+      - uses: actions/setup-java@v2
+        with:
+          distribution: zulu
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2
+
       - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/gradle-jdk11@master
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          args: --severity-threshold=high
+        run: >
+          snyk test
+          --severity-threshold=high
+          --configuration-matching='^runtimeClasspath$'
+          --fail-on=upgradable
+          --org=radar-base
