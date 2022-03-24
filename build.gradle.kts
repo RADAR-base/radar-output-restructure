@@ -15,7 +15,7 @@ plugins {
 }
 
 group = "org.radarbase"
-version = "2.0.2"
+version = "2.1.0"
 
 repositories {
     mavenCentral()
@@ -299,5 +299,5 @@ tasks.named<DependencyUpdatesTask>("dependencyUpdates").configure {
 }
 
 tasks.wrapper {
-    gradleVersion = "7.3.3"
+    gradleVersion = "7.4.1"
 }
