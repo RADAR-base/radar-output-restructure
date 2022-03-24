@@ -70,7 +70,7 @@ When upgrading to version 0.6.0 from version 0.5.x or earlier, please follow the
 This package is available as docker image [`radarbase/radar-output-restructure`](https://hub.docker.com/r/radarbase/radar-output-restructure). The entrypoint of the image is the current application. So in all the commands listed in usage, replace `radar-output-restructure` with for example:
 
 ```shell
-docker run --rm -t --network s3 -v "$PWD/output:/output" radarbase/radar-output-restructure:2.0.2 -o /output /myTopic
+docker run --rm -t --network s3 -v "$PWD/output:/output" radarbase/radar-output-restructure:2.1.0 -o /output /myTopic
 ```
 
 ## Command line usage
@@ -182,7 +182,7 @@ This package requires at least Java JDK 8. Build the distribution with
 and install the package into `/usr/local` with for example
 ```shell
 sudo mkdir -p /usr/local
-sudo tar -xzf build/distributions/radar-output-restructure-2.0.2.tar.gz -C /usr/local --strip-components=1
+sudo tar -xzf build/distributions/radar-output-restructure-2.1.0.tar.gz -C /usr/local --strip-components=1
 ```
 
 Now the `radar-output-restructure` command should be available.
