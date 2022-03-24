@@ -25,14 +25,14 @@ COPY ./src /code/src
 
 RUN gradle jar --no-watch-fs
 
-FROM azul/zulu-openjdk-alpine:17-jre-headless
+FROM eclipse-temurin:17-jre
 
 MAINTAINER Joris Borgdorff <joris@thehyve.nl>, Yatharth Ranjan<yatharth.ranjan@kcl.ac.uk>
 
 LABEL description="RADAR-base output data restructuring"
 
-ENV RADAR_OUTPUT_RESTRUCTURE_OPTS=""
-ENV JAVA_OPTS="-Djava.security.egd=file:/dev/./urandom -XX:+UseG1GC -XX:MaxHeapFreeRatio=10 -XX:MinHeapFreeRatio=10"
+ENV RADAR_OUTPUT_RESTRUCTURE_OPTS="" \
+  JAVA_OPTS="-Djava.security.egd=file:/dev/./urandom -XX:+UseG1GC -XX:MaxHeapFreeRatio=10 -XX:MinHeapFreeRatio=10"
 
 COPY --from=builder /code/build/third-party/* /usr/lib/
 COPY --from=builder /code/build/scripts/* /usr/bin/
