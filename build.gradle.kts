@@ -15,7 +15,7 @@ plugins {
 }
 
 group = "org.radarbase"
-version = "2.1.0"
+version = "2.1.0.1"
 
 repositories {
     mavenCentral()
