@@ -28,9 +28,9 @@ import org.radarbase.output.config.LocalConfig
 import org.radarbase.output.target.LocalTargetStorage
 import org.radarbase.output.target.TargetStorage
 import java.io.IOException
-import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
+import kotlin.io.path.createFile
 
 class OffsetRangeFileTest {
     private lateinit var testFile: Path
@@ -42,7 +42,7 @@ class OffsetRangeFileTest {
     @Throws(IOException::class)
     fun setUp(@TempDir dir: Path) {
         testFile = dir.resolve("test")
-        Files.createFile(testFile)
+        testFile.createFile()
         targetStorage = LocalTargetStorage(LocalConfig())
         offsetPersistence = OffsetFilePersistence(targetStorage)
     }

@@ -28,10 +28,12 @@ import org.radarbase.output.util.Timer.time
 import org.slf4j.LoggerFactory
 import java.io.*
 import java.nio.file.AtomicMoveNotSupportedException
-import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.io.path.createTempFile
+import kotlin.io.path.moveTo
+import kotlin.io.path.outputStream
 
 /** Keeps path handles of a path.  */
 class FileCache(
@@ -65,10 +67,9 @@ class FileCache(
 
         val fileIsNew = targetStorage.status(path)?.takeIf { it.size > 0L } == null
 
-        this.tmpPath = Files.createTempFile(tmpDir, fileName, ".tmp" + compression.extension)
+        this.tmpPath = createTempFile(tmpDir, fileName, ".tmp" + compression.extension)
 
-        var outStream = compression.compress(fileName,
-                BufferedOutputStream(Files.newOutputStream(tmpPath)))
+        var outStream = compression.compress(fileName, tmpPath.outputStream().buffered())
 
         val inputStream: InputStream
         if (fileIsNew) {
@@ -79,8 +80,7 @@ class FileCache(
                     // restart output buffer
                     outStream.close()
                     // clear output file
-                    outStream = compression.compress(
-                            fileName, BufferedOutputStream(Files.newOutputStream(tmpPath)))
+                    outStream = compression.compress(fileName, tmpPath.outputStream().buffered())
                 }
                 compression.decompress(targetStorage.newInputStream(path))
             }
@@ -133,17 +133,20 @@ class FileCache(
             if (deduplicate.enable == true) {
                 time("close.deduplicate") {
                     val dedupTmp = tmpPath.resolveSibling("${tmpPath.fileName}.dedup")
-                    if (converterFactory.deduplicate(
-                                    fileName,
-                                    source = tmpPath,
-                                    target = dedupTmp,
-                                    compression = compression,
-                                    distinctFields = deduplicate.distinctFields ?: emptySet(),
-                                    ignoreFields = deduplicate.ignoreFields ?: emptySet())) {
+                    if (
+                        converterFactory.deduplicate(
+                            fileName = fileName,
+                            source = tmpPath,
+                            target = dedupTmp,
+                            compression = compression,
+                            distinctFields = deduplicate.distinctFields ?: emptySet(),
+                            ignoreFields = deduplicate.ignoreFields ?: emptySet(),
+                        )
+                    ) {
                         try {
-                            Files.move(dedupTmp, tmpPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+                            dedupTmp.moveTo(tmpPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
                         } catch (ex: AtomicMoveNotSupportedException) {
-                            Files.move(dedupTmp, tmpPath, StandardCopyOption.REPLACE_EXISTING)
+                            dedupTmp.moveTo(tmpPath, StandardCopyOption.REPLACE_EXISTING)
                         }
                     }
                 }

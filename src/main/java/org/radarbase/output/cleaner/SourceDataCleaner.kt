@@ -2,6 +2,7 @@ package org.radarbase.output.cleaner
 
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.accounting.Accountant
+import org.radarbase.output.util.ResourceContext.Companion.resourceContext
 import org.radarbase.output.util.Timer
 import org.slf4j.LoggerFactory
 import java.io.Closeable
@@ -61,10 +62,10 @@ class SourceDataCleaner(
 
         return try {
             lockManager.tryRunLocked(topic) {
-                Accountant(fileStoreFactory, topic).use { accountant ->
-                    TimestampExtractionCheck(sourceStorage, fileStoreFactory).use { extractionCheck ->
-                        deleteOldFiles(accountant, extractionCheck, topic, topicPath).toLong()
-                    }
+                resourceContext {
+                    val accountant = createResource { Accountant(fileStoreFactory, topic) }
+                    val extractionCheck = createResource { TimestampExtractionCheck(sourceStorage, fileStoreFactory) }
+                    deleteOldFiles(accountant, extractionCheck, topic, topicPath).toLong()
                 }
             }
         } catch (ex: IOException) {

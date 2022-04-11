@@ -6,9 +6,10 @@ import org.apache.avro.file.SeekableInput
 import org.radarbase.output.config.AzureConfig
 import org.radarbase.output.util.TemporaryDirectory
 import org.radarbase.output.util.toKey
-import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import kotlin.io.path.createTempFile
+import kotlin.io.path.deleteIfExists
 
 class AzureSourceStorage(
         client: BlobServiceClient,
@@ -57,7 +58,7 @@ class AzureSourceStorage(
         private val tempDir = TemporaryDirectory(tempPath, "worker-")
 
         override fun newInput(file: TopicFile): SeekableInput {
-            val fileName = Files.createTempFile(tempDir.path, "${file.topic}-${file.path.fileName}", ".avro")
+            val fileName = createTempFile(tempDir.path, "${file.topic}-${file.path.fileName}", ".avro")
 
             blobClient(file.path)
                     .downloadToFile(fileName.toString(), true)
@@ -65,7 +66,7 @@ class AzureSourceStorage(
             return object : SeekableFileInput(fileName.toFile()) {
                 override fun close() {
                     super.close()
-                    Files.deleteIfExists(fileName)
+                    fileName.deleteIfExists()
                 }
             }
         }

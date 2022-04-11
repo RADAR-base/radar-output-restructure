@@ -23,7 +23,6 @@ import org.slf4j.LoggerFactory
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.nio.file.Path
-import java.util.*
 
 /**
  * Caches open file handles. If more than the limit is cached, the half of the files that were used

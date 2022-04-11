@@ -19,7 +19,6 @@ package org.radarbase.output.target
 import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStream
-import java.io.InputStreamReader
 import java.nio.file.Path
 
 interface TargetStorage {
@@ -53,10 +52,7 @@ interface TargetStorage {
      * It should be closed by the caller.
      */
     @Throws(IOException::class)
-    fun newBufferedReader(path: Path): BufferedReader {
-        val reader = InputStreamReader(newInputStream(path))
-        return BufferedReader(reader)
-    }
+    fun newBufferedReader(path: Path): BufferedReader = newInputStream(path).reader().buffered()
 
     /** Create given directory, by recursively creating all parent directories. */
     @Throws(IOException::class)

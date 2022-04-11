@@ -12,7 +12,13 @@ import org.radarbase.output.util.objectBuild
 import org.slf4j.LoggerFactory
 import java.io.FileNotFoundException
 import java.io.IOException
-import java.nio.file.*
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.nio.file.StandardOpenOption
+import kotlin.io.path.createTempFile
+import kotlin.io.path.deleteExisting
+import kotlin.io.path.deleteIfExists
+import kotlin.io.path.outputStream
 
 class S3SourceStorage(
         private val s3Client: MinioClient,
@@ -74,18 +80,18 @@ class S3SourceStorage(
         private val tempDir = TemporaryDirectory(tempPath, "worker-")
 
         override fun newInput(file: TopicFile): SeekableInput {
-            val tempFile = Files.createTempFile(tempDir.path, "${file.topic}-${file.path.fileName}", ".avro")
+            val tempFile = createTempFile(tempDir.path, "${file.topic}-${file.path.fileName}", ".avro")
 
             try {
                 faultTolerant {
-                    Files.newOutputStream(tempFile, StandardOpenOption.TRUNCATE_EXISTING).use { out ->
+                    tempFile.outputStream(StandardOpenOption.TRUNCATE_EXISTING).use { out ->
                         s3Client.getObject(GetObjectArgs.Builder().objectBuild(bucket, file.path))
                             .copyTo(out)
                     }
                 }
             } catch (ex: Exception) {
                 try {
-                    Files.delete(tempFile)
+                    tempFile.deleteExisting()
                 } catch (ex: IOException) {
                     logger.warn("Failed to delete temporary file {}", tempFile)
                 }
@@ -94,7 +100,7 @@ class S3SourceStorage(
             return object : SeekableFileInput(tempFile.toFile()) {
                 override fun close() {
                     super.close()
-                    Files.deleteIfExists(tempFile)
+                    tempFile.deleteIfExists()
                 }
             }
         }

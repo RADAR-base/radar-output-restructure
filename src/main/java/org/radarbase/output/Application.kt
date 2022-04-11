@@ -36,7 +36,6 @@ import org.radarbase.output.worker.RadarKafkaRestructure
 import org.slf4j.LoggerFactory
 import redis.clients.jedis.JedisPool
 import java.io.IOException
-import java.nio.file.Files
 import java.text.NumberFormat
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -44,6 +43,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.LongAdder
 import kotlin.Long.Companion.MAX_VALUE
+import kotlin.io.path.createDirectories
 import kotlin.system.exitProcess
 
 /** Main application.  */
@@ -84,7 +84,7 @@ class Application(
                 (config.worker.numThreads - 1).toString())
 
         try {
-            Files.createDirectories(config.paths.temp)
+            config.paths.temp.createDirectories()
         } catch (ex: IOException) {
             logger.error("Failed to create temporary directory")
             return

@@ -4,10 +4,11 @@ import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.compression.Compression
 import org.radarbase.output.format.JsonAvroConverter.Companion.JSON_READER
 import org.radarbase.output.format.JsonAvroConverter.Companion.JSON_WRITER
+import org.radarbase.output.util.ResourceContext.Companion.resourceContext
 import org.radarbase.output.util.TimeUtil.getDate
 import java.io.*
-import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.inputStream
 
 class JsonAvroConverterFactory : RecordConverterFactory {
     override val extension: String = ".json"
@@ -22,38 +23,47 @@ class JsonAvroConverterFactory : RecordConverterFactory {
                               writeHeader: Boolean,
                               reader: Reader): RecordConverter = JsonAvroConverter(writer, converter)
 
-    override fun readTimeSeconds(source: InputStream, compression: Compression): Pair<Array<String>?, List<Double>>? {
-        return compression.decompress(source).use {
-            zipIn -> InputStreamReader(zipIn).use {
-            inReader -> BufferedReader(inReader).use {
-            reader ->
-            Pair(null, fileSequence(reader, hasHeader)
-                    .mapNotNull {
-                        val record = JSON_READER.readTree(it)
-                        getDate(record.get("key"), record.get("value"))
-                    }
-                    .toList())
-        } } }
+    override fun readTimeSeconds(
+        source: InputStream,
+        compression: Compression,
+    ): Pair<Array<String>?, List<Double>> = resourceContext {
+        val reader = resourceChain { compression.decompress(source) }
+            .chain { it.reader() }
+            .conclude { it.buffered() }
+
+        Pair(
+            null,
+            reader.contentLines()
+                .mapNotNull {
+                    val record = JSON_READER.readTree(it)
+                    getDate(record.get("key"), record.get("value"))
+                }
+                .toList(),
+        )
     }
 
     override fun contains(source: Path, record: GenericRecord, compression: Compression, usingFields: Set<String>, ignoreFields: Set<String>): Boolean {
         val recordString = JSON_WRITER.writeValueAsString(converter.convertRecord(record))
 
-        return Files.newInputStream(source).use {
-            inFile -> compression.decompress(inFile).use {
-            zipIn -> InputStreamReader(zipIn).use {
-            inReader -> BufferedReader(inReader).use {
-            reader ->
-            fileSequence(reader, hasHeader)
-                    .any { recordString == it }
-        } } } }
+        return resourceContext {
+            val reader = resourceChain { source.inputStream() }
+                .chain { compression.decompress(it) }
+                .chain { it.reader() }
+                .conclude { it.buffered() }
+
+            reader.contentLines()
+                .any { recordString == it }
+        }
     }
 
-    companion object {
-        fun fileSequence(reader: BufferedReader, withHeader: Boolean): Sequence<String> {
-            if (withHeader) reader.readLine() // skip header
+    fun BufferedReader.contentLines(): Sequence<String> = lineSequence()
+        .drop(if (hasHeader) 1 else 0)
 
-            return generateSequence { reader.readLine() }
-        }
+    companion object {
+        fun fileSequence(
+            reader: BufferedReader,
+            withHeader: Boolean,
+        ): Sequence<String> = reader.lineSequence()
+            .drop(if (withHeader) 1 else 0)
     }
 }

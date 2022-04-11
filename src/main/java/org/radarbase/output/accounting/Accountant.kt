@@ -23,9 +23,10 @@ import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.Flushable
 import java.io.IOException
-import java.nio.file.Files
 import java.nio.file.Paths
 import java.time.Instant
+import kotlin.io.path.deleteExisting
+import kotlin.io.path.exists
 
 open class Accountant @Throws(IOException::class)
 constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
@@ -53,9 +54,9 @@ constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
                 .resolve(OFFSETS_FILE_NAME)
                 .resolve("$topic.csv")
 
-        return if (Files.exists(offsetsPath)) {
+        return if (offsetsPath.exists()) {
             OffsetFilePersistence(factory.targetStorage).read(offsetsPath)
-                    .also { Files.delete(offsetsPath) }
+                    .also { offsetsPath.deleteExisting() }
         } else null
     }
 

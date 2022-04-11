@@ -38,6 +38,7 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
+import kotlin.io.path.createDirectories
 
 class FileCacheStoreTest {
     private val lastModified = Instant.now()
@@ -49,7 +50,7 @@ class FileCacheStoreTest {
         val f2 = root.resolve("f2")
         val f3 = root.resolve("f3")
         val d4 = root.resolve("d4")
-        Files.createDirectories(d4)
+        d4.createDirectories()
         val f4 = d4.resolve("f4.txt")
         val newFile = root.resolve("newFile")
 

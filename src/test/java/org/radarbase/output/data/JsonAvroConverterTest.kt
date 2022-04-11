@@ -29,7 +29,6 @@ import org.radarbase.output.compression.IdentityCompression
 import org.radarbase.output.data.CsvAvroConverterTest.Companion.writeTestNumbers
 import org.radarbase.output.format.JsonAvroConverter
 import java.io.IOException
-import java.io.InputStreamReader
 import java.io.StringReader
 import java.io.StringWriter
 import java.nio.file.Files
@@ -40,9 +39,11 @@ class JsonAvroConverterTest {
     @Throws(IOException::class)
     fun fullAvroTest() {
         val parser = Parser()
-        val schema = parser.parse(javaClass.getResourceAsStream("full.avsc"))
+        val schema = parser.parse(
+            requireNotNull(javaClass.getResourceAsStream("full.avsc")) { "Missing full.avsc" }
+        )
         val reader = GenericDatumReader<GenericRecord>(schema)
-        val decoder = DecoderFactory.get().jsonDecoder(schema, javaClass.getResourceAsStream("full.json"))
+        val decoder = DecoderFactory.get().jsonDecoder(schema, requireNotNull(javaClass.getResourceAsStream("full.json")) { "Missing full.json" })
         val record = reader.read(null, decoder)
 
         val map = JsonAvroConverter
@@ -50,8 +51,9 @@ class JsonAvroConverterTest {
         val writer = ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT).writer()
         val result = writer.writeValueAsString(map)
 
-        val expected = InputStreamReader(javaClass.getResourceAsStream("full.json"))
-                .useLines { it.joinToString("\n") }
+        val expected = requireNotNull(javaClass.getResourceAsStream("full.json")) { "Missing full.json" }
+            .reader()
+            .useLines { it.joinToString("\n") }
 
         println(result)
 

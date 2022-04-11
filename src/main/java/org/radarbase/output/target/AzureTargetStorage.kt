@@ -24,8 +24,8 @@ import org.radarbase.output.util.toKey
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.io.InputStream
-import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.deleteExisting
 
 class AzureTargetStorage(private val config: AzureConfig) : TargetStorage {
     private val container: String = config.container
@@ -79,7 +79,7 @@ class AzureTargetStorage(private val config: AzureConfig) : TargetStorage {
     @Throws(IOException::class)
     override fun store(localPath: Path, newPath: Path) {
         blob(newPath).uploadFromFile(localPath.toString(), true)
-        Files.delete(localPath)
+        localPath.deleteExisting()
     }
 
     @Throws(IOException::class)

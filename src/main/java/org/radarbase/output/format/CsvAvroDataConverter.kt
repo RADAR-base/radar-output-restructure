@@ -6,7 +6,6 @@ import org.apache.avro.generic.GenericFixed
 import org.apache.avro.generic.GenericRecord
 import java.nio.ByteBuffer
 import java.util.*
-import kotlin.collections.ArrayList
 
 internal class CsvAvroDataConverter(
         private val headers: Array<String>

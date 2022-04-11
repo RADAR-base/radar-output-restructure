@@ -29,12 +29,19 @@ import org.junit.jupiter.api.io.TempDir
 import org.radarbase.output.compression.GzipCompression
 import org.radarbase.output.compression.IdentityCompression
 import org.radarbase.output.format.CsvAvroConverter
-import java.io.*
+import org.radarbase.output.util.ResourceContext.Companion.resourceContext
+import java.io.IOException
+import java.io.StringReader
+import java.io.StringWriter
+import java.io.Writer
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.*
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
+import kotlin.io.path.bufferedWriter
+import kotlin.io.path.inputStream
+import kotlin.io.path.outputStream
 
 class CsvAvroConverterTest {
     @Test
@@ -161,7 +168,7 @@ class CsvAvroConverterTest {
     fun deduplicate(@TempDir dir: Path) {
         val path = dir.resolve("test")
         val toPath = dir.resolve("test.dedup")
-        Files.newBufferedWriter(path).use { writer -> writeTestNumbers(writer) }
+        path.bufferedWriter().use { writer -> writeTestNumbers(writer) }
         CsvAvroConverter.factory.deduplicate("t", path, toPath, IdentityCompression())
         assertEquals(listOf("a,b", "1,3", "3,4", "1,2", "a,a", "3,3"), Files.readAllLines(toPath))
     }
@@ -172,7 +179,7 @@ class CsvAvroConverterTest {
     fun deduplicateFields(@TempDir dir: Path) {
         val path = dir.resolve("test")
         val toPath = dir.resolve("test.dedup")
-        Files.newBufferedWriter(path).use { writer -> writeTestNumbers(writer) }
+        path.bufferedWriter().use { writer -> writeTestNumbers(writer) }
         CsvAvroConverter.factory.deduplicate("t", path, toPath, IdentityCompression(),
                 distinctFields = setOf("a"))
         assertEquals(listOf("a,b", "1,2", "a,a", "3,3"), Files.readAllLines(toPath))
@@ -184,7 +191,7 @@ class CsvAvroConverterTest {
     fun deduplicateIgnoreFields(@TempDir dir: Path) {
         val path = dir.resolve("test")
         val toPath = dir.resolve("test.dedup")
-        Files.newBufferedWriter(path).use { writer -> writeTestNumbers(writer) }
+        path.bufferedWriter().use { writer -> writeTestNumbers(writer) }
         CsvAvroConverter.factory.deduplicate("t", path, toPath, IdentityCompression(),
                 ignoreFields = setOf("a"))
         assertEquals(listOf("a,b", "3,4", "1,2", "a,a", "3,3"), Files.readAllLines(toPath))
@@ -196,12 +203,21 @@ class CsvAvroConverterTest {
         val path = dir.resolve("test.csv.gz")
         val toPath = dir.resolve("test.csv.gz.dedup")
 
-        Files.newOutputStream(path).use { out -> GZIPOutputStream(out).use { gzipOut -> OutputStreamWriter(gzipOut).use { writer -> writeTestNumbers(writer) } } }
+        resourceContext {
+            val writer = resourceChain { path.outputStream() }
+                .chain { GZIPOutputStream(it) }
+                .chain { it.writer() }
+                .result
+            writeTestNumbers(writer)
+        }
         CsvAvroConverter.factory.deduplicate("t", path, toPath, GzipCompression())
-        val storedLines = Files.newInputStream(toPath).use {
-            `in` -> GZIPInputStream(`in`).use {
-            gzipIn -> InputStreamReader(gzipIn).readLines() } }
-
+        val storedLines = resourceContext {
+            resourceChain { toPath.inputStream() }
+                .chain { GZIPInputStream(it) }
+                .chain { it.reader() }
+                .result
+                .readLines()
+        }
         assertEquals(listOf("a,b", "1,3", "3,4", "1,2", "a,a", "3,3"), storedLines)
     }
 

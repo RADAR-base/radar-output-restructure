@@ -17,7 +17,6 @@
 package org.radarbase.output.target
 
 import io.minio.*
-import io.minio.errors.ErrorResponseException
 import org.radarbase.output.config.S3Config
 import org.radarbase.output.source.S3SourceStorage.Companion.faultTolerant
 import org.radarbase.output.util.bucketBuild
@@ -26,8 +25,8 @@ import org.slf4j.LoggerFactory
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.io.InputStream
-import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.deleteExisting
 
 class S3TargetStorage(config: S3Config) : TargetStorage {
     private val bucket: String = config.bucket
@@ -87,7 +86,7 @@ class S3TargetStorage(config: S3Config) : TargetStorage {
             filename(localPath.toAbsolutePath().toString())
         }
         faultTolerant { s3Client.uploadObject(uploadRequest) }
-        Files.delete(localPath)
+        localPath.deleteExisting()
     }
 
     @Throws(IOException::class)

@@ -21,11 +21,12 @@ import org.radarbase.output.util.PostponedWriter
 import org.radarbase.output.util.Timer.time
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
+import kotlin.io.path.bufferedWriter
+import kotlin.io.path.createTempFile
 
 /**
  * Accesses a OffsetRange file using the CSV format. On writing, this will create the file if
@@ -38,13 +39,11 @@ class OffsetFilePersistence(
         return try {
             if (targetStorage.status(path) != null) {
                 OffsetRangeSet().also { set ->
-                    targetStorage.newBufferedReader(path).use { br ->
-                        // ignore header
-                        br.readLine() ?: return@use
-
-                        generateSequence { br.readLine() }
-                                .map(::parseLine)
-                                .forEach(set::add)
+                    targetStorage.newBufferedReader(path).useLines { lines ->
+                        lines
+                            .drop(1)  // ignore header
+                            .map(::parseLine)
+                            .forEach(set::add)
                     }
                 }
             } else null
@@ -94,9 +93,9 @@ class OffsetFilePersistence(
 
         override fun doWrite() = time("accounting.offsets") {
             try {
-                val tmpPath = Files.createTempFile("offsets", ".csv")
+                val tmpPath = createTempFile("offsets", ".csv")
 
-                Files.newBufferedWriter(tmpPath).use { writer ->
+                tmpPath.bufferedWriter().use { writer ->
                     writer.append("offsetFrom,offsetTo,partition,topic\n")
                     offsets.forEach { topicPartition, offsetIntervals ->
                         offsetIntervals.forEach { offsetFrom, offsetTo, lastModified ->

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.path.RecordPathFactory.Companion.getFieldOrNull
-import org.radarbase.output.path.RecordPathFactory.Companion.getOrNull
 import java.math.RoundingMode
 import java.time.*
 import java.time.format.DateTimeParseException

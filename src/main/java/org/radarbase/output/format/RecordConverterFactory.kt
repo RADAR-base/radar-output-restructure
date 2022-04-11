@@ -20,23 +20,15 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.compression.Compression
+import org.radarbase.output.util.ResourceContext.Companion.resourceContext
 import java.io.*
-import java.nio.file.Files
 import java.nio.file.Path
 import java.util.*
 import java.util.regex.Pattern
-import kotlin.collections.ArrayList
-import kotlin.collections.Collection
-import kotlin.collections.List
-import kotlin.collections.Map
-import kotlin.collections.MutableList
-import kotlin.collections.Set
 import kotlin.collections.component1
 import kotlin.collections.component2
-import kotlin.collections.emptySet
-import kotlin.collections.iterator
-import kotlin.collections.toTypedArray
-import kotlin.collections.withIndex
+import kotlin.io.path.inputStream
+import kotlin.io.path.outputStream
 
 interface RecordConverterFactory : Format {
     /**
@@ -60,25 +52,34 @@ interface RecordConverterFactory : Format {
      * created.
      */
     @Throws(IOException::class)
-    fun deduplicate(fileName: String, source: Path, target: Path,
-                    compression: Compression, distinctFields: Set<String> = emptySet(), ignoreFields: Set<String> = emptySet()): Boolean {
+    fun deduplicate(
+        fileName: String,
+        source: Path,
+        target: Path,
+        compression: Compression,
+        distinctFields: Set<String> = emptySet(),
+        ignoreFields: Set<String> = emptySet(),
+    ): Boolean {
         val withHeader = hasHeader
 
-        val (header, lines) = Files.newInputStream(source).use {
-            inFile -> compression.decompress(inFile).use {
-            zipIn -> InputStreamReader(zipIn).use {
-            inReader -> BufferedReader(inReader).use {
-            reader ->
+        val (header, lines) = resourceContext {
+            val reader = resourceChain { source.inputStream() }
+                .chain { compression.decompress(it) }
+                .chain { it.reader() }
+                .chain { it.buffered() }
+                .result
             readFile(reader, withHeader)
-        } } } }
+        }
 
-        Files.newOutputStream(target).use {
-            fileOut -> BufferedOutputStream(fileOut).use {
-            bufOut -> compression.compress(fileName, bufOut).use {
-            zipOut -> OutputStreamWriter(zipOut).use {
-            writer ->
+        resourceContext {
+            val writer = resourceChain { target.outputStream() }
+                .chain { it.buffered() }
+                .chain { compression.compress(fileName, it) }
+                .chain { it.writer() }
+                .result
+
             writeFile(writer, header, lines)
-        } } } }
+        }
 
         return true
     }

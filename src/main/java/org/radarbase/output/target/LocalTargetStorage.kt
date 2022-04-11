@@ -21,11 +21,11 @@ import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.io.InputStream
 import java.nio.file.AtomicMoveNotSupportedException
-import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.attribute.PosixFilePermissions
+import kotlin.io.path.*
 
 class LocalTargetStorage(private val config: LocalConfig) : TargetStorage {
     init {
@@ -35,50 +35,49 @@ class LocalTargetStorage(private val config: LocalConfig) : TargetStorage {
 
     @Throws(IOException::class)
     override fun status(path: Path): TargetStorage.PathStatus? {
-        return if (Files.exists(path)) {
-            TargetStorage.PathStatus(Files.size(path))
+        return if (path.exists()) {
+            TargetStorage.PathStatus(path.fileSize())
         } else {
             null
         }
     }
 
     @Throws(IOException::class)
-    override fun newInputStream(path: Path): InputStream = Files.newInputStream(path)
+    override fun newInputStream(path: Path): InputStream = path.inputStream()
 
     @Throws(IOException::class)
     override fun move(oldPath: Path, newPath: Path) {
         try {
-            Files.move(oldPath, newPath, REPLACE_EXISTING, ATOMIC_MOVE)
+            oldPath.moveTo(newPath, REPLACE_EXISTING, ATOMIC_MOVE)
         } catch (ex: AtomicMoveNotSupportedException) {
-            Files.move(oldPath, newPath, REPLACE_EXISTING)
+            oldPath.moveTo(newPath, REPLACE_EXISTING)
         }
     }
 
     @Throws(IOException::class)
     override fun store(localPath: Path, newPath: Path) {
         localPath.updateUser()
-        Files.setPosixFilePermissions(localPath, PosixFilePermissions.fromString("rw-r--r--"))
+        localPath.setPosixFilePermissions(PosixFilePermissions.fromString("rw-r--r--"))
         move(localPath, newPath)
     }
 
     override fun createDirectories(directory: Path) {
-        Files.createDirectories(directory, PosixFilePermissions.asFileAttribute(
-                PosixFilePermissions.fromString("rwxr-xr-x")))
-
+        directory.createDirectories(PosixFilePermissions.asFileAttribute(
+            PosixFilePermissions.fromString("rwxr-xr-x")))
         directory.updateUser()
     }
 
     private fun Path.updateUser() {
         if (config.userId >= 0) {
-            Files.setAttribute(this, "unix:uid", config.userId)
+            setAttribute("unix:uid", config.userId)
         }
         if (config.groupId >= 0) {
-            Files.setAttribute(this, "unix:gid", config.groupId)
+            setAttribute("unix:gid", config.groupId)
         }
     }
 
     @Throws(IOException::class)
-    override fun delete(path: Path) = Files.delete(path)
+    override fun delete(path: Path) = path.deleteExisting()
 
     companion object {
         private val logger = LoggerFactory.getLogger(LocalTargetStorage::class.java)

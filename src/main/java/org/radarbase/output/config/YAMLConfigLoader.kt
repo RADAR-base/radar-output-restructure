@@ -5,8 +5,8 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import org.slf4j.LoggerFactory
-import java.nio.file.Files
 import java.nio.file.Paths
+import kotlin.io.path.exists
 
 internal object YAMLConfigLoader {
     val mapper = ObjectMapper(YAMLFactory())
@@ -22,7 +22,7 @@ internal object YAMLConfigLoader {
 
     inline fun <reified T> loadFromPath(path: String): T? {
         val filePath = Paths.get(path)
-        return if (Files.exists(filePath)) {
+        return if (filePath.exists()) {
             mapper.readValue<T>(filePath.toFile())
                     .also { logger.info("Loaded config from $path") }
         } else {

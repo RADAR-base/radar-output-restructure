@@ -19,7 +19,8 @@ package org.radarbase.output.data
 import org.apache.avro.SchemaBuilder
 import org.apache.avro.generic.GenericData.Record
 import org.apache.avro.generic.GenericRecordBuilder
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -31,13 +32,15 @@ import org.radarbase.output.config.HdfsConfig
 import org.radarbase.output.config.PathConfig
 import org.radarbase.output.config.ResourceConfig
 import org.radarbase.output.config.RestructureConfig
+import org.radarbase.output.util.ResourceContext.Companion.resourceContext
 import org.radarbase.output.worker.FileCache
 import java.io.IOException
-import java.io.InputStreamReader
-import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import java.util.zip.GZIPInputStream
+import kotlin.io.path.bufferedReader
+import kotlin.io.path.fileSize
+import kotlin.io.path.inputStream
 
 /**
  * Created by joris on 03/07/2017.
@@ -93,11 +96,15 @@ class FileCacheTest {
                     Accountant.Transaction(topicPartition, 0L, lastModified))
         }
 
-        println("Gzip: " + Files.size(path))
+        println("Gzip: " + path.fileSize())
 
-        val lines = Files.newInputStream(path).use {
-            fin -> GZIPInputStream(fin).use {
-            gzipIn -> InputStreamReader(gzipIn).readLines() } }
+        val lines = resourceContext {
+            resourceChain { path.inputStream() }
+                .chain { GZIPInputStream(it) }
+                .chain { it.reader() }
+                .result
+                .readLines()
+        }
 
         assertEquals(listOf("a", "something"), lines)
     }
@@ -117,12 +124,14 @@ class FileCacheTest {
                     Accountant.Transaction(topicPartition, 0, lastModified))
         }
 
-        println("Gzip appended: " + Files.size(path))
-
-        val lines = Files.newInputStream(path).use {
-            fin -> GZIPInputStream(fin).use {
-            gzipIn -> InputStreamReader(gzipIn).readLines() } }
-
+        println("Gzip appended: " + path.fileSize())
+        val lines = resourceContext {
+            resourceChain { path.inputStream() }
+                .chain { GZIPInputStream(it) }
+                .chain { it.reader() }
+                .result
+                .readLines()
+        }
         assertEquals(listOf("a", "something", "something"), lines)
     }
 
@@ -134,9 +143,9 @@ class FileCacheTest {
                     Accountant.Transaction(topicPartition, 0, lastModified))
         }
 
-        println("Plain: " + Files.size(path))
+        println("Plain: " + path.fileSize())
 
-        val lines = Files.newBufferedReader(path).readLines()
+        val lines = path.bufferedReader().use { it.readLines() }
         assertEquals(listOf("a", "something"), lines)
     }
 
@@ -153,9 +162,9 @@ class FileCacheTest {
                     Accountant.Transaction(topicPartition, 1, lastModified))
         }
 
-        println("Plain appended: " + Files.size(path))
+        println("Plain appended: " + path.fileSize())
 
-        val lines = Files.newBufferedReader(path).readLines()
+        val lines = path.bufferedReader().use { it.readLines() }
         assertEquals(listOf("a", "something", "something"), lines)
     }
 
@@ -163,28 +172,29 @@ class FileCacheTest {
     @Throws(IOException::class)
     fun compareTo() {
         val file3 = path.parent.resolve("g")
-        FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant).use { cache1 ->
-            FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant).use { cache2 ->
-                FileCache(factory, "topic", file3, exampleRecord, tmpDir, accountant).use { cache3 ->
-                    val transaction = Accountant.Transaction(topicPartition, 0, lastModified)
-                    assertEquals(0, cache1.compareTo(cache2))
-                    // filenames are not equal
-                    assertTrue(cache1 < cache3)
-                    cache1.writeRecord(exampleRecord, transaction)
-                    // last used
-                    assertTrue(cache1 > cache2)
-                    // last used takes precedence over filename
-                    assertTrue(cache1 > cache3)
 
-                    // last used reversal
-                    transaction.offset = 1
-                    cache2.writeRecord(exampleRecord, transaction)
-                    transaction.offset = 2
-                    cache3.writeRecord(exampleRecord, transaction)
-                    assertTrue(cache1 < cache2)
-                    assertTrue(cache1 < cache3)
-                }
-            }
+        resourceContext {
+            val cache1 = createResource { FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant) }
+            val cache2 = createResource { FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant) }
+            val cache3 = createResource { FileCache(factory, "topic", file3, exampleRecord, tmpDir, accountant) }
+
+            val transaction = Accountant.Transaction(topicPartition, 0, lastModified)
+            assertEquals(0, cache1.compareTo(cache2))
+            // filenames are not equal
+            assertTrue(cache1 < cache3)
+            cache1.writeRecord(exampleRecord, transaction)
+            // last used
+            assertTrue(cache1 > cache2)
+            // last used takes precedence over filename
+            assertTrue(cache1 > cache3)
+
+            // last used reversal
+            transaction.offset = 1
+            cache2.writeRecord(exampleRecord, transaction)
+            transaction.offset = 2
+            cache3.writeRecord(exampleRecord, transaction)
+            assertTrue(cache1 < cache2)
+            assertTrue(cache1 < cache3)
         }
     }
 }

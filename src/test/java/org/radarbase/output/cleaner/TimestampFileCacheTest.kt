@@ -17,11 +17,12 @@ import org.radarbase.output.compression.IdentityCompression
 import org.radarbase.output.config.LocalConfig
 import org.radarbase.output.format.CsvAvroConverterFactory
 import org.radarbase.output.target.LocalTargetStorage
+import org.radarbase.output.util.ResourceContext.Companion.resourceContext
 import java.io.ByteArrayInputStream
 import java.io.FileNotFoundException
 import java.io.InputStreamReader
-import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.bufferedWriter
 
 internal class TimestampFileCacheTest {
     private lateinit var record: GenericData.Record
@@ -63,13 +64,13 @@ internal class TimestampFileCacheTest {
     }
 
     private fun writeRecord(path: Path, record: GenericRecord) {
-        Files.newBufferedWriter(path).use { wr ->
-            ByteArrayInputStream(ByteArray(0)).use { emptyInput ->
-                InputStreamReader(emptyInput).use { emptyReader ->
-                    csvConverter.converterFor(wr, record, true, emptyReader).use { converter ->
-                        converter.writeRecord(record)
-                    }
-                }
+        resourceContext {
+            val wr = this.createResource { path.bufferedWriter() }
+            val emptyReader = resourceChain { ByteArrayInputStream(ByteArray(0)) }
+                .chain { InputStreamReader(it) }
+                .result
+            csvConverter.converterFor(wr, record, true, emptyReader).use { converter ->
+                converter.writeRecord(record)
             }
         }
     }
@@ -83,7 +84,7 @@ internal class TimestampFileCacheTest {
     @Test
     fun testHeaderMismatch(@TempDir path: Path) {
         val targetPath = path.resolve("test.avro")
-        Files.newBufferedWriter(targetPath).use { writer ->
+        targetPath.bufferedWriter().use { writer ->
             writer.write("key.projectId,key.userId,key.sourceId,value.time,value.timeReceived,value.luminance")
         }
         val cache = TimestampFileCache(factory, targetPath)

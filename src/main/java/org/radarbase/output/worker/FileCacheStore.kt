@@ -22,14 +22,14 @@ import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.util.TemporaryDirectory
 import org.radarbase.output.util.Timer.time
-import org.radarbase.output.worker.FileCacheStore.WriteResponse.*
+import org.radarbase.output.worker.FileCacheStore.WriteResponse.NO_CACHE_AND_NO_WRITE
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.Flushable
 import java.io.IOException
-import java.nio.file.Files
 import java.nio.file.Path
-import java.util.*
+import kotlin.io.path.createTempFile
+import kotlin.io.path.outputStream
 
 /**
  * Caches open file handles. If more than the limit is cached, the half of the files that were used
@@ -106,8 +106,8 @@ constructor(private val factory: FileStoreFactory, private val accountant: Accou
             val storage = factory.targetStorage
 
             if (storage.status(schemaPath) == null) {
-                val tmpSchemaPath = Files.createTempFile(tmpDir.path, "schema-$topic", ".json")
-                Files.newOutputStream(tmpSchemaPath).use { out ->
+                val tmpSchemaPath = createTempFile(tmpDir.path, "schema-$topic", ".json")
+                tmpSchemaPath.outputStream().use { out ->
                     out.write(schema.toString(true).toByteArray())
                 }
                 storage.store(tmpSchemaPath, schemaPath)
