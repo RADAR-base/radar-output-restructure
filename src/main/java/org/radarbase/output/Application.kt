@@ -18,6 +18,10 @@ package org.radarbase.output
 
 import com.beust.jcommander.JCommander
 import com.beust.jcommander.ParameterException
+import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import org.radarbase.output.accounting.*
 import org.radarbase.output.cleaner.SourceDataCleaner
 import org.radarbase.output.compression.Compression
@@ -29,6 +33,7 @@ import org.radarbase.output.source.SourceStorage
 import org.radarbase.output.source.SourceStorageFactory
 import org.radarbase.output.target.TargetStorage
 import org.radarbase.output.target.TargetStorageFactory
+import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.util.Timer
 import org.radarbase.output.worker.FileCacheStore
 import org.radarbase.output.worker.Job
@@ -39,10 +44,7 @@ import java.io.IOException
 import java.text.NumberFormat
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.LongAdder
-import kotlin.Long.Companion.MAX_VALUE
 import kotlin.io.path.createDirectories
 import kotlin.system.exitProcess
 
@@ -71,17 +73,23 @@ class Application(
 
     override val offsetPersistenceFactory: OffsetPersistenceFactory = OffsetRedisPersistence(redisHolder)
 
-    private val jobs = listOf(
-            Job("restructure", config.worker.enable, config.service.interval, ::runRestructure),
-            Job("clean", config.cleaner.enable, config.cleaner.interval, ::runCleaner))
-            .filter { it.isEnabled }
+    override val workerSemaphore = Semaphore(config.worker.numThreads * 2)
+
+    private val jobs = listOfNotNull(
+        Job("restructure", config.service.interval, ::runRestructure).takeIf { config.worker.enable },
+        Job("clean", config.cleaner.interval, ::runCleaner).takeIf { config.cleaner.enable },
+    )
 
     @Throws(IOException::class)
     override fun newFileCacheStore(accountant: Accountant) = FileCacheStore(this, accountant)
 
     fun start() {
         System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism",
-                (config.worker.numThreads - 1).toString())
+            (config.worker.numThreads - 1).toString())
+        System.setProperty("kotlinx.coroutines.scheduler.max.pool.size",
+            config.worker.numThreads.toString())
+        System.setProperty("kotlinx.coroutines.scheduler.core.pool.size",
+            config.worker.numThreads.toString())
 
         try {
             config.paths.temp.createDirectories()
@@ -90,36 +98,41 @@ class Application(
             return
         }
 
+        runBlocking {
+            launch { targetStorage.initialize() }
+        }
+
         if (config.service.enable) {
             runService()
         } else {
-            jobs.forEach { it.run() }
+            val serviceMutex = Mutex()
+            runBlocking {
+                jobs.map {
+                    async {
+                        serviceMutex.withLock {
+                            it.run()
+                        }
+                    }
+                }.awaitAll()
+            }
         }
     }
 
     private fun runService() {
         logger.info("Running as a Service with poll interval of {} seconds", config.service.interval)
         logger.info("Press Ctrl+C to exit...")
-        val executorService = Executors.newSingleThreadScheduledExecutor()
 
-        jobs.forEach { it.schedule(executorService) }
+        val serviceMutex = Mutex()
 
-        try {
-            Thread.sleep(MAX_VALUE)
-        } catch (e: InterruptedException) {
-            logger.info("Interrupted, shutting down...")
-            executorService.shutdownNow()
-            try {
-                executorService.awaitTermination(MAX_VALUE, TimeUnit.SECONDS)
-                Thread.currentThread().interrupt()
-            } catch (ex: InterruptedException) {
-                logger.info("Interrupted again...")
+        runBlocking {
+            jobs.forEach {
+                launch { it.schedule(serviceMutex) }
             }
         }
     }
 
-    private fun runCleaner() {
-        SourceDataCleaner(this).use { cleaner ->
+    private suspend fun runCleaner() {
+        SourceDataCleaner(this).useSuspended { cleaner ->
             for (input in config.paths.inputs) {
                 logger.info("Cleaning {}", input)
                 cleaner.process(input.toString())
@@ -129,17 +142,19 @@ class Application(
         }
     }
 
-    private fun runRestructure() {
-        RadarKafkaRestructure(this).use { restructure ->
+    private suspend fun runRestructure() {
+        RadarKafkaRestructure(this).useSuspended { restructure ->
             for (input in config.paths.inputs) {
                 logger.info("In:  {}", input)
                 logger.info("Out: {}", pathFactory.root)
                 restructure.process(input.toString())
             }
 
-            logger.info("Processed {} files and {} records",
-                    restructure.processedFileCount.format(),
-                    restructure.processedRecordsCount.format())
+            logger.info(
+                "Processed {} files and {} records",
+                restructure.processedFileCount.format(),
+                restructure.processedRecordsCount.format(),
+            )
         }
     }
 
@@ -153,23 +168,22 @@ class Application(
         private fun parseArgs(args: Array<String>): CommandLineArgs {
             val commandLineArgs = CommandLineArgs()
             JCommander.newBuilder()
-                    .addObject(commandLineArgs)
-                    .programName("radar-output-restructure")
-                    .build().run {
-                        try {
-                            parse(*args)
-                        } catch (ex: ParameterException) {
-                            logger.error(ex.message)
-                            usage()
-                            exitProcess(1)
-                        }
-
-                        if (commandLineArgs.help) {
-                            usage()
-                            exitProcess(0)
-                        }
+                .addObject(commandLineArgs)
+                .programName("radar-output-restructure")
+                .build().run {
+                    try {
+                        parse(*args)
+                    } catch (ex: ParameterException) {
+                        logger.error(ex.message)
+                        usage()
+                        exitProcess(1)
                     }
 
+                    if (commandLineArgs.help) {
+                        usage()
+                        exitProcess(0)
+                    }
+                }
 
             return commandLineArgs
         }

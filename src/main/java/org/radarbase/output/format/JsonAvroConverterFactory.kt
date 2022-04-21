@@ -23,13 +23,12 @@ class JsonAvroConverterFactory : RecordConverterFactory {
                               writeHeader: Boolean,
                               reader: Reader): RecordConverter = JsonAvroConverter(writer, converter)
 
-    override fun readTimeSeconds(
+    override suspend fun readTimeSeconds(
         source: InputStream,
         compression: Compression,
     ): Pair<Array<String>?, List<Double>> = resourceContext {
         val reader = resourceChain { compression.decompress(source) }
-            .chain { it.reader() }
-            .conclude { it.buffered() }
+            .conclude { it.bufferedReader() }
 
         Pair(
             null,
@@ -42,28 +41,19 @@ class JsonAvroConverterFactory : RecordConverterFactory {
         )
     }
 
-    override fun contains(source: Path, record: GenericRecord, compression: Compression, usingFields: Set<String>, ignoreFields: Set<String>): Boolean {
+    override suspend fun contains(source: Path, record: GenericRecord, compression: Compression, usingFields: Set<String>, ignoreFields: Set<String>): Boolean {
         val recordString = JSON_WRITER.writeValueAsString(converter.convertRecord(record))
 
         return resourceContext {
             val reader = resourceChain { source.inputStream() }
                 .chain { compression.decompress(it) }
-                .chain { it.reader() }
-                .conclude { it.buffered() }
+                .conclude { it.bufferedReader() }
 
             reader.contentLines()
                 .any { recordString == it }
         }
     }
 
-    fun BufferedReader.contentLines(): Sequence<String> = lineSequence()
+    private fun BufferedReader.contentLines(): Sequence<String> = lineSequence()
         .drop(if (hasHeader) 1 else 0)
-
-    companion object {
-        fun fileSequence(
-            reader: BufferedReader,
-            withHeader: Boolean,
-        ): Sequence<String> = reader.lineSequence()
-            .drop(if (withHeader) 1 else 0)
-    }
 }

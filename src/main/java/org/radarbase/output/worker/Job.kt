@@ -1,21 +1,25 @@
 package org.radarbase.output.worker
 
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.radarbase.output.util.ProgressBar.Companion.format
 import org.radarbase.output.util.TimeUtil.durationSince
 import org.radarbase.output.util.Timer
 import org.slf4j.LoggerFactory
 import java.time.Instant
-import java.util.concurrent.Future
-import java.util.concurrent.ScheduledExecutorService
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 class Job(
-        val name: String,
-        val isEnabled: Boolean,
-        private val intervalSeconds: Long,
-        val work: () -> Unit
+    val name: String,
+    private val intervalSeconds: Long,
+    val work: suspend () -> Unit
 ) {
-    fun run() {
+    suspend fun run() {
         val timeStart = Instant.now()
         logger.info("Job {} started", name)
         try {
@@ -33,14 +37,23 @@ class Job(
         }
     }
 
-    fun schedule(
-            executorService: ScheduledExecutorService
-    ): Future<*> = executorService.scheduleAtFixedRate(::run,
-            intervalSeconds / 4,
-            intervalSeconds,
-            TimeUnit.SECONDS)
+    suspend fun schedule(serviceMutex: Mutex) = repeatWithFixedInterval(intervalSeconds.seconds, intervalSeconds.seconds / 4)
+        .conflate()
+        .collect {
+            serviceMutex.withLock {
+                run()
+            }
+        }
 
     companion object {
         private val logger = LoggerFactory.getLogger(Job::class.java)
+
+        fun repeatWithFixedInterval(period: Duration, initialDelay: Duration = Duration.ZERO): Flow<Unit> = flow {
+            delay(initialDelay)
+            while (currentCoroutineContext().isActive) {
+                emit(Unit)
+                delay(period)
+            }
+        }
     }
 }

@@ -16,38 +16,22 @@
 
 package org.radarbase.output.util
 
-import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantReadWriteLock
+import kotlin.concurrent.read
+import kotlin.concurrent.write
 
 /**
  * Value protected by a read-write lock.
  * @param <T> type of value.
 </T> */
 class LockedFunctionalValue<T>(initialValue: T) : FunctionalValue<T>(initialValue) {
-    private val readLock: Lock
-    private val writeLock: Lock
+    private val lock = ReentrantReadWriteLock()
 
-    init {
-        val lock = ReentrantReadWriteLock()
-        this.readLock = lock.readLock()
-        this.writeLock = lock.writeLock()
+    override fun <V> read(function: (T) -> V): V = lock.read {
+        function(value)
     }
 
-    override fun <V> read(function: (T) -> V): V {
-        try {
-            readLock.lock()
-            return function(value)
-        } finally {
-            readLock.unlock()
-        }
-    }
-
-    override fun modify(consumer: (T) -> Unit) {
-        try {
-            writeLock.lock()
-            consumer(value)
-        } finally {
-            writeLock.unlock()
-        }
+    override fun modify(consumer: (T) -> Unit) = lock.write {
+        consumer(value)
     }
 }

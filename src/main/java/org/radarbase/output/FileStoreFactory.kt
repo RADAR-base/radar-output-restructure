@@ -16,6 +16,7 @@
 
 package org.radarbase.output
 
+import kotlinx.coroutines.sync.Semaphore
 import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.OffsetPersistenceFactory
 import org.radarbase.output.accounting.RedisHolder
@@ -40,6 +41,7 @@ interface FileStoreFactory {
     val remoteLockManager: RemoteLockManager
     val redisHolder: RedisHolder
     val offsetPersistenceFactory: OffsetPersistenceFactory
+    val workerSemaphore: Semaphore
 
     @Throws(IOException::class)
     fun newFileCacheStore(accountant: Accountant): FileCacheStore

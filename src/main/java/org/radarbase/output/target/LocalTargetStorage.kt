@@ -16,6 +16,8 @@
 
 package org.radarbase.output.target
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.radarbase.output.config.LocalConfig
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -33,9 +35,11 @@ class LocalTargetStorage(private val config: LocalConfig) : TargetStorage {
                 config.userId, config.groupId)
     }
 
+    override suspend fun initialize() = Unit
+
     @Throws(IOException::class)
-    override fun status(path: Path): TargetStorage.PathStatus? {
-        return if (path.exists()) {
+    override suspend fun status(path: Path): TargetStorage.PathStatus? = withContext(Dispatchers.IO) {
+        if (path.exists()) {
             TargetStorage.PathStatus(path.fileSize())
         } else {
             null
@@ -43,10 +47,16 @@ class LocalTargetStorage(private val config: LocalConfig) : TargetStorage {
     }
 
     @Throws(IOException::class)
-    override fun newInputStream(path: Path): InputStream = path.inputStream()
+    override suspend fun newInputStream(path: Path): InputStream = withContext(Dispatchers.IO) {
+        path.inputStream()
+    }
 
     @Throws(IOException::class)
-    override fun move(oldPath: Path, newPath: Path) {
+    override suspend fun move(oldPath: Path, newPath: Path) = withContext(Dispatchers.IO) {
+        doMove(oldPath, newPath)
+    }
+
+    private fun doMove(oldPath: Path, newPath: Path) {
         try {
             oldPath.moveTo(newPath, REPLACE_EXISTING, ATOMIC_MOVE)
         } catch (ex: AtomicMoveNotSupportedException) {
@@ -55,10 +65,10 @@ class LocalTargetStorage(private val config: LocalConfig) : TargetStorage {
     }
 
     @Throws(IOException::class)
-    override fun store(localPath: Path, newPath: Path) {
+    override suspend fun store(localPath: Path, newPath: Path) = withContext(Dispatchers.IO) {
         localPath.updateUser()
         localPath.setPosixFilePermissions(PosixFilePermissions.fromString("rw-r--r--"))
-        move(localPath, newPath)
+        doMove(localPath, newPath)
     }
 
     override fun createDirectories(directory: Path) {
@@ -77,7 +87,7 @@ class LocalTargetStorage(private val config: LocalConfig) : TargetStorage {
     }
 
     @Throws(IOException::class)
-    override fun delete(path: Path) = path.deleteExisting()
+    override suspend fun delete(path: Path) = path.deleteExisting()
 
     companion object {
         private val logger = LoggerFactory.getLogger(LocalTargetStorage::class.java)

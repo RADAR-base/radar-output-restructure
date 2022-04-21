@@ -50,13 +50,15 @@ class TimestampFileCacheStore(private val factory: FileStoreFactory) {
      * @throws IOException when failing to open a file or writing to it.
      */
     @Throws(IOException::class)
-    fun contains(path: Path, record: GenericRecord): FindResult {
+    suspend fun contains(path: Path, record: GenericRecord): FindResult {
         return try {
             val fileCache = caches[path]
                     ?: time("cleaner.cache") {
                         ensureCapacity()
-                        TimestampFileCache(factory, path)
-                                .also { caches[path] = it }
+                        TimestampFileCache(factory, path).apply {
+                            initialize()
+                            caches[path] = this
+                        }
                     }
 
             time("cleaner.contains") {

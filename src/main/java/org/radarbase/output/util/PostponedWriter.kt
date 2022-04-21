@@ -16,92 +16,87 @@
 
 package org.radarbase.output.util
 
+import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
-import java.io.Closeable
-import java.io.Flushable
 import java.io.IOException
 import java.util.concurrent.*
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.CancellationException
 
 /**
  * File writer where data is written in a separate thread with a timeout.
- */
-abstract class PostponedWriter
-/**
- * Constructor with timeout.
+ *
  * @param name thread name.
  * @param timeout maximum time between triggering a write and actually writing the file.
  * @param timeoutUnit timeout unit.
  */
-(private val name: String, private val timeout: Long, private val timeoutUnit: TimeUnit) : Closeable, Flushable {
-
-    private val writeFuture = AtomicReference<Future<*>?>(null)
-    private val executor = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, name) }
+abstract class PostponedWriter(
+    private val coroutineScope: CoroutineScope,
+    private val name: String,
+    timeout: Long,
+    timeoutUnit: TimeUnit,
+): SuspendedCloseable {
+    private var writeFuture: Job? = null
+    private val modificationMutex = Mutex()
+    private val workMutex = Mutex()
+    private var isClosed = false
+    private val timeout = timeoutUnit.toMillis(timeout)
 
     /**
      * Trigger a write to occur within set timeout. If a write was already triggered earlier but has
      * not yet taken place, the write will occur earlier.
      */
-    fun triggerWrite() {
-        if (writeFuture.get() == null) {
-            executor.schedule(::startWrite, timeout, timeoutUnit)
-                    .also { newWriteFuture ->
-                        if (!writeFuture.compareAndSet(null, newWriteFuture)) {
-                            newWriteFuture.cancel(false)
-                        }
-                    }
-        }
-    }
+    suspend fun triggerWrite() {
+        modificationMutex.withLock {
+            if (isClosed || writeFuture != null) {
+                return
+            }
 
-    /** Start the write in the writer thread.  */
-    private fun startWrite() {
-        writeFuture.set(null)
-        doWrite()
+            writeFuture = coroutineScope.launch {
+                delay(timeout)
+                modificationMutex.withLock {
+                    if (isClosed) {
+                        return@launch
+                    }
+                    writeFuture = null
+                }
+                workMutex.withLock {
+                    doWrite()
+                }
+            }
+        }
     }
 
     /** Perform the write.  */
-    protected abstract fun doWrite()
+    protected abstract suspend fun doWrite()
 
-    @Throws(IOException::class)
-    override fun close() {
+    override suspend fun closeAndJoin() {
+        modificationMutex.withLock {
+            isClosed = true
+        }
         doFlush(true)
-        try {
-            executor.awaitTermination(30, TimeUnit.SECONDS)
-        } catch (e: InterruptedException) {
-            logger.error("Failed to write {} data: interrupted", name)
-        }
-
     }
 
     @Throws(IOException::class)
-    private fun doFlush(shutdown: Boolean) {
-        val localFuture = executor.submit(::startWrite)
-                .also { writeFuture.getAndSet(it)?.cancel(false) }
+    private suspend fun doFlush(shutdown: Boolean) {
+        coroutineScope {
+            launch {
+                modificationMutex.withLock {
+                    if (!shutdown && isClosed) return@launch
 
-        if (shutdown) {
-            executor.shutdown()
-        }
-
-        try {
-            localFuture.get(30, TimeUnit.SECONDS)
-        } catch (ex: CancellationException) {
-            logger.debug("File flush for {} was cancelled, another thread executed it", name)
-        } catch (ex: ExecutionException) {
-            logger.error("Failed to write data for {}", name, ex.cause)
-            throw IOException("Failed to write data", ex.cause)
-        } catch (e: InterruptedException) {
-            logger.error("Failed to write {} data: timeout", name)
-        } catch (e: TimeoutException) {
-            logger.error("Failed to write {} data: timeout", name)
+                    writeFuture?.cancel()
+                    writeFuture = null
+                }
+                workMutex.withLock {
+                    doWrite()
+                }
+            }
         }
     }
 
     @Throws(IOException::class)
-    override fun flush() {
+    suspend fun flush() {
         doFlush(false)
-    }
-
-    companion object {
-        private val logger = LoggerFactory.getLogger(PostponedWriter::class.java)
     }
 }

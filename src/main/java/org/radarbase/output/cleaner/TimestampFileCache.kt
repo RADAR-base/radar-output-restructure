@@ -19,6 +19,7 @@ package org.radarbase.output.cleaner
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.format.RecordConverterFactory
+import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.util.TimeUtil.getDate
 import org.radarbase.output.util.TimeUtil.toDouble
 import java.io.FileNotFoundException
@@ -26,22 +27,22 @@ import java.nio.file.Path
 
 /** Keeps path handles of a path.  */
 class TimestampFileCache(
-        factory: FileStoreFactory,
+        private val factory: FileStoreFactory,
         /** File that the cache is maintaining.  */
         val path: Path
 ) : Comparable<TimestampFileCache> {
     private val converterFactory: RecordConverterFactory = factory.recordConverter
     private var lastUse: Long = 0
-    private val header: Array<String>?
-    private val times: Set<Double>
+    private var header: Array<String>? = null
+    private lateinit var times: Set<Double>
 
-    init {
+    suspend fun initialize() {
         val targetStorage = factory.targetStorage
         targetStorage.status(path)
-                ?.takeIf { it.size > 0 }
-                ?: throw FileNotFoundException()
+            ?.takeIf { it.size > 0 }
+            ?: throw FileNotFoundException()
 
-        val readDates = targetStorage.newInputStream(path).use {
+        val readDates = targetStorage.newInputStream(path).useSuspended {
             converterFactory.readTimeSeconds(it, factory.compression)
         } ?: throw FileNotFoundException()
 

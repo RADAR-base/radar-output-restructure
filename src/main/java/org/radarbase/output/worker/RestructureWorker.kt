@@ -1,6 +1,8 @@
 package org.radarbase.output.worker
 
 import com.fasterxml.jackson.databind.JsonMappingException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.apache.avro.file.DataFileReader
 import org.apache.avro.file.SeekableInput
 import org.apache.avro.generic.GenericData
@@ -13,8 +15,10 @@ import org.radarbase.output.path.RecordPathFactory
 import org.radarbase.output.source.SourceStorage
 import org.radarbase.output.source.TopicFile
 import org.radarbase.output.source.TopicFileList
+import org.radarbase.output.util.GenericRecordReader
 import org.radarbase.output.util.ProgressBar
 import org.radarbase.output.util.ReadOnlyFunctionalValue
+import org.radarbase.output.util.SuspendedCloseable
 import org.radarbase.output.util.Timer.time
 import org.slf4j.LoggerFactory
 import java.io.Closeable
@@ -31,7 +35,7 @@ internal class RestructureWorker(
         private val accountant: Accountant,
         fileStoreFactory: FileStoreFactory,
         private val closed: AtomicBoolean
-): Closeable {
+): SuspendedCloseable {
     var processedFileCount: Long = 0
     var processedRecordsCount: Long = 0
     private val reader = storage.createReader()
@@ -40,7 +44,7 @@ internal class RestructureWorker(
 
     private val cacheStore = fileStoreFactory.newFileCacheStore(accountant)
 
-    fun processPaths(topicPaths: TopicFileList) {
+    suspend fun processPaths(topicPaths: TopicFileList) {
         val numFiles = topicPaths.numberOfFiles
         val numOffsets = topicPaths.numberOfOffsets
         val totalProgress = numOffsets ?: numFiles.toLong()
@@ -109,7 +113,7 @@ internal class RestructureWorker(
     }
 
     @Throws(IOException::class)
-    private fun processFile(file: TopicFile,
+    private suspend fun processFile(file: TopicFile,
                             progressBar: ProgressBar, seenOffsets: OffsetRangeSet): Long {
         logger.debug("Reading {}", file.path)
 
@@ -123,29 +127,34 @@ internal class RestructureWorker(
                 return 0L
             }
             val transaction = Accountant.Transaction(file.range.topicPartition, offset, file.lastModified)
-            extractRecords(input) { records ->
-                val recordsInFile = records.mapIndexed { relativeOffset, record ->
-                    transaction.offset = offset + relativeOffset
-                    val alreadyContains = time("accounting.check") {
-                        seenOffsets.contains(file.range.topicPartition, transaction.offset, transaction.lastModified)
+            withContext(Dispatchers.Default) {
+                GenericRecordReader(input).use { reader ->
+                    var currentOffset = offset
+                    while (reader.hasNext()) {
+                        val alreadyContains = time("accounting.check") {
+                            seenOffsets.contains(file.range.topicPartition,
+                                transaction.offset,
+                                transaction.lastModified)
+                        }
+                        if (!alreadyContains) {
+                            // Get the fields
+                            writeRecord(transaction, reader.next())
+                        }
+                        processedRecordsCount++
+                        if (file.size != null) {
+                            progressBar.update(processedRecordsCount)
+                        }
+                        currentOffset++
                     }
-                    if (!alreadyContains) {
-                        // Get the fields
-                        this.writeRecord(transaction, record)
-                    }
-                    processedRecordsCount++
-                    if (file.size != null) {
-                        progressBar.update(processedRecordsCount)
-                    }
-                }.count().toLong()
 
-                recordsInFile
+                    currentOffset - offset
+                }
             }
         }
     }
 
     @Throws(IOException::class)
-    private fun writeRecord(
+    private suspend fun writeRecord(
             transaction: Accountant.Transaction,
             record: GenericRecord) {
         var currentSuffix = 0
@@ -167,15 +176,15 @@ internal class RestructureWorker(
         return (batchSize * modifier).roundToLong()
     }
 
-    override fun close() {
-        reader.close()
-        cacheStore.close()
+    override suspend fun closeAndJoin() {
+        reader.closeAndJoin()
+        cacheStore.closeAndJoin()
     }
 
     companion object {
         private val logger = LoggerFactory.getLogger(RestructureWorker::class.java)
 
-        fun <T> extractRecords(input: SeekableInput, processing: (Sequence<GenericRecord>) -> T): T {
+        inline fun <T> extractRecords(input: SeekableInput, processing: (Sequence<GenericRecord>) -> T): T {
             var tmpRecord: GenericRecord? = null
             val genericData = GenericData().apply {
                 isFastReaderEnabled = true
@@ -189,5 +198,7 @@ internal class RestructureWorker(
                 }.onEach { tmpRecord = it })
             }
         }
+
     }
+
 }

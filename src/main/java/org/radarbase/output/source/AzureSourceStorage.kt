@@ -1,6 +1,8 @@
 package org.radarbase.output.source
 
 import com.azure.storage.blob.BlobServiceClient
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.apache.avro.file.SeekableFileInput
 import org.apache.avro.file.SeekableInput
 import org.radarbase.output.config.AzureConfig
@@ -21,16 +23,18 @@ class AzureSourceStorage(
 
     private fun blobClient(path: Path) = blobContainerClient.getBlobClient(path.toKey())
 
-    override fun list(path: Path): Sequence<SimpleFileStatus> = blobContainerClient.listBlobsByHierarchy("$path/")
-            .asSequence()
+    override suspend fun list(path: Path): List<SimpleFileStatus> =
+        withContext(Dispatchers.IO) { blobContainerClient.listBlobsByHierarchy("$path/") }
             .map { SimpleFileStatus(Paths.get(it.name), it.isPrefix ?: false, it.properties?.lastModified?.toInstant()) }
 
-    override fun createTopicFile(topic: String, status: SimpleFileStatus): TopicFile {
+    override suspend fun createTopicFile(topic: String, status: SimpleFileStatus): TopicFile {
         var topicFile = super.createTopicFile(topic, status)
 
         if (readOffsetFromMetadata && topicFile.range.range.to == null) {
             try {
-                val endOffset = blobClient(topicFile.path).properties.metadata["endOffset"]?.toLongOrNull()
+                val endOffset = withContext(Dispatchers.IO) {
+                    blobClient(topicFile.path).properties
+                }.metadata["endOffset"]?.toLongOrNull()
 
                 if (endOffset != null) {
                     topicFile = topicFile.copy(
@@ -46,7 +50,7 @@ class AzureSourceStorage(
         return topicFile
     }
 
-    override fun delete(path: Path) {
+    override suspend fun delete(path: Path) = withContext(Dispatchers.IO) {
         blobClient(path).delete()
     }
 
@@ -57,13 +61,13 @@ class AzureSourceStorage(
     private inner class AzureSourceStorageReader: SourceStorage.SourceStorageReader {
         private val tempDir = TemporaryDirectory(tempPath, "worker-")
 
-        override fun newInput(file: TopicFile): SeekableInput {
+        override suspend fun newInput(file: TopicFile): SeekableInput = withContext(Dispatchers.IO) {
             val fileName = createTempFile(tempDir.path, "${file.topic}-${file.path.fileName}", ".avro")
 
             blobClient(file.path)
-                    .downloadToFile(fileName.toString(), true)
+                .downloadToFile(fileName.toString(), true)
 
-            return object : SeekableFileInput(fileName.toFile()) {
+            object : SeekableFileInput(fileName.toFile()) {
                 override fun close() {
                     super.close()
                     fileName.deleteIfExists()
@@ -71,7 +75,7 @@ class AzureSourceStorage(
             }
         }
 
-        override fun close() {
+        override suspend fun closeAndJoin() = withContext(Dispatchers.IO) {
             tempDir.close()
         }
     }

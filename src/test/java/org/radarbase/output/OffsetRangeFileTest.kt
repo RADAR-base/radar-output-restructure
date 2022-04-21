@@ -16,6 +16,7 @@
 
 package org.radarbase.output
 
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -27,6 +28,7 @@ import org.radarbase.output.accounting.TopicPartitionOffsetRange
 import org.radarbase.output.config.LocalConfig
 import org.radarbase.output.target.LocalTargetStorage
 import org.radarbase.output.target.TargetStorage
+import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import java.io.IOException
 import java.nio.file.Path
 import java.time.Instant
@@ -49,7 +51,7 @@ class OffsetRangeFileTest {
 
     @Test
     @Throws(IOException::class)
-    fun readEmpty() {
+    fun readEmpty() = runTest {
         assertEquals(java.lang.Boolean.TRUE, offsetPersistence.read(testFile)?.isEmpty)
 
         targetStorage.delete(testFile)
@@ -60,8 +62,8 @@ class OffsetRangeFileTest {
 
     @Test
     @Throws(IOException::class)
-    fun write() {
-        offsetPersistence.writer(testFile).use { rangeFile ->
+    fun write() = runTest {
+        offsetPersistence.writer(this@runTest, testFile).useSuspended { rangeFile ->
             rangeFile.add(TopicPartitionOffsetRange.parseFilename("a+0+0+1", lastModified))
             rangeFile.add(TopicPartitionOffsetRange.parseFilename("a+0+1+2", lastModified))
         }
@@ -80,8 +82,8 @@ class OffsetRangeFileTest {
 
     @Test
     @Throws(IOException::class)
-    fun cleanUp() {
-        offsetPersistence.writer(testFile).use { rangeFile ->
+    fun cleanUp() = runTest {
+        offsetPersistence.writer(this@runTest, testFile).useSuspended { rangeFile ->
             rangeFile.add(TopicPartitionOffsetRange.parseFilename("a+0+0+1", lastModified))
             rangeFile.add(TopicPartitionOffsetRange.parseFilename("a+0+1+2", lastModified))
             rangeFile.add(TopicPartitionOffsetRange.parseFilename("a+0+4+4", lastModified))

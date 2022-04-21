@@ -1,7 +1,11 @@
 package org.radarbase.output.cleaner
 
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.withPermit
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.accounting.Accountant
+import org.radarbase.output.accounting.AccountantImpl
 import org.radarbase.output.util.ResourceContext.Companion.resourceContext
 import org.radarbase.output.util.Timer
 import org.slf4j.LoggerFactory
@@ -31,7 +35,7 @@ class SourceDataCleaner(
     val deletedFileCount = LongAdder()
 
     @Throws(IOException::class, InterruptedException::class)
-    fun process(directoryName: String) {
+    suspend fun process(directoryName: String) {
         // Get files and directories
         val absolutePath = Paths.get(directoryName)
 
@@ -39,10 +43,13 @@ class SourceDataCleaner(
 
         logger.info("{} topics found", paths.size)
 
-        paths.parallelStream()
-                .forEach { p ->
+        coroutineScope {
+            paths.forEach { p ->
+                launch {
                     try {
-                        val deleteCount = mapTopic(p)
+                        val deleteCount = fileStoreFactory.workerSemaphore.withPermit {
+                            mapTopic(p)
+                        }
                         if (deleteCount > 0) {
                             logger.info("Removed {} files in topic {}", deleteCount, p.fileName)
                             deletedFileCount.add(deleteCount)
@@ -51,21 +58,25 @@ class SourceDataCleaner(
                         logger.warn("Failed to map topic", ex)
                     }
                 }
+            }
+        }
     }
 
-    private fun mapTopic(topicPath: Path): Long {
+    private suspend fun mapTopic(topicPath: Path): Long {
         if (isClosed.get()) {
             return 0L
         }
 
         val topic = topicPath.fileName.toString()
-
         return try {
-            lockManager.tryRunLocked(topic) {
-                resourceContext {
-                    val accountant = createResource { Accountant(fileStoreFactory, topic) }
-                    val extractionCheck = createResource { TimestampExtractionCheck(sourceStorage, fileStoreFactory) }
-                    deleteOldFiles(accountant, extractionCheck, topic, topicPath).toLong()
+            lockManager.tryWithLock(topic) {
+                coroutineScope {
+                    resourceContext {
+                        val accountant = createResource { AccountantImpl(fileStoreFactory, topic) }
+                                .apply { initialize(this@coroutineScope) }
+                        val extractionCheck = createResource { TimestampExtractionCheck(sourceStorage, fileStoreFactory) }
+                        deleteOldFiles(accountant, extractionCheck, topic, topicPath).toLong()
+                    }
                 }
             }
         } catch (ex: IOException) {
@@ -74,42 +85,40 @@ class SourceDataCleaner(
         } ?: 0L
     }
 
-    private fun deleteOldFiles(
-            accountant: Accountant,
-            extractionCheck: ExtractionCheck,
-            topic: String,
-            topicPath: Path
+    private suspend fun deleteOldFiles(
+        accountant: Accountant,
+        extractionCheck: ExtractionCheck,
+        topic: String,
+        topicPath: Path
     ): Int {
         val offsets = accountant.offsets.copyForTopic(topic)
-        return sourceStorage.walker.walkRecords(topic, topicPath)
-                .filter { f ->
-                    f.lastModified.isBefore(deleteThreshold) &&
-                            // ensure that there is a file with a larger offset also
-                            // processed, so the largest offset is never removed.
-                            offsets.contains(f.range
-                                    .mapRange { r ->
-                                        r.copy(to = r.to?.let { it + 1 })
-                                    })
-                }
-                .take(maxFilesPerTopic)
-                .takeWhile { !isClosed.get() }
-                .count { file ->
-                    if (extractionCheck.isExtracted(file)) {
-                        logger.info("Removing {}", file.path)
-                        Timer.time("cleaner.delete") {
-                            sourceStorage.delete(file.path)
-                        }
-                        true
-                    } else {
-                        logger.warn("Source file was not completely extracted: {}", file.path)
-                        // extract the file again at a later time
-                        accountant.remove(file.range.mapRange { it.ensureToOffset() })
-                        false
+
+        return sourceStorage.walker.walkRecords(topic, topicPath).consumeAsFlow()
+            .filter { f ->
+                f.lastModified.isBefore(deleteThreshold) &&
+                    // ensure that there is a file with a larger offset also
+                    // processed, so the largest offset is never removed.
+                    offsets.contains(f.range.mapRange { r -> r.incrementTo() })
+            }
+            .take(maxFilesPerTopic)
+            .takeWhile { !isClosed.get() }
+            .count { file ->
+                if (extractionCheck.isExtracted(file)) {
+                    logger.info("Removing {}", file.path)
+                    Timer.time("cleaner.delete") {
+                        sourceStorage.delete(file.path)
                     }
+                    true
+                } else {
+                    logger.warn("Source file was not completely extracted: {}", file.path)
+                    // extract the file again at a later time
+                    accountant.remove(file.range.mapRange { it.ensureToOffset() })
+                    false
                 }
+            }
     }
 
-    private fun topicPaths(path: Path): List<Path> = sourceStorage.walker.walkTopics(path, excludeTopics)
+    private suspend fun topicPaths(path: Path): List<Path> = sourceStorage.walker.walkTopics(path, excludeTopics)
             .toMutableList()
             // different services start on different topics to decrease lock contention
             .also { it.shuffle() }
