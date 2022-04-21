@@ -86,11 +86,11 @@ class RadarKafkaRestructure(
         logger.info("{} topics found", paths.size)
 
         coroutineScope {
-            paths.map { p ->
+            paths.forEach { p ->
                 launch {
                     try {
                         val (fileCount, recordCount) = fileStoreFactory.workerSemaphore.withPermit {
-                            mapTopic(this@coroutineScope, p)
+                            mapTopic(p)
                         }
                         processedFileCount.add(fileCount)
                         processedRecordsCount.add(recordCount)
@@ -102,8 +102,7 @@ class RadarKafkaRestructure(
         }
     }
 
-    private suspend fun mapTopic(scope: CoroutineScope, topicPath: Path): ProcessingStatistics {
-        logger.info("Mapping topic {}", topicPath)
+    private suspend fun mapTopic(topicPath: Path): ProcessingStatistics {
         if (isClosed.get()) {
             return ProcessingStatistics(0L, 0L)
         }
@@ -112,9 +111,11 @@ class RadarKafkaRestructure(
 
         return try {
             val statistics = lockManager.tryWithLock(topic) {
-                AccountantImpl(fileStoreFactory, topic).useSuspended { accountant ->
-                    accountant.initialize(scope)
-                    startWorker(topic, topicPath, accountant, accountant.offsets)
+                coroutineScope {
+                    AccountantImpl(fileStoreFactory, topic).useSuspended { accountant ->
+                        accountant.initialize(this@coroutineScope)
+                        startWorker(topic, topicPath, accountant, accountant.offsets)
+                    }
                 }
             }
             if (statistics == null) {
@@ -134,15 +135,12 @@ class RadarKafkaRestructure(
             seenFiles: OffsetRangeSet): ProcessingStatistics {
         return RestructureWorker(sourceStorage, accountant, fileStoreFactory, isClosed).useSuspended { worker ->
             try {
-                logger.info("Collecting paths for topic {}", topic)
                 val topicPaths = TopicFileList(topic, sourceStorage.walker.walkRecords(topic, topicPath)
                     .consumeAsFlow()
                     .filter { f -> !seenFiles.contains(f.range)
                             && f.lastModified.durationSince() >= minimumFileAge }
                     .take(maxFilesPerTopic)
                     .toList())
-
-                logger.info("Collected {} paths for topic {}", topicPaths.numberOfFiles, topic)
 
                 if (topicPaths.numberOfFiles > 0) {
                     worker.processPaths(topicPaths)
