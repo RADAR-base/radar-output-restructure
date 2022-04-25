@@ -75,10 +75,15 @@ class Application(
 
     override val workerSemaphore = Semaphore(config.worker.numThreads * 2)
 
-    private val jobs = listOfNotNull(
-        Job("restructure", config.service.interval, ::runRestructure).takeIf { config.worker.enable },
-        Job("clean", config.cleaner.interval, ::runCleaner).takeIf { config.cleaner.enable },
-    )
+    private val jobs: List<Job>
+
+    init {
+        val serviceMutex = Mutex()
+        jobs = listOfNotNull(
+            RadarKafkaRestructure.job(config, serviceMutex),
+            SourceDataCleaner.job(config, serviceMutex),
+        )
+    }
 
     @Throws(IOException::class)
     override fun newFileCacheStore(accountant: Accountant) = FileCacheStore(this, accountant)
@@ -105,15 +110,10 @@ class Application(
         if (config.service.enable) {
             runService()
         } else {
-            val serviceMutex = Mutex()
             runBlocking {
-                jobs.map {
-                    async {
-                        serviceMutex.withLock {
-                            it.run()
-                        }
-                    }
-                }.awaitAll()
+                jobs.forEach { job ->
+                    launch { job.run(this@Application) }
+                }
             }
         }
     }
@@ -122,39 +122,10 @@ class Application(
         logger.info("Running as a Service with poll interval of {} seconds", config.service.interval)
         logger.info("Press Ctrl+C to exit...")
 
-        val serviceMutex = Mutex()
-
         runBlocking {
-            jobs.forEach {
-                launch { it.schedule(serviceMutex) }
+            jobs.forEach { job ->
+                launch { job.schedule(this@Application) }
             }
-        }
-    }
-
-    private suspend fun runCleaner() {
-        SourceDataCleaner(this).useSuspended { cleaner ->
-            for (input in config.paths.inputs) {
-                logger.info("Cleaning {}", input)
-                cleaner.process(input.toString())
-            }
-            logger.info("Cleaned up {} files",
-                    cleaner.deletedFileCount.format())
-        }
-    }
-
-    private suspend fun runRestructure() {
-        RadarKafkaRestructure(this).useSuspended { restructure ->
-            for (input in config.paths.inputs) {
-                logger.info("In:  {}", input)
-                logger.info("Out: {}", pathFactory.root)
-                restructure.process(input.toString())
-            }
-
-            logger.info(
-                "Processed {} files and {} records",
-                restructure.processedFileCount.format(),
-                restructure.processedRecordsCount.format(),
-            )
         }
     }
 
@@ -162,7 +133,7 @@ class Application(
         private val logger = LoggerFactory.getLogger(Application::class.java)
         const val CACHE_SIZE_DEFAULT = 100
 
-        private fun LongAdder.format(): String =
+        internal fun LongAdder.format(): String =
                 NumberFormat.getNumberInstance().format(sum())
 
         private fun parseArgs(args: Array<String>): CommandLineArgs {

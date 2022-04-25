@@ -19,6 +19,8 @@ package org.radarbase.output.target
 import com.azure.storage.blob.BlobClient
 import com.azure.storage.blob.BlobContainerClient
 import com.azure.storage.blob.models.ListBlobContainersOptions
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.radarbase.output.config.AzureConfig
 import org.radarbase.output.util.toKey
 import org.slf4j.LoggerFactory
@@ -46,12 +48,17 @@ class AzureTargetStorage(private val config: AzureConfig) : TargetStorage {
 
         // Check if the bucket already exists.
         val listContainer = ListBlobContainersOptions().apply { prefix = container }
-        val isExist: Boolean = serviceClient.listBlobContainers(listContainer, null)
-            .any { it.name == container }
+
+        val isExist: Boolean = withContext(Dispatchers.IO) {
+            serviceClient.listBlobContainers(listContainer, null)
+        }.any { it.name == container }
+
         if (isExist) {
             logger.info("Container $container already exists.")
         } else {
-            serviceClient.createBlobContainer(container)
+            withContext(Dispatchers.IO) {
+                serviceClient.createBlobContainer(container)
+            }
             logger.info("Container $container was created.")
         }
 

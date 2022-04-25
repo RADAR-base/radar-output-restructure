@@ -17,15 +17,14 @@
 package org.radarbase.output.worker
 
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.consumeAsFlow
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.take
-import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withPermit
+import org.radarbase.output.Application.Companion.format
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.AccountantImpl
 import org.radarbase.output.accounting.OffsetRangeSet
+import org.radarbase.output.config.RestructureConfig
 import org.radarbase.output.source.TopicFileList
 import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.util.TimeUtil.durationSince
@@ -113,7 +112,7 @@ class RadarKafkaRestructure(
             val statistics = lockManager.tryWithLock(topic) {
                 coroutineScope {
                     AccountantImpl(fileStoreFactory, topic).useSuspended { accountant ->
-                        accountant.initialize(this@coroutineScope)
+                        accountant.initialize(this)
                         startWorker(topic, topicPath, accountant, accountant.offsets)
                     }
                 }
@@ -129,18 +128,20 @@ class RadarKafkaRestructure(
     }
 
     private suspend fun startWorker(
-            topic: String,
-            topicPath: Path,
-            accountant: Accountant,
-            seenFiles: OffsetRangeSet): ProcessingStatistics {
+        topic: String,
+        topicPath: Path,
+        accountant: Accountant,
+        seenFiles: OffsetRangeSet
+    ): ProcessingStatistics {
         return RestructureWorker(sourceStorage, accountant, fileStoreFactory, isClosed).useSuspended { worker ->
             try {
-                val topicPaths = TopicFileList(topic, sourceStorage.walker.walkRecords(topic, topicPath)
-                    .consumeAsFlow()
-                    .filter { f -> !seenFiles.contains(f.range)
-                            && f.lastModified.durationSince() >= minimumFileAge }
-                    .take(maxFilesPerTopic)
-                    .toList())
+                val topicPaths = TopicFileList(
+                    topic,
+                    sourceStorage.listTopicFiles(topic, topicPath, maxFilesPerTopic) { f ->
+                        !seenFiles.contains(f.range)
+                            && f.lastModified.durationSince() >= minimumFileAge
+                    },
+                )
 
                 if (topicPaths.numberOfFiles > 0) {
                     worker.processPaths(topicPaths)
@@ -157,16 +158,36 @@ class RadarKafkaRestructure(
         isClosed.set(true)
     }
 
-    private suspend fun topicPaths(root: Path): List<Path> = sourceStorage.walker.walkTopics(root, excludeTopics)
-                .toMutableList()
-                // different services start on different topics to decrease lock contention
-                .also { it.shuffle() }
+    private suspend fun topicPaths(root: Path): List<Path> = sourceStorage.listTopics(root, excludeTopics)
+        // different services start on different topics to decrease lock contention
+        .shuffled()
 
     private data class ProcessingStatistics(
-            val fileCount: Long,
-            val recordCount: Long)
+        val fileCount: Long,
+        val recordCount: Long,
+    )
 
     companion object {
         private val logger = LoggerFactory.getLogger(RadarKafkaRestructure::class.java)
+
+        fun job(config: RestructureConfig, serviceMutex: Mutex): Job? = if (config.worker.enable) {
+            Job("restructure", config.service.interval, ::runRestructure, serviceMutex)
+        } else null
+
+        private suspend fun runRestructure(factory: FileStoreFactory) {
+            RadarKafkaRestructure(factory).useSuspended { restructure ->
+                for (input in factory.config.paths.inputs) {
+                    logger.info("In:  {}", input)
+                    logger.info("Out: {}", factory.pathFactory.root)
+                    restructure.process(input.toString())
+                }
+
+                logger.info(
+                    "Processed {} files and {} records",
+                    restructure.processedFileCount.format(),
+                    restructure.processedRecordsCount.format(),
+                )
+            }
+        }
     }
 }

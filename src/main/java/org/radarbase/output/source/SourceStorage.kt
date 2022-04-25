@@ -1,11 +1,10 @@
 package org.radarbase.output.source
 
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.Flow
 import org.apache.avro.file.SeekableInput
 import org.radarbase.output.accounting.TopicPartitionOffsetRange
-import org.radarbase.output.util.SuspendedCloseable
-import java.io.Closeable
+import org.radarbase.output.util.*
+import org.radarbase.output.util.AvroFileLister.Companion.avroFileTreeLister
+import org.radarbase.output.util.AvroTopicLister.Companion.avroTopicTreeLister
 import java.nio.file.Path
 import java.time.Instant
 
@@ -24,8 +23,28 @@ interface SourceStorage {
         return TopicFile(topic, status.path, lastModified, range)
     }
 
-    /** Find records and topics. */
-    val walker: SourceStorageWalker
+    /**
+     * Recursively returns all record files in a sequence of a given topic with path.
+     * The path must only contain records of a single topic, this is not verified.
+     */
+    suspend fun listTopicFiles(
+        topic: String,
+        topicPath: Path,
+        limit: Int,
+        predicate: (TopicFile) -> Boolean,
+    ): List<TopicFile> = avroFileTreeLister()
+        .list(TopicPath(topic, topicPath), limit, predicate)
+
+    /**
+     * Recursively find all topic root paths of records in the given path.
+     * Exclude paths belonging to the set of given excluded topics.
+     */
+    suspend fun listTopics(
+        root: Path,
+        exclude: Set<String>,
+    ): List<Path> = avroTopicTreeLister()
+        .listTo(LinkedHashSet(), root)
+        .filter { it.fileName.toString() !in exclude }
 
     /**
      * File reader for the storage medium.

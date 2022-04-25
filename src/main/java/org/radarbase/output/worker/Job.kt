@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.util.ProgressBar.Companion.format
 import org.radarbase.output.util.TimeUtil.durationSince
 import org.radarbase.output.util.Timer
@@ -17,33 +18,32 @@ import kotlin.time.Duration.Companion.seconds
 class Job(
     val name: String,
     private val intervalSeconds: Long,
-    val work: suspend () -> Unit
+    val work: suspend (FileStoreFactory) -> Unit,
+    private val serviceMutex: Mutex,
 ) {
-    suspend fun run() {
-        val timeStart = Instant.now()
-        logger.info("Job {} started", name)
-        try {
-            work()
-            logger.info("Job {} completed in {}", name, timeStart.durationSince().format())
-        } catch (e: InterruptedException) {
-            logger.error("Job {} interrupted", name)
-        } catch (ex: Throwable) {
-            logger.error("Failed to run job {}", name, ex)
-        } finally {
-            if (Timer.isEnabled) {
-                logger.info("Job {} {}", name, Timer)
-                Timer.reset()
+    suspend fun run(factory: FileStoreFactory) {
+        logger.debug("Pending start of job {}", name)
+        serviceMutex.withLock {
+            val timeStart = Instant.now()
+            logger.info("Job {} started", name)
+            try {
+                work(factory)
+                logger.info("Job {} completed in {}", name, timeStart.durationSince().format())
+            } catch (e: InterruptedException) {
+                logger.error("Job {} interrupted", name)
+            } catch (ex: Throwable) {
+                logger.error("Failed to run job {}", name, ex)
+            } finally {
+                if (Timer.isEnabled) {
+                    logger.info("Job {} {}", name, Timer)
+                    Timer.reset()
+                }
             }
         }
     }
 
-    suspend fun schedule(serviceMutex: Mutex) = repeatWithFixedInterval(intervalSeconds.seconds, intervalSeconds.seconds / 4)
-        .conflate()
-        .collect {
-            serviceMutex.withLock {
-                run()
-            }
-        }
+    suspend fun schedule(factory: FileStoreFactory) = repeatWithFixedInterval(intervalSeconds.seconds, intervalSeconds.seconds / 4)
+        .collect { run(factory) }
 
     companion object {
         private val logger = LoggerFactory.getLogger(Job::class.java)
@@ -54,6 +54,6 @@ class Job(
                 emit(Unit)
                 delay(period)
             }
-        }
+        }.conflate()
     }
 }

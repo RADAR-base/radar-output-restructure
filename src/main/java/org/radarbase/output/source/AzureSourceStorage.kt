@@ -54,8 +54,6 @@ class AzureSourceStorage(
         blobClient(path).delete()
     }
 
-    override val walker: SourceStorageWalker = GeneralSourceStorageWalker(this)
-
     override fun createReader(): SourceStorage.SourceStorageReader = AzureSourceStorageReader()
 
     private inner class AzureSourceStorageReader: SourceStorage.SourceStorageReader {

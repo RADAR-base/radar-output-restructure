@@ -28,7 +28,6 @@ class S3SourceStorage(
         config: S3Config,
         private val tempPath: Path
 ): SourceStorage {
-    override val walker: SourceStorageWalker = GeneralSourceStorageWalker(this)
     private val bucket = config.bucket
     private val readEndOffset = config.endOffsetFromTags
 
