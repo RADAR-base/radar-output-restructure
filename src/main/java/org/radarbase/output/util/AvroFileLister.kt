@@ -16,8 +16,7 @@ class AvroFileLister(private val storage: SourceStorage) :
             val filename = status.path.fileName.toString()
             when {
                 status.isDirectory && filename != "+tmp" -> descend(context.copy(path = status.path))
-                filename.endsWith(".avro") -> emit(storage.createTopicFile(context.topic,
-                    status))
+                filename.endsWith(".avro") -> emit(storage.createTopicFile(context.topic, status))
                 else -> {}
             }
         }

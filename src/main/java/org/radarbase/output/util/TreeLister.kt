@@ -27,7 +27,7 @@ class TreeLister<T, C>(
             coroutineScope {
                 descend(
                     context,
-                    if (predicate == null) channel::send else ({ if (predicate(it)) channel.send(it) }),
+                    if (predicate == null) channel::send else ({ value -> if (predicate(value)) channel.send(value) }),
                 )
             }
             channel.close()
@@ -39,15 +39,15 @@ class TreeLister<T, C>(
             }
             producer.cancel()
         } catch (ex: ClosedReceiveChannelException) {
-            // done
+            // done: channel closed by producer
         }
 
         collection
     }
 
-    private fun CoroutineScope.descend(context: C, send: suspend (T) -> Unit) {
+    private fun CoroutineScope.descend(context: C, emit: suspend (T) -> Unit) {
         levelLister.run {
-            listLevel(context, { descend(it, send) }, send)
+            listLevel(context, { descend(it, emit) }, emit)
         }
     }
 
