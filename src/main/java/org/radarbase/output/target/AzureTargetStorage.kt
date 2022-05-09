@@ -65,34 +65,41 @@ class AzureTargetStorage(private val config: AzureConfig) : TargetStorage {
         containerClient = serviceClient.getBlobContainerClient(container)
     }
 
-    override suspend fun status(path: Path): TargetStorage.PathStatus? {
-        return try {
-            TargetStorage.PathStatus(blob(path)
+    override suspend fun status(path: Path): TargetStorage.PathStatus? =
+        withContext(Dispatchers.IO) {
+            try {
+                TargetStorage.PathStatus(blob(path)
                     .getPropertiesWithResponse(null, null, null)
                     .value
                     .blobSize)
-        } catch (ex: Exception) {
-            null
+            } catch (ex: Exception) {
+                null
+            }
         }
+
+    @Throws(IOException::class)
+    override suspend fun newInputStream(path: Path): InputStream = withContext(Dispatchers.IO) {
+        blob(path).openInputStream()
     }
 
     @Throws(IOException::class)
-    override suspend fun newInputStream(path: Path): InputStream = blob(path).openInputStream()
-
-    @Throws(IOException::class)
-    override suspend fun move(oldPath: Path, newPath: Path) {
+    override suspend fun move(oldPath: Path, newPath: Path) = withContext(Dispatchers.IO) {
         blob(newPath).copyFromUrl("${config.endpoint}/${config.container}/${oldPath.toKey()}")
-        delete(oldPath)
+        doDelete(oldPath)
     }
 
     @Throws(IOException::class)
-    override suspend fun store(localPath: Path, newPath: Path) {
+    override suspend fun store(localPath: Path, newPath: Path) = withContext(Dispatchers.IO) {
         blob(newPath).uploadFromFile(localPath.toString(), true)
         localPath.deleteExisting()
     }
 
     @Throws(IOException::class)
-    override suspend fun delete(path: Path) {
+    override suspend fun delete(path: Path) = withContext(Dispatchers.IO) {
+        doDelete(path)
+    }
+
+    private fun doDelete(path: Path) {
         blob(path).delete()
     }
 

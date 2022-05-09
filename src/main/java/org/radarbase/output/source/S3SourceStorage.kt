@@ -127,7 +127,8 @@ class S3SourceStorage(
             return flow { emit(action()) }
                 .retryWhen { cause, attempt ->
                     if (cause is ErrorResponseException &&
-                        (cause.errorResponse().code() == "NoSuchKey" || cause.errorResponse().code() == "ResourceNotFound")
+                        (cause.errorResponse().code() == "NoSuchKey"
+                            || cause.errorResponse().code() == "ResourceNotFound")
                     ) {
                         throw FileNotFoundException()
                     }
