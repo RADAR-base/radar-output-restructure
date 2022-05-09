@@ -90,6 +90,8 @@ dependencies {
 
     val log4jVersion: String by project
     runtimeOnly("org.apache.logging.log4j:log4j-slf4j-impl:$log4jVersion")
+    runtimeOnly("org.apache.logging.log4j:log4j-api:$log4jVersion")
+    runtimeOnly("org.apache.logging.log4j:log4j-jul:$log4jVersion")
 
     val radarSchemasVersion: String by project
     testImplementation("org.radarbase:radar-schemas-commons:$radarSchemasVersion")
@@ -114,6 +116,10 @@ dependencies {
 
 application {
     mainClass.set("org.radarbase.output.Application")
+    applicationDefaultJvmArgs = listOf(
+         "-Djava.security.egd=file:/dev/./urandom",
+         "-Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager",
+    )
 }
 
 distributions {
