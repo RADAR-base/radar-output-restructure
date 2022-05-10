@@ -13,15 +13,18 @@ interface SourceStorage {
     /** Create a reader for the storage medium. It should be closed by the caller. */
     fun createReader(): SourceStorageReader
     /** List all files in the given directory. */
-    suspend fun list(path: Path): List<SimpleFileStatus>
+    suspend fun list(
+        path: Path,
+        maxKeys: Int? = null,
+    ): List<SimpleFileStatus>
 
     /** Delete given file. Will not delete any directories. */
     suspend fun delete(path: Path)
-    suspend fun createTopicFile(topic: String, status: SimpleFileStatus): TopicFile {
-        val lastModified = status.lastModified ?: Instant.now()
-        val range = TopicPartitionOffsetRange.parseFilename(status.path.fileName.toString(), lastModified)
-        return TopicFile(topic, status.path, lastModified, range)
-    }
+    suspend fun createTopicFile(topic: String, status: SimpleFileStatus): TopicFile = TopicFile(
+        topic = topic,
+        path = status.path,
+        lastModified = status.lastModified ?: Instant.now(),
+    )
 
     /**
      * Recursively returns all record files in a sequence of a given topic with path.

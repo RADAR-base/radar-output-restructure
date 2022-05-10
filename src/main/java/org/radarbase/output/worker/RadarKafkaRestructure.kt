@@ -34,8 +34,9 @@ import java.io.IOException
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.LongAdder
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.coroutineContext
 
 /**
  * Performs the following actions
@@ -52,11 +53,11 @@ class RadarKafkaRestructure(
 
     private val lockManager = fileStoreFactory.remoteLockManager
 
-    private val isClosed = AtomicBoolean(false)
-
     private val excludeTopics: Set<String>
     private val maxFilesPerTopic: Int
     private val minimumFileAge: Duration
+
+    private val supervisor = SupervisorJob()
 
     init {
         val config = fileStoreFactory.config
@@ -84,7 +85,7 @@ class RadarKafkaRestructure(
 
         logger.info("{} topics found", paths.size)
 
-        coroutineScope {
+        withContext(coroutineContext + supervisor) {
             paths.forEach { p ->
                 launch {
                     try {
@@ -93,8 +94,8 @@ class RadarKafkaRestructure(
                         }
                         processedFileCount.add(fileCount)
                         processedRecordsCount.add(recordCount)
-                    } catch (ex: Exception) {
-                        logger.warn("Failed to map topic", ex)
+                    } catch (ex: Throwable) {
+                        logger.warn("Failed to map topic {}", p, ex)
                     }
                 }
             }
@@ -102,10 +103,6 @@ class RadarKafkaRestructure(
     }
 
     private suspend fun mapTopic(topicPath: Path): ProcessingStatistics {
-        if (isClosed.get()) {
-            return ProcessingStatistics(0L, 0L)
-        }
-
         val topic = topicPath.fileName.toString()
 
         return try {
@@ -133,7 +130,7 @@ class RadarKafkaRestructure(
         accountant: Accountant,
         seenFiles: OffsetRangeSet
     ): ProcessingStatistics {
-        return RestructureWorker(sourceStorage, accountant, fileStoreFactory, isClosed).useSuspended { worker ->
+        return RestructureWorker(sourceStorage, accountant, fileStoreFactory).useSuspended { worker ->
             try {
                 val topicPaths = TopicFileList(
                     topic,
@@ -155,7 +152,7 @@ class RadarKafkaRestructure(
     }
 
     override fun close() {
-        isClosed.set(true)
+        supervisor.cancel()
     }
 
     private suspend fun topicPaths(root: Path): List<Path> = sourceStorage.listTopics(root, excludeTopics)

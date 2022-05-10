@@ -25,7 +25,7 @@ class RedisRemoteLockManager(
     }
 
     private inner class RemoteLock(
-            private val lockKey: String
+        private val lockKey: String
     ) : RemoteLockManager.RemoteLock {
         override suspend fun closeAndJoin() {
             redisHolder.execute { redis ->

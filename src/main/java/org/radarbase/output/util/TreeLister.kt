@@ -45,17 +45,15 @@ class TreeLister<T, C>(
         collection
     }
 
-    private fun CoroutineScope.descend(context: C, emit: suspend (T) -> Unit) {
-        levelLister.run {
-            listLevel(context, { descend(it, emit) }, emit)
-        }
+    private suspend fun descend(context: C, emit: suspend (T) -> Unit) {
+        levelLister.listLevel(context, { descend(it, emit) }, emit)
     }
 
     interface LevelLister<T, C> {
-        fun CoroutineScope.listLevel(
+        suspend fun listLevel(
             context: C,
-            descend: CoroutineScope.(C) -> Unit,
+            descend: suspend (C) -> Unit,
             emit: suspend (T) -> Unit
-        ): Job
+        )
     }
 }

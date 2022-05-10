@@ -3,10 +3,6 @@ package org.radarbase.output.worker
 import com.fasterxml.jackson.databind.JsonMappingException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.apache.avro.file.DataFileReader
-import org.apache.avro.file.SeekableInput
-import org.apache.avro.generic.GenericData
-import org.apache.avro.generic.GenericDatumReader
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.accounting.Accountant
@@ -21,20 +17,17 @@ import org.radarbase.output.util.ReadOnlyFunctionalValue
 import org.radarbase.output.util.SuspendedCloseable
 import org.radarbase.output.util.Timer.time
 import org.slf4j.LoggerFactory
-import java.io.Closeable
 import java.io.IOException
 import java.io.UncheckedIOException
 import java.text.NumberFormat
 import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToLong
 
 internal class RestructureWorker(
-        storage: SourceStorage,
-        private val accountant: Accountant,
-        fileStoreFactory: FileStoreFactory,
-        private val closed: AtomicBoolean
+    storage: SourceStorage,
+    private val accountant: Accountant,
+    fileStoreFactory: FileStoreFactory,
 ): SuspendedCloseable {
     var processedFileCount: Long = 0
     var processedRecordsCount: Long = 0
@@ -72,9 +65,6 @@ internal class RestructureWorker(
         var currentFile = 0L
         try {
             for (file in topicPaths.files) {
-                if (closed.get()) {
-                    break
-                }
                 val processedSize = try {
                     this.processFile(file, progressBar, seenOffsets)
                             .also { size ->
@@ -183,22 +173,5 @@ internal class RestructureWorker(
 
     companion object {
         private val logger = LoggerFactory.getLogger(RestructureWorker::class.java)
-
-        inline fun <T> extractRecords(input: SeekableInput, processing: (Sequence<GenericRecord>) -> T): T {
-            var tmpRecord: GenericRecord? = null
-            val genericData = GenericData().apply {
-                isFastReaderEnabled = true
-            }
-
-            return DataFileReader(input, GenericDatumReader<GenericRecord>(null, null, genericData)).use { reader ->
-                processing(generateSequence {
-                    time("read") {
-                        if (reader.hasNext()) reader.next(tmpRecord) else null
-                    }
-                }.onEach { tmpRecord = it })
-            }
-        }
-
     }
-
 }

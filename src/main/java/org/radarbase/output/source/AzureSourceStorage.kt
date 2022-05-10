@@ -1,6 +1,7 @@
 package org.radarbase.output.source
 
 import com.azure.storage.blob.BlobServiceClient
+import com.azure.storage.blob.models.BlobItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.avro.file.SeekableFileInput
@@ -23,9 +24,19 @@ class AzureSourceStorage(
 
     private fun blobClient(path: Path) = blobContainerClient.getBlobClient(path.toKey())
 
-    override suspend fun list(path: Path): List<SimpleFileStatus> =
-        withContext(Dispatchers.IO) { blobContainerClient.listBlobsByHierarchy("$path/") }
-            .map { SimpleFileStatus(Paths.get(it.name), it.isPrefix ?: false, it.properties?.lastModified?.toInstant()) }
+    override suspend fun list(path: Path, maxKeys: Int?): List<SimpleFileStatus> =
+        withContext(Dispatchers.IO) {
+            var iterable: Iterable<BlobItem> = blobContainerClient.listBlobsByHierarchy("$path/")
+            if (maxKeys != null) {
+                iterable = iterable.take(maxKeys)
+            }
+            iterable.map {
+                SimpleFileStatus(Paths.get(it.name),
+                    it.isPrefix ?: false,
+                    it.properties?.lastModified?.toInstant())
+            }
+        }
+
 
     override suspend fun createTopicFile(topic: String, status: SimpleFileStatus): TopicFile {
         var topicFile = super.createTopicFile(topic, status)

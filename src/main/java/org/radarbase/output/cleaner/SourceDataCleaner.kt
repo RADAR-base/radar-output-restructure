@@ -2,7 +2,6 @@ package org.radarbase.output.cleaner
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import org.radarbase.output.Application.Companion.format
 import org.radarbase.output.FileStoreFactory
@@ -20,13 +19,12 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Instant
 import java.time.temporal.ChronoUnit
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.LongAdder
+import kotlin.coroutines.coroutineContext
 
 class SourceDataCleaner(
-        private val fileStoreFactory: FileStoreFactory
+    private val fileStoreFactory: FileStoreFactory
 ) : Closeable {
-    private val isClosed = AtomicBoolean(false)
     private val lockManager = fileStoreFactory.remoteLockManager
     private val sourceStorage = fileStoreFactory.sourceStorage
     private val excludeTopics: Set<String> = fileStoreFactory.config.topics
@@ -38,7 +36,7 @@ class SourceDataCleaner(
             .minus(fileStoreFactory.config.cleaner.age.toLong(), ChronoUnit.DAYS)
 
     val deletedFileCount = LongAdder()
-    private val scope = CoroutineScope(Dispatchers.Default)
+    private val supervisor = SupervisorJob()
 
     @Throws(IOException::class, InterruptedException::class)
     suspend fun process(directoryName: String) {
@@ -49,28 +47,26 @@ class SourceDataCleaner(
 
         logger.info("{} topics found", paths.size)
 
-        paths.map { p ->
-            scope.launch {
-                try {
-                    val deleteCount = fileStoreFactory.workerSemaphore.withPermit {
-                        mapTopic(p)
+        withContext(coroutineContext + supervisor) {
+            paths.forEach { p ->
+                launch {
+                    try {
+                        val deleteCount = fileStoreFactory.workerSemaphore.withPermit {
+                            mapTopic(p)
+                        }
+                        if (deleteCount > 0) {
+                            logger.info("Removed {} files in topic {}", deleteCount, p.fileName)
+                            deletedFileCount.add(deleteCount)
+                        }
+                    } catch (ex: Exception) {
+                        logger.warn("Failed to map topic {}", p, ex)
                     }
-                    if (deleteCount > 0) {
-                        logger.info("Removed {} files in topic {}", deleteCount, p.fileName)
-                        deletedFileCount.add(deleteCount)
-                    }
-                } catch (ex: Exception) {
-                    logger.warn("Failed to map topic", ex)
                 }
             }
-        }.joinAll()
+        }
     }
 
     private suspend fun mapTopic(topicPath: Path): Long {
-        if (isClosed.get()) {
-            return 0L
-        }
-
         val topic = topicPath.fileName.toString()
         return try {
             lockManager.tryWithLock(topic) {
@@ -104,41 +100,30 @@ class SourceDataCleaner(
                 offsets.contains(f.range.mapRange { r -> r.incrementTo() })
         }
 
-        val accountantMutex = Mutex()
-
-        return coroutineScope {
-            paths
-                .map { file ->
-                    async {
-                        if (extractionCheck.isExtracted(file)) {
-                            logger.info("Removing {}", file.path)
-                            Timer.time("cleaner.delete") {
-                                sourceStorage.delete(file.path)
-                            }
-                            true
-                        } else {
-                            // extract the file again at a later time
-                            logger.warn("Source file was not completely extracted: {}", file.path)
-                            val fullRange = file.range.mapRange { it.ensureToOffset() }
-                            accountantMutex.withLock {
-                                accountant.remove(fullRange)
-                            }
-                            false
-                        }
+        return paths
+            .count { file ->
+                if (extractionCheck.isExtracted(file)) {
+                    logger.info("Removing {}", file.path)
+                    Timer.time("cleaner.delete") {
+                        sourceStorage.delete(file.path)
                     }
+                    true
+                } else {
+                    // extract the file again at a later time
+                    logger.warn("Source file was not completely extracted: {}", file.path)
+                    val fullRange = file.range.mapRange { it.ensureToOffset() }
+                    accountant.remove(fullRange)
+                    false
                 }
-                .awaitAll()
-                .count { it }
-        }
+            }
     }
 
     private suspend fun topicPaths(path: Path): List<Path> = sourceStorage.listTopics(path, excludeTopics)
-            .toMutableList()
-            // different services start on different topics to decrease lock contention
-            .also { it.shuffle() }
+        // different services start on different topics to decrease lock contention
+        .shuffled()
 
     override fun close() {
-        scope.cancel()
+        supervisor.cancel()
     }
 
     companion object {

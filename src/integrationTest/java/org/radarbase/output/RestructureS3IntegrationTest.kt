@@ -78,12 +78,15 @@ class RestructureS3IntegrationTest {
                 STAGING_PROJECT,1543bc93-3c17-4381-89a5-c5d6272b827c,99caf236-bbe6-4eed-9c63-fba77349821d,1.58021982003E9,CONNECTED,
 
                 """.trimIndent()
-                assertEquals(csvContents, targetClient.getObject(GetObjectArgs.Builder()
+
+                val targetContent = targetClient.getObject(GetObjectArgs.Builder()
                     .bucketBuild(targetConfig.bucket) {
                         `object`("$firstParticipantOutput/20200128_1300.csv")
-                    })
-                    .readBytes()
-                    .toString(UTF_8))
+                    }).use { response ->
+                    response.readBytes()
+                }
+
+                assertEquals(csvContents, targetContent.toString(UTF_8))
             }
 
             withContext(Dispatchers.IO) {

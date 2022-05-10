@@ -1,17 +1,17 @@
 package org.radarbase.output.util
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import org.radarbase.output.source.SourceStorage
 import org.radarbase.output.source.TopicFile
 
-class AvroFileLister(private val storage: SourceStorage) :
-    TreeLister.LevelLister<TopicFile, TopicPath> {
-    override fun CoroutineScope.listLevel(
+class AvroFileLister(
+    private val storage: SourceStorage
+) : TreeLister.LevelLister<TopicFile, TopicPath> {
+
+    override suspend fun listLevel(
         context: TopicPath,
-        descend: CoroutineScope.(TopicPath) -> Unit,
-        emit: suspend (TopicFile) -> Unit,
-    ) = launch {
+        descend: suspend (TopicPath) -> Unit,
+        emit: suspend (TopicFile) -> Unit
+    ) {
         storage.list(context.path).forEach { status ->
             val filename = status.path.fileName.toString()
             when {

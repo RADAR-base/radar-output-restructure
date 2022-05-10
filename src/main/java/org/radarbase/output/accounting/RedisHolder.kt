@@ -8,14 +8,14 @@ import redis.clients.jedis.exceptions.JedisException
 import java.io.Closeable
 import java.io.IOException
 
-class RedisHolder(private val jedisPool: JedisPool): Closeable {
+class RedisHolder(
+    private val jedisPool: JedisPool,
+): Closeable {
     @Throws(IOException::class)
-    suspend fun <T> execute(routine: suspend (Jedis) -> T): T {
-        return try {
-            withContext(Dispatchers.IO) {
-                jedisPool.resource.use {
-                    routine(it)
-                }
+    suspend fun <T> execute(routine: suspend (Jedis) -> T): T = withContext(Dispatchers.IO) {
+        try {
+            jedisPool.resource.use {
+                routine(it)
             }
         } catch (ex: JedisException) {
             throw IOException(ex)

@@ -27,7 +27,6 @@ interface SuspendedCloseable {
                     }
                 }
             }
-
         }
 
         suspend inline fun <S: AutoCloseable?, T> S.useSuspended(action: (S) -> T): T {

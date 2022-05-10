@@ -31,13 +31,23 @@ class S3SourceStorage(
     private val bucket = config.bucket
     private val readEndOffset = config.endOffsetFromTags
 
-    override suspend fun list(path: Path): List<SimpleFileStatus> {
+    override suspend fun list(
+        path: Path,
+        maxKeys: Int?,
+    ): List<SimpleFileStatus> {
         val listRequest = ListObjectsArgs.Builder().bucketBuild(bucket) {
+            if (maxKeys != null) {
+                maxKeys(maxKeys.coerceAtMost(1000))
+            }
             prefix("$path/")
             recursive(false)
             useUrlEncodingType(false)
         }
-        return faultTolerant { s3Client.listObjects(listRequest) }
+        var iterable = faultTolerant { s3Client.listObjects(listRequest) }
+        if (maxKeys != null) {
+            iterable = iterable.take(maxKeys)
+        }
+        return iterable
             .map {
                 val item = it.get()
                 SimpleFileStatus(
@@ -94,9 +104,12 @@ class S3SourceStorage(
                 try {
                     faultTolerant {
                         tempFile.outputStream(StandardOpenOption.TRUNCATE_EXISTING).use { out ->
-                            s3Client.getObject(GetObjectArgs.Builder()
-                                .objectBuild(bucket, file.path))
-                                .copyTo(out)
+                            s3Client.getObject(
+                                GetObjectArgs.Builder()
+                                    .objectBuild(bucket, file.path)
+                            ).use { input ->
+                                input.copyTo(out)
+                            }
                         }
                     }
                 } catch (ex: Exception) {
