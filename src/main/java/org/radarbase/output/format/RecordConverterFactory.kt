@@ -23,7 +23,6 @@ import org.radarbase.output.compression.Compression
 import org.radarbase.output.util.ResourceContext.Companion.resourceContext
 import java.io.*
 import java.nio.file.Path
-import java.util.*
 import java.util.regex.Pattern
 import kotlin.collections.component1
 import kotlin.collections.component2

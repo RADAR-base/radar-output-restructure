@@ -18,8 +18,6 @@ package org.radarbase.output.accounting
 
 import kotlinx.coroutines.CoroutineScope
 import org.radarbase.output.util.SuspendedCloseable
-import java.io.Closeable
-import java.io.Flushable
 import java.nio.file.Path
 
 /**

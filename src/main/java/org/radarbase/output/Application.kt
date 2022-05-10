@@ -18,10 +18,10 @@ package org.radarbase.output
 
 import com.beust.jcommander.JCommander
 import com.beust.jcommander.ParameterException
-import kotlinx.coroutines.*
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withLock
 import org.radarbase.output.accounting.*
 import org.radarbase.output.cleaner.SourceDataCleaner
 import org.radarbase.output.compression.Compression
@@ -33,7 +33,6 @@ import org.radarbase.output.source.SourceStorage
 import org.radarbase.output.source.SourceStorageFactory
 import org.radarbase.output.target.TargetStorage
 import org.radarbase.output.target.TargetStorageFactory
-import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.util.Timer
 import org.radarbase.output.worker.FileCacheStore
 import org.radarbase.output.worker.Job
@@ -89,8 +88,6 @@ class Application(
     override fun newFileCacheStore(accountant: Accountant) = FileCacheStore(this, accountant)
 
     fun start() {
-        System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism",
-            (config.worker.numThreads - 1).toString())
         System.setProperty("kotlinx.coroutines.scheduler.max.pool.size",
             config.worker.numThreads.toString())
         System.setProperty("kotlinx.coroutines.scheduler.core.pool.size",

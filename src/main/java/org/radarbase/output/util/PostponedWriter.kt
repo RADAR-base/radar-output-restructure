@@ -19,10 +19,8 @@ package org.radarbase.output.util
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.util.concurrent.*
-import java.util.concurrent.CancellationException
+import java.util.concurrent.TimeUnit
 
 /**
  * File writer where data is written in a separate thread with a timeout.

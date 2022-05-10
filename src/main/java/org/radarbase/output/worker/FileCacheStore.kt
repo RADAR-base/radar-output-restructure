@@ -16,7 +16,10 @@
 
 package org.radarbase.output.worker
 
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.FileStoreFactory

@@ -17,7 +17,6 @@
 package org.radarbase.output.target
 
 import io.minio.*
-import io.minio.errors.ErrorResponseException
 import org.radarbase.output.config.S3Config
 import org.radarbase.output.source.S3SourceStorage.Companion.faultTolerant
 import org.radarbase.output.util.bucketBuild

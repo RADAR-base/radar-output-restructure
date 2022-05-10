@@ -16,9 +16,12 @@
 
 package org.radarbase.output.worker
 
-import kotlinx.coroutines.*
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import org.radarbase.output.Application.Companion.format
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.accounting.Accountant
@@ -35,7 +38,6 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
 import java.util.concurrent.atomic.LongAdder
-import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.coroutineContext
 
 /**
