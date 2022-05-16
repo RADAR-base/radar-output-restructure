@@ -1,5 +1,6 @@
 package org.radarbase.output.cleaner
 
+import kotlinx.coroutines.test.runTest
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericRecord
@@ -20,7 +21,6 @@ import org.radarbase.output.target.LocalTargetStorage
 import org.radarbase.output.util.ResourceContext.Companion.resourceContext
 import java.io.ByteArrayInputStream
 import java.io.FileNotFoundException
-import java.io.InputStreamReader
 import java.nio.file.Path
 import kotlin.io.path.bufferedWriter
 
@@ -56,19 +56,21 @@ internal class TimestampFileCacheTest {
     }
 
     @Test
-    fun testFileCacheFound(@TempDir path: Path) {
+    fun testFileCacheFound(@TempDir path: Path) = runTest {
         val targetPath = path.resolve("test.avro")
         writeRecord(targetPath, record)
-        val timestampFileCache = TimestampFileCache(factory, targetPath)
+        val timestampFileCache = TimestampFileCache(factory, targetPath).apply {
+            initialize()
+        }
         assertThat(timestampFileCache.contains(record), `is`(true))
     }
 
-    private fun writeRecord(path: Path, record: GenericRecord) {
+    private suspend fun writeRecord(path: Path, record: GenericRecord) {
         resourceContext {
             val wr = this.createResource { path.bufferedWriter() }
             val emptyReader = resourceChain { ByteArrayInputStream(ByteArray(0)) }
-                .chain { InputStreamReader(it) }
-                .result
+                .conclude { it.reader() }
+
             csvConverter.converterFor(wr, record, true, emptyReader).use { converter ->
                 converter.writeRecord(record)
             }
@@ -76,23 +78,26 @@ internal class TimestampFileCacheTest {
     }
 
     @Test
-    fun testFileCacheNotFound(@TempDir path: Path) {
+    fun testFileCacheNotFound(@TempDir path: Path) = runTest {
         val targetPath = path.resolve("test.avro")
-        assertThrows<FileNotFoundException> { TimestampFileCache(factory, targetPath) }
+        assertThrows<FileNotFoundException> {
+            TimestampFileCache(factory, targetPath)
+                .initialize()
+        }
     }
 
     @Test
-    fun testHeaderMismatch(@TempDir path: Path) {
+    fun testHeaderMismatch(@TempDir path: Path) = runTest {
         val targetPath = path.resolve("test.avro")
         targetPath.bufferedWriter().use { writer ->
             writer.write("key.projectId,key.userId,key.sourceId,value.time,value.timeReceived,value.luminance")
         }
-        val cache = TimestampFileCache(factory, targetPath)
+        val cache = TimestampFileCache(factory, targetPath).apply { initialize() }
         assertThrows<IllegalArgumentException> { cache.contains(record) }
     }
 
     @Test
-    fun testNotFound(@TempDir path: Path) {
+    fun testNotFound(@TempDir path: Path) = runTest {
         val targetPath = path.resolve("test.avro")
 
         val otherRecord = GenericRecordBuilder(record)
@@ -104,6 +109,7 @@ internal class TimestampFileCacheTest {
 
         writeRecord(targetPath, otherRecord)
         val cache = TimestampFileCache(factory, targetPath)
+        cache.initialize()
         assertThat(cache.contains(record), `is`(false))
     }
 }

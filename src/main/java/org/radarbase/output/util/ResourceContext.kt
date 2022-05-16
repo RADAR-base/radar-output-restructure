@@ -1,7 +1,6 @@
 package org.radarbase.output.util
 
-import java.io.Closeable
-import java.io.IOException
+import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 
 /**
  * Resource context to use multiple resources in.
@@ -19,28 +18,31 @@ import java.io.IOException
  * Instances of this class may only be used from a single thread. When the resourceContext is
  * finished, the managed resources are closed in the reversed order that they were created.
  */
-class ResourceContext: Closeable {
-    private var isClosed = false
-    private val resources: MutableList<AutoCloseable> = mutableListOf()
+class ResourceContext: SuspendedCloseable {
+    private val resources: MutableList<SuspendedCloseable> = mutableListOf()
 
     /** Add a given resource to be closed when this ResourceContext is closed. */
-    fun resource(resource: AutoCloseable) {
-        resources += resource
+    fun resource(resource: Any) {
+        resources += when (resource) {
+            is SuspendedCloseable -> resource
+            is AutoCloseable -> SuspendedCloseableWrapper(resource)
+            else -> throw IllegalArgumentException("Resource must be AutoCloseable or SuspendedCloseable")
+        }
     }
 
     /** Create a resource with [supplier] to be closed when this ResourceContext is closed. */
-    inline fun <T: AutoCloseable> createResource(supplier: () -> T): T = supplier()
+    inline fun <T: Any> createResource(supplier: () -> T): T = supplier()
         .also { resource(it) }
 
     /**
      * Create a resource chain with [supplier] to be closed when this ResourceContext is closed.
      * The chain can be extended with more [Chain.chain] calls and finished with [Chain.conclude].
      */
-    inline fun <T: AutoCloseable> resourceChain(supplier: () -> T): Chain<T> {
+    inline fun <T: Any> resourceChain(supplier: () -> T): Chain<T> {
         return Chain(createResource(supplier))
     }
 
-    inner class Chain<T: AutoCloseable>(
+    inner class Chain<T: Any>(
         val result: T,
     ) {
         /**
@@ -68,16 +70,12 @@ class ResourceContext: Closeable {
      * exception that is thrown is re-thrown. Further exceptions are added as kotlin suppressed
      * exceptions.
      */
-    override fun close() {
-        if (isClosed) {
-            throw IOException("ResourceContext is already closed")
-        }
-        isClosed = true
+    override suspend fun closeAndJoin() {
         var throwable: Throwable? = null
         resources.reversed()
             .forEach {
                 try {
-                    it.close()
+                    it.closeAndJoin()
                 } catch (ex: Throwable) {
                     val localThrowable = throwable
                     if (localThrowable == null) {
@@ -91,6 +89,6 @@ class ResourceContext: Closeable {
     }
 
     companion object {
-        inline fun <T> resourceContext(exec: ResourceContext.() -> T): T = ResourceContext().use(exec)
+        suspend inline fun <T> resourceContext(exec: ResourceContext.() -> T): T = ResourceContext().useSuspended(exec)
     }
 }

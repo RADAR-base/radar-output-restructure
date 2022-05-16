@@ -50,6 +50,8 @@ dependencies {
     runtimeOnly("org.xerial.snappy:snappy-java:$snappyVersion")
 
     implementation(kotlin("reflect"))
+    val coroutinesVersion: String by project
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
 
     val jacksonVersion: String by project
     api(platform("com.fasterxml.jackson:jackson-bom:$jacksonVersion"))
@@ -95,6 +97,7 @@ dependencies {
 
     val radarSchemasVersion: String by project
     testImplementation("org.radarbase:radar-schemas-commons:$radarSchemasVersion")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:$coroutinesVersion")
 
     val junitVersion: String by project
     testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")

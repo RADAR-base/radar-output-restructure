@@ -18,7 +18,6 @@ package org.radarbase.output.util
 
 import org.radarbase.output.util.ProgressBar.Companion.appendTime
 import java.time.Duration
-import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.atomic.LongAdder
@@ -27,13 +26,6 @@ import java.util.concurrent.atomic.LongAdder
 object Timer {
     private val shutdownHook = Thread({ println(Timer) }, "Timer")
     val times: ConcurrentMap<String, MutableTimerEntry> = ConcurrentHashMap()
-
-    /**
-     * All currently measured timings.
-     * This returns a thread-safe sorted snapshot of the current state.
-     */
-    val timings: Map<String, TimerEntry>
-        get() = times.mapValuesTo(TreeMap()) { it.value.toTimerEntry() }
 
     /**
      * Whether the timer is enabled. A disabled timer will have much less performance impact on
@@ -64,7 +56,7 @@ object Timer {
                 action()
             } finally {
                 val time = System.nanoTime() - startTime
-                times.computeIfAbsent(type) { MutableTimerEntry() }.add(time)
+                times.computeIfAbsent(type) { MutableTimerEntry() } += time
             }
         } else {
             action()
@@ -86,17 +78,19 @@ object Timer {
         } else if (times.isEmpty()) {
             builder.append(" none")
         } else {
-            timings.entries
-                    .forEach { entry ->
-                        builder.append("\n\t")
-                        builder.append(entry.key)
-                        builder.append(" - time: ")
-                        builder.appendTime(entry.value.totalTime)
-                        builder.append(" - threads: ")
-                        builder.append(entry.value.numThreads)
-                        builder.append(" - invocations: ")
-                        builder.append(entry.value.invocations)
-                    }
+            times.entries
+                .map { (type, timer) -> type to timer.toTimerEntry() }
+                .sortedBy { (type, _) -> type }
+                .forEach { (type, timer) ->
+                    builder.append("\n\t")
+                    builder.append(type)
+                    builder.append(" - time: ")
+                    builder.appendTime(timer.totalTime)
+                    builder.append(" - threads: ")
+                    builder.append(timer.numThreads)
+                    builder.append(" - invocations: ")
+                    builder.append(timer.invocations)
+                }
         }
 
         return builder.toString()
@@ -110,10 +104,11 @@ object Timer {
         fun add(nanoTime: Long) {
             invocations.increment()
             totalTime.add(nanoTime)
-            Thread.currentThread().id.let {
-                threads[it] = it
-            }
+            val threadId = Thread.currentThread().id
+            threads[threadId] = threadId
         }
+
+        operator fun plusAssign(nanoTime: Long) = add(nanoTime)
 
         fun toTimerEntry(): TimerEntry = TimerEntry(invocations.sum(), Duration.ofNanos(totalTime.sum()), threads.size)
     }

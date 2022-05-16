@@ -16,6 +16,10 @@
 
 package org.radarbase.output.data
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runTest
 import org.apache.avro.SchemaBuilder
 import org.apache.avro.generic.GenericData.Record
 import org.apache.avro.generic.GenericRecordBuilder
@@ -33,6 +37,7 @@ import org.radarbase.output.config.PathConfig
 import org.radarbase.output.config.ResourceConfig
 import org.radarbase.output.config.RestructureConfig
 import org.radarbase.output.util.ResourceContext.Companion.resourceContext
+import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.worker.FileCache
 import java.io.IOException
 import java.nio.file.Path
@@ -88,10 +93,11 @@ class FileCacheTest {
 
     @Test
     @Throws(IOException::class)
-    fun testGzip() {
+    fun testGzip() = runTest {
         setUp(config.copy(compression = config.compression.copy(type = "gzip")))
 
-        FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant).use { cache ->
+        FileCache(factory, "topic", path, tmpDir, accountant).useSuspended { cache ->
+            cache.initialize(exampleRecord)
             cache.writeRecord(exampleRecord,
                     Accountant.Transaction(topicPartition, 0L, lastModified))
         }
@@ -111,15 +117,17 @@ class FileCacheTest {
 
     @Test
     @Throws(IOException::class)
-    fun testGzipAppend() {
+    fun testGzipAppend() = runTest {
         setUp(config.copy(compression = config.compression.copy(type = "gzip")))
 
-        FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant).use { cache ->
+        FileCache(factory, "topic", path, tmpDir, accountant).useSuspended { cache ->
+            cache.initialize(exampleRecord)
             cache.writeRecord(exampleRecord,
                     Accountant.Transaction(topicPartition, 0, lastModified))
         }
 
-        FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant).use { cache ->
+        FileCache(factory, "topic", path, tmpDir, accountant).useSuspended { cache ->
+            cache.initialize(exampleRecord)
             cache.writeRecord(exampleRecord,
                     Accountant.Transaction(topicPartition, 0, lastModified))
         }
@@ -137,8 +145,9 @@ class FileCacheTest {
 
     @Test
     @Throws(IOException::class)
-    fun testPlain() {
-        FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant).use { cache ->
+    fun testPlain() = runTest {
+        FileCache(factory, "topic", path, tmpDir, accountant).useSuspended { cache ->
+            cache.initialize(exampleRecord)
             cache.writeRecord(exampleRecord,
                     Accountant.Transaction(topicPartition, 0, lastModified))
         }
@@ -151,13 +160,15 @@ class FileCacheTest {
 
     @Test
     @Throws(IOException::class)
-    fun testPlainAppend() {
-        FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant).use { cache ->
+    fun testPlainAppend() = runTest {
+        FileCache(factory, "topic", path, tmpDir, accountant).useSuspended { cache ->
+            cache.initialize(exampleRecord)
             cache.writeRecord(exampleRecord,
                     Accountant.Transaction(topicPartition, 0, lastModified))
         }
 
-        FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant).use { cache ->
+        FileCache(factory, "topic", path, tmpDir, accountant).useSuspended { cache ->
+            cache.initialize(exampleRecord)
             cache.writeRecord(exampleRecord,
                     Accountant.Transaction(topicPartition, 1, lastModified))
         }
@@ -170,13 +181,17 @@ class FileCacheTest {
 
     @Test
     @Throws(IOException::class)
-    fun compareTo() {
+    fun compareTo() = runTest {
         val file3 = path.parent.resolve("g")
 
         resourceContext {
-            val cache1 = createResource { FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant) }
-            val cache2 = createResource { FileCache(factory, "topic", path, exampleRecord, tmpDir, accountant) }
-            val cache3 = createResource { FileCache(factory, "topic", file3, exampleRecord, tmpDir, accountant) }
+            val cache1 = createResource { FileCache(factory, "topic", path, tmpDir, accountant) }
+            val cache2 = createResource { FileCache(factory, "topic", path, tmpDir, accountant) }
+            val cache3 = createResource { FileCache(factory, "topic", file3, tmpDir, accountant) }
+
+            listOf(cache1, cache2, cache3)
+                .map { cache -> launch(Dispatchers.IO) { cache.initialize(exampleRecord) } }
+                .joinAll()
 
             val transaction = Accountant.Transaction(topicPartition, 0, lastModified)
             assertEquals(0, cache1.compareTo(cache2))

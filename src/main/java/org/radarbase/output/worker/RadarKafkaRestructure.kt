@@ -16,10 +16,20 @@
 
 package org.radarbase.output.worker
 
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
+import org.radarbase.output.Application.Companion.format
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.accounting.Accountant
+import org.radarbase.output.accounting.AccountantImpl
 import org.radarbase.output.accounting.OffsetRangeSet
+import org.radarbase.output.config.RestructureConfig
 import org.radarbase.output.source.TopicFileList
+import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.util.TimeUtil.durationSince
 import org.slf4j.LoggerFactory
 import java.io.Closeable
@@ -27,8 +37,8 @@ import java.io.IOException
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.LongAdder
+import kotlin.coroutines.coroutineContext
 
 /**
  * Performs the following actions
@@ -39,17 +49,17 @@ import java.util.concurrent.atomic.LongAdder
  *    - Acquire a lock before processing to avoid multiple processing of files
  */
 class RadarKafkaRestructure(
-        private val fileStoreFactory: FileStoreFactory
+    private val fileStoreFactory: FileStoreFactory
 ): Closeable {
     private val sourceStorage = fileStoreFactory.sourceStorage
 
     private val lockManager = fileStoreFactory.remoteLockManager
 
-    private val isClosed = AtomicBoolean(false)
-
     private val excludeTopics: Set<String>
     private val maxFilesPerTopic: Int
     private val minimumFileAge: Duration
+
+    private val supervisor = SupervisorJob()
 
     init {
         val config = fileStoreFactory.config
@@ -67,7 +77,7 @@ class RadarKafkaRestructure(
     val processedRecordsCount = LongAdder()
 
     @Throws(IOException::class, InterruptedException::class)
-    fun process(directoryName: String) {
+    suspend fun process(directoryName: String) {
         // Get files and directories
         val absolutePath = Paths.get(directoryName)
 
@@ -77,49 +87,60 @@ class RadarKafkaRestructure(
 
         logger.info("{} topics found", paths.size)
 
-        paths.parallelStream()
-                .forEach { p ->
+        withContext(coroutineContext + supervisor) {
+            paths.forEach { p ->
+                launch {
                     try {
-                        val (fileCount, recordCount) = mapTopic(p)
+                        val (fileCount, recordCount) = fileStoreFactory.workerSemaphore.withPermit {
+                            mapTopic(p)
+                        }
                         processedFileCount.add(fileCount)
                         processedRecordsCount.add(recordCount)
-                    } catch (ex: Exception) {
-                        logger.warn("Failed to map topic", ex)
+                    } catch (ex: Throwable) {
+                        logger.warn("Failed to map topic {}", p, ex)
                     }
                 }
+            }
+        }
     }
 
-    private fun mapTopic(topicPath: Path): ProcessingStatistics {
-        if (isClosed.get()) {
-            return ProcessingStatistics(0L, 0L)
-        }
-
+    private suspend fun mapTopic(topicPath: Path): ProcessingStatistics {
         val topic = topicPath.fileName.toString()
 
         return try {
-            lockManager.tryRunLocked(topic) {
-                Accountant(fileStoreFactory, topic).use { accountant ->
-                    startWorker(topic, topicPath, accountant, accountant.offsets)
+            val statistics = lockManager.tryWithLock(topic) {
+                coroutineScope {
+                    AccountantImpl(fileStoreFactory, topic).useSuspended { accountant ->
+                        accountant.initialize(this)
+                        startWorker(topic, topicPath, accountant, accountant.offsets)
+                    }
                 }
             }
+            if (statistics == null) {
+                logger.info("Failed to acquire lock for topic {}", topicPath)
+            }
+            statistics
         } catch (ex: IOException) {
             logger.error("Failed to map files of topic {}", topic, ex)
             null
         } ?: ProcessingStatistics(0L, 0L)
     }
 
-    private fun startWorker(
-            topic: String,
-            topicPath: Path,
-            accountant: Accountant,
-            seenFiles: OffsetRangeSet): ProcessingStatistics {
-        return RestructureWorker(sourceStorage, accountant, fileStoreFactory, isClosed).use { worker ->
+    private suspend fun startWorker(
+        topic: String,
+        topicPath: Path,
+        accountant: Accountant,
+        seenFiles: OffsetRangeSet
+    ): ProcessingStatistics {
+        return RestructureWorker(sourceStorage, accountant, fileStoreFactory).useSuspended { worker ->
             try {
-                val topicPaths = TopicFileList(topic, sourceStorage.walker.walkRecords(topic, topicPath)
-                        .filter { f -> !seenFiles.contains(f.range)
-                                && f.lastModified.durationSince() >= minimumFileAge }
-                        .take(maxFilesPerTopic)
-                        .toList())
+                val topicPaths = TopicFileList(
+                    topic,
+                    sourceStorage.listTopicFiles(topic, topicPath, maxFilesPerTopic) { f ->
+                        !seenFiles.contains(f.range)
+                            && f.lastModified.durationSince() >= minimumFileAge
+                    },
+                )
 
                 if (topicPaths.numberOfFiles > 0) {
                     worker.processPaths(topicPaths)
@@ -133,19 +154,39 @@ class RadarKafkaRestructure(
     }
 
     override fun close() {
-        isClosed.set(true)
+        supervisor.cancel()
     }
 
-    private fun topicPaths(root: Path): List<Path> = sourceStorage.walker.walkTopics(root, excludeTopics)
-                .toMutableList()
-                // different services start on different topics to decrease lock contention
-                .also { it.shuffle() }
+    private suspend fun topicPaths(root: Path): List<Path> = sourceStorage.listTopics(root, excludeTopics)
+        // different services start on different topics to decrease lock contention
+        .shuffled()
 
     private data class ProcessingStatistics(
-            val fileCount: Long,
-            val recordCount: Long)
+        val fileCount: Long,
+        val recordCount: Long,
+    )
 
     companion object {
         private val logger = LoggerFactory.getLogger(RadarKafkaRestructure::class.java)
+
+        fun job(config: RestructureConfig, serviceMutex: Mutex): Job? = if (config.worker.enable) {
+            Job("restructure", config.service.interval, ::runRestructure, serviceMutex)
+        } else null
+
+        private suspend fun runRestructure(factory: FileStoreFactory) {
+            RadarKafkaRestructure(factory).useSuspended { restructure ->
+                for (input in factory.config.paths.inputs) {
+                    logger.info("In:  {}", input)
+                    logger.info("Out: {}", factory.pathFactory.root)
+                    restructure.process(input.toString())
+                }
+
+                logger.info(
+                    "Processed {} files and {} records",
+                    restructure.processedFileCount.format(),
+                    restructure.processedRecordsCount.format(),
+                )
+            }
+        }
     }
 }

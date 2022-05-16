@@ -19,10 +19,10 @@ package org.radarbase.output.cleaner
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.util.Timer.time
-import org.slf4j.LoggerFactory
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Caches open file handles. If more than the limit is cached, the half of the files that were used
@@ -36,7 +36,7 @@ class TimestampFileCacheStore(private val factory: FileStoreFactory) {
     init {
         val config = factory.config
         this.maxCacheSize = config.worker.cacheSize
-        this.caches = HashMap(maxCacheSize * 4 / 3 + 1)
+        this.caches = ConcurrentHashMap(maxCacheSize * 4 / 3 + 1)
         this.schemasAdded = HashMap()
     }
 
@@ -50,13 +50,15 @@ class TimestampFileCacheStore(private val factory: FileStoreFactory) {
      * @throws IOException when failing to open a file or writing to it.
      */
     @Throws(IOException::class)
-    fun contains(path: Path, record: GenericRecord): FindResult {
+    suspend fun contains(path: Path, record: GenericRecord): FindResult {
         return try {
             val fileCache = caches[path]
                     ?: time("cleaner.cache") {
                         ensureCapacity()
-                        TimestampFileCache(factory, path)
-                                .also { caches[path] = it }
+                        TimestampFileCache(factory, path).apply {
+                            initialize()
+                            caches[path] = this
+                        }
                     }
 
             time("cleaner.contains") {
@@ -94,9 +96,5 @@ class TimestampFileCacheStore(private val factory: FileStoreFactory) {
         BAD_SCHEMA,
         NOT_FOUND,
         FOUND
-    }
-
-    companion object {
-        private val logger = LoggerFactory.getLogger(TimestampFileCacheStore::class.java)
     }
 }

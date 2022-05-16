@@ -16,6 +16,9 @@
 
 package org.radarbase.output.data
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import org.apache.avro.Schema.Parser
 import org.apache.avro.SchemaBuilder
 import org.apache.avro.generic.GenericData
@@ -30,6 +33,7 @@ import org.radarbase.output.compression.GzipCompression
 import org.radarbase.output.compression.IdentityCompression
 import org.radarbase.output.format.CsvAvroConverter
 import org.radarbase.output.util.ResourceContext.Companion.resourceContext
+import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import java.io.IOException
 import java.io.StringReader
 import java.io.StringWriter
@@ -165,41 +169,41 @@ class CsvAvroConverterTest {
 
     @Test
     @Throws(IOException::class)
-    fun deduplicate(@TempDir dir: Path) {
+    fun deduplicate(@TempDir dir: Path) = runTest {
         val path = dir.resolve("test")
         val toPath = dir.resolve("test.dedup")
-        path.bufferedWriter().use { writer -> writeTestNumbers(writer) }
+        path.bufferedWriter().useSuspended { writer -> writeTestNumbers(writer) }
         CsvAvroConverter.factory.deduplicate("t", path, toPath, IdentityCompression())
-        assertEquals(listOf("a,b", "1,3", "3,4", "1,2", "a,a", "3,3"), Files.readAllLines(toPath))
+        assertEquals(listOf("a,b", "1,3", "3,4", "1,2", "a,a", "3,3"), withContext(Dispatchers.IO) { Files.readAllLines(toPath) })
     }
 
 
     @Test
     @Throws(IOException::class)
-    fun deduplicateFields(@TempDir dir: Path) {
+    fun deduplicateFields(@TempDir dir: Path) = runTest {
         val path = dir.resolve("test")
         val toPath = dir.resolve("test.dedup")
-        path.bufferedWriter().use { writer -> writeTestNumbers(writer) }
+        path.bufferedWriter().useSuspended { writer -> writeTestNumbers(writer) }
         CsvAvroConverter.factory.deduplicate("t", path, toPath, IdentityCompression(),
                 distinctFields = setOf("a"))
-        assertEquals(listOf("a,b", "1,2", "a,a", "3,3"), Files.readAllLines(toPath))
+        assertEquals(listOf("a,b", "1,2", "a,a", "3,3"), withContext(Dispatchers.IO) { Files.readAllLines(toPath) })
     }
 
 
     @Test
     @Throws(IOException::class)
-    fun deduplicateIgnoreFields(@TempDir dir: Path) {
+    fun deduplicateIgnoreFields(@TempDir dir: Path) = runTest {
         val path = dir.resolve("test")
         val toPath = dir.resolve("test.dedup")
-        path.bufferedWriter().use { writer -> writeTestNumbers(writer) }
+        path.bufferedWriter().useSuspended { writer -> writeTestNumbers(writer) }
         CsvAvroConverter.factory.deduplicate("t", path, toPath, IdentityCompression(),
                 ignoreFields = setOf("a"))
-        assertEquals(listOf("a,b", "3,4", "1,2", "a,a", "3,3"), Files.readAllLines(toPath))
+        assertEquals(listOf("a,b", "3,4", "1,2", "a,a", "3,3"), withContext(Dispatchers.IO) { Files.readAllLines(toPath) })
     }
 
     @Test
     @Throws(IOException::class)
-    fun deduplicateGzip(@TempDir dir: Path) {
+    fun deduplicateGzip(@TempDir dir: Path) = runTest {
         val path = dir.resolve("test.csv.gz")
         val toPath = dir.resolve("test.csv.gz.dedup")
 

@@ -23,7 +23,6 @@ import org.radarbase.output.compression.Compression
 import org.radarbase.output.util.ResourceContext.Companion.resourceContext
 import java.io.*
 import java.nio.file.Path
-import java.util.*
 import java.util.regex.Pattern
 import kotlin.collections.component1
 import kotlin.collections.component2
@@ -52,7 +51,7 @@ interface RecordConverterFactory : Format {
      * created.
      */
     @Throws(IOException::class)
-    fun deduplicate(
+    suspend fun deduplicate(
         fileName: String,
         source: Path,
         target: Path,
@@ -65,9 +64,8 @@ interface RecordConverterFactory : Format {
         val (header, lines) = resourceContext {
             val reader = resourceChain { source.inputStream() }
                 .chain { compression.decompress(it) }
-                .chain { it.reader() }
-                .chain { it.buffered() }
-                .result
+                .conclude { it.bufferedReader() }
+
             readFile(reader, withHeader)
         }
 
@@ -75,8 +73,7 @@ interface RecordConverterFactory : Format {
             val writer = resourceChain { target.outputStream() }
                 .chain { it.buffered() }
                 .chain { compression.compress(fileName, it) }
-                .chain { it.writer() }
-                .result
+                .conclude { it.writer() }
 
             writeFile(writer, header, lines)
         }
@@ -84,9 +81,9 @@ interface RecordConverterFactory : Format {
         return true
     }
 
-    fun readTimeSeconds(source: InputStream, compression: Compression): Pair<Array<String>?, List<Double>>?
+    suspend fun readTimeSeconds(source: InputStream, compression: Compression): Pair<Array<String>?, List<Double>>?
 
-    fun contains(source: Path, record: GenericRecord,
+    suspend fun contains(source: Path, record: GenericRecord,
                  compression: Compression, usingFields: Set<String>,
                  ignoreFields: Set<String>): Boolean
 
@@ -138,8 +135,7 @@ interface RecordConverterFactory : Format {
     companion object {
         /**
          * @param reader file to read from
-         * @param lines lines in the file to increment to
-         * @return header
+         * @return optional header with full contents
          */
         @Throws(IOException::class)
         fun readFile(reader: BufferedReader, withHeader: Boolean): Pair<String?, Set<String>> {
@@ -147,8 +143,7 @@ interface RecordConverterFactory : Format {
                 reader.readLine() ?: return Pair(null, emptySet())
             } else null
 
-            return Pair(header, generateSequence { reader.readLine() }
-                    .toCollection(LinkedHashSet()))
+            return Pair(header, reader.lineSequence().toCollection(LinkedHashSet()))
         }
 
         @Throws(IOException::class)

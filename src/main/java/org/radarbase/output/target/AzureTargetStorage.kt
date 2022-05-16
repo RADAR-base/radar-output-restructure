@@ -19,6 +19,8 @@ package org.radarbase.output.target
 import com.azure.storage.blob.BlobClient
 import com.azure.storage.blob.BlobContainerClient
 import com.azure.storage.blob.models.ListBlobContainersOptions
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.radarbase.output.config.AzureConfig
 import org.radarbase.output.util.toKey
 import org.slf4j.LoggerFactory
@@ -29,9 +31,14 @@ import kotlin.io.path.deleteExisting
 
 class AzureTargetStorage(private val config: AzureConfig) : TargetStorage {
     private val container: String = config.container
-    private val containerClient: BlobContainerClient
+    private lateinit var containerClient: BlobContainerClient
 
     init {
+        logger.info("Azure Blob storage configured with endpoint {} in container {}",
+                config.endpoint, config.container)
+    }
+
+    override suspend fun initialize() {
         val serviceClient = try {
             config.createAzureClient()
         } catch (ex: IllegalArgumentException) {
@@ -39,51 +46,60 @@ class AzureTargetStorage(private val config: AzureConfig) : TargetStorage {
             throw ex
         }
 
-        logger.info("Azure Blob storage configured with endpoint {} in container {}",
-                config.endpoint, config.container)
-
         // Check if the bucket already exists.
         val listContainer = ListBlobContainersOptions().apply { prefix = container }
-        val isExist: Boolean = serviceClient.listBlobContainers(listContainer, null)
-                .any { it.name == container }
+
+        val isExist: Boolean = withContext(Dispatchers.IO) {
+            serviceClient.listBlobContainers(listContainer, null)
+        }.any { it.name == container }
+
         if (isExist) {
             logger.info("Container $container already exists.")
         } else {
-            serviceClient.createBlobContainer(container)
+            withContext(Dispatchers.IO) {
+                serviceClient.createBlobContainer(container)
+            }
             logger.info("Container $container was created.")
         }
 
         containerClient = serviceClient.getBlobContainerClient(container)
     }
 
-    override fun status(path: Path): TargetStorage.PathStatus? {
-        return try {
-            TargetStorage.PathStatus(blob(path)
+    override suspend fun status(path: Path): TargetStorage.PathStatus? =
+        withContext(Dispatchers.IO) {
+            try {
+                TargetStorage.PathStatus(blob(path)
                     .getPropertiesWithResponse(null, null, null)
                     .value
                     .blobSize)
-        } catch (ex: Exception) {
-            null
+            } catch (ex: Exception) {
+                null
+            }
         }
+
+    @Throws(IOException::class)
+    override suspend fun newInputStream(path: Path): InputStream = withContext(Dispatchers.IO) {
+        blob(path).openInputStream()
     }
 
     @Throws(IOException::class)
-    override fun newInputStream(path: Path): InputStream = blob(path).openInputStream()
-
-    @Throws(IOException::class)
-    override fun move(oldPath: Path, newPath: Path) {
+    override suspend fun move(oldPath: Path, newPath: Path) = withContext(Dispatchers.IO) {
         blob(newPath).copyFromUrl("${config.endpoint}/${config.container}/${oldPath.toKey()}")
-        delete(oldPath)
+        doDelete(oldPath)
     }
 
     @Throws(IOException::class)
-    override fun store(localPath: Path, newPath: Path) {
+    override suspend fun store(localPath: Path, newPath: Path) = withContext(Dispatchers.IO) {
         blob(newPath).uploadFromFile(localPath.toString(), true)
         localPath.deleteExisting()
     }
 
     @Throws(IOException::class)
-    override fun delete(path: Path) {
+    override suspend fun delete(path: Path) = withContext(Dispatchers.IO) {
+        doDelete(path)
+    }
+
+    private fun doDelete(path: Path) {
         blob(path).delete()
     }
 

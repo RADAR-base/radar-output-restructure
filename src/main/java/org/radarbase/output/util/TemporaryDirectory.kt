@@ -25,8 +25,7 @@ import kotlin.io.path.createTempDirectory
 import kotlin.io.path.exists
 
 /** Temporary directory that will be removed on close or shutdown.  */
-class TemporaryDirectory @Throws(IOException::class)
-constructor(root: Path, prefix: String) : Closeable {
+class TemporaryDirectory(root: Path, prefix: String) : Closeable {
 
     private val shutdownHook: Thread
     val path: Path

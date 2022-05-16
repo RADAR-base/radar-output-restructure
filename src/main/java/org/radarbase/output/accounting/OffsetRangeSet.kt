@@ -40,15 +40,15 @@ class OffsetRangeSet {
 
     @JvmOverloads
     constructor(
-            factory: (OffsetIntervals) -> FunctionalValue<OffsetIntervals> = { LockedFunctionalValue(it) }
+        factory: (OffsetIntervals) -> FunctionalValue<OffsetIntervals> = { LockedFunctionalValue(it) }
     ) {
         this.ranges = ConcurrentHashMap()
         this.factory = factory
     }
 
     private constructor(
-            ranges: ConcurrentMap<TopicPartition, FunctionalValue<OffsetIntervals>>,
-            factory: (OffsetIntervals) -> FunctionalValue<OffsetIntervals>
+        ranges: ConcurrentMap<TopicPartition, FunctionalValue<OffsetIntervals>>,
+        factory: (OffsetIntervals) -> FunctionalValue<OffsetIntervals>
     ) {
         this.ranges = ranges
         this.factory = factory
@@ -168,6 +168,7 @@ class OffsetRangeSet {
         @JsonIgnore
         val size: Long? = to?.let { it - from + 1 }
         fun ensureToOffset(): Range = if (to == null) copy(to = from) else this
+        fun incrementTo(): Range = if (to != null) copy(to = to + 1) else this
         override fun toString() = "($from - $to, $lastProcessed)"
     }
 

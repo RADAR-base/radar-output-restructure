@@ -5,12 +5,16 @@ import com.opencsv.CSVWriter
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.compression.Compression
 import org.radarbase.output.util.ResourceContext.Companion.resourceContext
+import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.util.TimeUtil.parseDate
 import org.radarbase.output.util.TimeUtil.parseDateTime
 import org.radarbase.output.util.TimeUtil.parseTime
 import org.radarbase.output.util.TimeUtil.toDouble
 import org.slf4j.LoggerFactory
-import java.io.*
+import java.io.IOException
+import java.io.InputStream
+import java.io.Reader
+import java.io.Writer
 import java.nio.file.Path
 import kotlin.io.path.inputStream
 import kotlin.io.path.outputStream
@@ -21,7 +25,7 @@ class CsvAvroConverterFactory: RecordConverterFactory {
     override val formats: Collection<String> = setOf("csv")
 
     @Throws(IOException::class)
-    override fun deduplicate(
+    override suspend fun deduplicate(
         fileName: String,
         source: Path,
         target: Path,
@@ -29,7 +33,7 @@ class CsvAvroConverterFactory: RecordConverterFactory {
         distinctFields: Set<String>,
         ignoreFields: Set<String>,
     ): Boolean {
-        val (header, lineIndexes) = source.inputStream().use { input ->
+        val (header, lineIndexes) = source.inputStream().useSuspended { input ->
             processLines(input, compression) { header, lines ->
                 if (header == null) return false
                 val fields = fieldIndexes(header, distinctFields, ignoreFields)
@@ -50,7 +54,7 @@ class CsvAvroConverterFactory: RecordConverterFactory {
             }
         }
 
-        source.inputStream().use { input ->
+        source.inputStream().useSuspended { input ->
             processLines(input, compression) { _, lines ->
                 var indexIndex = 0
                 writeLines(target, fileName, compression, sequenceOf(header) + lines.filterIndexed { i, _ ->
@@ -64,12 +68,17 @@ class CsvAvroConverterFactory: RecordConverterFactory {
         return true
     }
 
-    private fun writeLines(target: Path, fileName: String, compression: Compression, lines: Sequence<Array<String>>) {
+    private suspend fun writeLines(
+        target: Path,
+        fileName: String,
+        compression: Compression,
+        lines: Sequence<Array<String>>,
+    ) {
         resourceContext {
             val csvWriter = resourceChain { target.outputStream() }
                 .chain { it.buffered() }
                 .chain { compression.compress(fileName, it) }
-                .chain { OutputStreamWriter(it) }
+                .chain { it.writer() }
                 .conclude { CSVWriter(it) }
 
             lines.forEach {
@@ -79,16 +88,16 @@ class CsvAvroConverterFactory: RecordConverterFactory {
     }
 
     private val fieldTimeParsers = listOf(
-            fieldTimeParser("value.time") { it.parseTime() },
-            fieldTimeParser("key.timeStart") { it.parseTime() },
-            fieldTimeParser("key.start") { it.parseTime() },
-            fieldTimeParser("value.dateTime") { it.parseDateTime()?.toDouble() },
-            fieldTimeParser("value.date") { it.parseDate()?.toDouble() },
-            fieldTimeParser("value.timeReceived") { it.parseTime() },
-            fieldTimeParser("value.timeReceived") { it.parseTime() },
-            fieldTimeParser("value.timeCompleted") { it.parseTime() })
+        fieldTimeParser("value.time") { it.parseTime() },
+        fieldTimeParser("key.timeStart") { it.parseTime() },
+        fieldTimeParser("key.start") { it.parseTime() },
+        fieldTimeParser("value.dateTime") { it.parseDateTime()?.toDouble() },
+        fieldTimeParser("value.date") { it.parseDate()?.toDouble() },
+        fieldTimeParser("value.timeReceived") { it.parseTime() },
+        fieldTimeParser("value.timeCompleted") { it.parseTime() },
+    )
 
-    override fun readTimeSeconds(source: InputStream, compression: Compression): Pair<Array<String>, List<Double>>? {
+    override suspend fun readTimeSeconds(source: InputStream, compression: Compression): Pair<Array<String>, List<Double>>? {
         return processLines(source, compression) { header, lines ->
             header ?: return@processLines null
 
@@ -98,7 +107,7 @@ class CsvAvroConverterFactory: RecordConverterFactory {
                         ?.let { Pair(it, parser) }
             }
 
-            return Pair(header, if (parsers.isEmpty()) emptyList() else {
+            Pair(header, if (parsers.isEmpty()) emptyList() else {
                 lines.mapNotNull { line ->
                     for ((index, parser) in parsers) {
                         parser(line[index])?.let {
@@ -111,7 +120,7 @@ class CsvAvroConverterFactory: RecordConverterFactory {
         }
     }
 
-    override fun contains(
+    override suspend fun contains(
         source: Path,
         record: GenericRecord,
         compression: Compression,
@@ -147,14 +156,13 @@ class CsvAvroConverterFactory: RecordConverterFactory {
 
         private fun fieldTimeParser(name: String, method: (String) -> Double?) = Pair(name, method)
 
-        private inline fun <T> processLines(
+        private suspend inline fun <T> processLines(
             input: InputStream,
             compression: Compression,
             process: (header: Array<String>?, lines: Sequence<Array<String>>) -> T,
         ): T = resourceContext {
             val csvReader = resourceChain { compression.decompress(input) }
-                .chain { it.reader() }
-                .chain { it.buffered() }
+                .chain { it.bufferedReader() }
                 .conclude { CSVReader(it) }
 
             val header = csvReader.readNext()

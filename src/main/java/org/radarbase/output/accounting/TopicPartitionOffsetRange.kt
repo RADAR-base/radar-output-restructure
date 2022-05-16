@@ -21,8 +21,9 @@ import java.time.Instant
 
 /** Offset range for a topic partition.  */
 data class TopicPartitionOffsetRange(
-        val topicPartition: TopicPartition,
-        val range: OffsetRangeSet.Range) {
+    val topicPartition: TopicPartition,
+    val range: OffsetRangeSet.Range
+) {
 
     @JsonIgnore
     val topic: String = topicPartition.topic
@@ -42,7 +43,12 @@ data class TopicPartitionOffsetRange(
         }
     }
 
-    fun mapRange(modification: (OffsetRangeSet.Range) -> OffsetRangeSet.Range) = copy(range = modification(range))
+    fun mapRange(
+        modification: (OffsetRangeSet.Range) -> OffsetRangeSet.Range
+    ): TopicPartitionOffsetRange {
+        val newRange = modification(range)
+        return if (newRange != range) copy(range = newRange) else this
+    }
 
     companion object {
         private val filenameSplitRegex = "[+.]".toRegex()

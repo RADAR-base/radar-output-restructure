@@ -16,8 +16,12 @@
 
 package org.radarbase.output.accounting
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.radarbase.output.target.TargetStorage
 import org.radarbase.output.util.PostponedWriter
+import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.util.Timer.time
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -33,17 +37,19 @@ import kotlin.io.path.createTempFile
  * not present.
  */
 class OffsetFilePersistence(
-        private val targetStorage: TargetStorage
+    private val targetStorage: TargetStorage
 ): OffsetPersistenceFactory {
-    override fun read(path: Path): OffsetRangeSet? {
+    override suspend fun read(path: Path): OffsetRangeSet? {
         return try {
             if (targetStorage.status(path) != null) {
-                OffsetRangeSet().also { set ->
-                    targetStorage.newBufferedReader(path).useLines { lines ->
-                        lines
-                            .drop(1)  // ignore header
-                            .map(::parseLine)
-                            .forEach(set::add)
+                withContext(Dispatchers.IO) {
+                    OffsetRangeSet().also { set ->
+                        targetStorage.newBufferedReader(path).useLines { lines ->
+                            lines
+                                .drop(1)  // ignore header
+                                .map(::parseLine)
+                                .forEach(set::add)
+                        }
                     }
                 }
             } else null
@@ -54,9 +60,10 @@ class OffsetFilePersistence(
     }
 
     override fun writer(
-            path: Path,
-            startSet: OffsetRangeSet?
-    ): OffsetPersistenceFactory.Writer = FileWriter(path, startSet)
+        scope: CoroutineScope,
+        path: Path,
+        startSet: OffsetRangeSet?
+    ): OffsetPersistenceFactory.Writer = FileWriter(scope, path, startSet)
 
     private fun parseLine(line: String): TopicPartitionOffsetRange {
         val cols = COMMA_PATTERN.split(line)
@@ -85,17 +92,18 @@ class OffsetFilePersistence(
     }
 
     private inner class FileWriter(
-            private val path: Path,
-            startSet: OffsetRangeSet?
-    ): PostponedWriter("offsets", 1, TimeUnit.SECONDS),
+        scope: CoroutineScope,
+        private val path: Path,
+        startSet: OffsetRangeSet?
+    ): PostponedWriter(scope, "offsets", 1, TimeUnit.SECONDS),
             OffsetPersistenceFactory.Writer {
         override val offsets: OffsetRangeSet = startSet ?: OffsetRangeSet()
 
-        override fun doWrite() = time("accounting.offsets") {
+        override suspend fun doWrite() = time("accounting.offsets") {
             try {
                 val tmpPath = createTempFile("offsets", ".csv")
 
-                tmpPath.bufferedWriter().use { writer ->
+                tmpPath.bufferedWriter().useSuspended { writer ->
                     writer.append("offsetFrom,offsetTo,partition,topic\n")
                     offsets.forEach { topicPartition, offsetIntervals ->
                         offsetIntervals.forEach { offsetFrom, offsetTo, lastModified ->

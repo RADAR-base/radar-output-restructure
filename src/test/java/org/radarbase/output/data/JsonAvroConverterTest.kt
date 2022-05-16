@@ -18,6 +18,7 @@ package org.radarbase.output.data
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
+import kotlinx.coroutines.test.runTest
 import org.apache.avro.Schema.Parser
 import org.apache.avro.generic.GenericDatumReader
 import org.apache.avro.generic.GenericRecord
@@ -33,6 +34,7 @@ import java.io.StringReader
 import java.io.StringWriter
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.bufferedWriter
 
 class JsonAvroConverterTest {
     @Test
@@ -69,9 +71,9 @@ class JsonAvroConverterTest {
 
     @Test
     @Throws(IOException::class)
-    fun deduplicate(@TempDir folder: Path) {
+    fun deduplicate(@TempDir folder: Path) = runTest {
         val path = folder.resolve("test.txt")
-        Files.newBufferedWriter(path).use { writer -> writeTestNumbers(writer) }
+        path.bufferedWriter().use { writer -> writeTestNumbers(writer) }
         JsonAvroConverter.factory.deduplicate("t", path, path, IdentityCompression())
         assertEquals(listOf("a,b", "1,2", "3,4", "1,3", "a,a", "3,3"), Files.readAllLines(path))
     }

@@ -4,13 +4,14 @@ import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.source.SourceStorage
 import org.radarbase.output.source.TopicFile
-import org.radarbase.output.worker.RestructureWorker
+import org.radarbase.output.util.GenericRecordReader
+import org.radarbase.output.util.ResourceContext.Companion.resourceContext
 import org.slf4j.LoggerFactory
 import java.io.IOException
 
 class TimestampExtractionCheck(
-        sourceStorage: SourceStorage,
-        fileStoreFactory: FileStoreFactory
+    sourceStorage: SourceStorage,
+    fileStoreFactory: FileStoreFactory
 ) : ExtractionCheck {
     private val cacheStore = TimestampFileCacheStore(fileStoreFactory)
     private val reader = sourceStorage.createReader()
@@ -19,22 +20,27 @@ class TimestampExtractionCheck(
 
     private var cachedRecords = 0L
 
-    override fun isExtracted(file: TopicFile): Boolean {
-        val result = reader.newInput(file).use { input ->
+    override suspend fun isExtracted(file: TopicFile): Boolean {
+        val result = resourceContext {
+            val input = createResource { reader.newInput(file) }
             // processing zero-length files may trigger a stall. See:
             // https://github.com/RADAR-base/Restructure-HDFS-topic/issues/3
             if (input.length() == 0L) {
                 logger.warn("File {} has zero length, skipping.", file.path)
-                return false
+                return@resourceContext false
             }
-            RestructureWorker.extractRecords(input) { records ->
-                records
-                        .mapIndexed { i, record ->
-                            cachedRecords += 1L
-                            containsRecord(file, file.range.range.from + i.toLong(), record)
-                        }
-                        .all { it }
+
+            val recordReader = createResource { GenericRecordReader(input) }
+            var offset = file.range.range.from
+
+            while (recordReader.hasNext()) {
+                cachedRecords++
+                if (!containsRecord(file, offset, recordReader.next())) {
+                    return@resourceContext false
+                }
+                offset++
             }
+            true
         }
         if (cachedRecords > batchSize) {
             cachedRecords = 0L
@@ -43,11 +49,11 @@ class TimestampExtractionCheck(
         return result
     }
 
-    override fun close() {
-        reader.close()
+    override suspend fun closeAndJoin() {
+        reader.closeAndJoin()
     }
 
-    private fun containsRecord(topicFile: TopicFile, offset: Long, record: GenericRecord): Boolean {
+    private suspend fun containsRecord(topicFile: TopicFile, offset: Long, record: GenericRecord): Boolean {
         var suffix = 0
 
         do {

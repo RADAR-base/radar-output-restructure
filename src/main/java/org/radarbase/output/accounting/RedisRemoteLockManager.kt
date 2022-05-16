@@ -2,12 +2,12 @@ package org.radarbase.output.accounting
 
 import org.slf4j.LoggerFactory
 import redis.clients.jedis.params.SetParams
-import java.time.Duration
 import java.util.*
+import kotlin.time.Duration.Companion.days
 
 class RedisRemoteLockManager(
-        private val redisHolder: RedisHolder,
-        private val keyPrefix: String
+    private val redisHolder: RedisHolder,
+    private val keyPrefix: String
 ) : RemoteLockManager {
     private val uuid: String = UUID.randomUUID().toString()
 
@@ -15,7 +15,7 @@ class RedisRemoteLockManager(
         logger.info("Managing locks as ID {}", uuid)
     }
 
-    override fun acquireLock(name: String): RemoteLockManager.RemoteLock? {
+    override suspend fun acquireLock(name: String): RemoteLockManager.RemoteLock? {
         val lockKey = "$keyPrefix/$name.lock"
         return redisHolder.execute { redis ->
             redis.set(lockKey, uuid, setParams)?.let {
@@ -25,10 +25,10 @@ class RedisRemoteLockManager(
     }
 
     private inner class RemoteLock(
-            private val lockKey: String
+        private val lockKey: String
     ) : RemoteLockManager.RemoteLock {
-        override fun close() {
-            return redisHolder.execute { redis ->
+        override suspend fun closeAndJoin() {
+            redisHolder.execute { redis ->
                 if (redis.get(lockKey) == uuid) {
                     redis.del(lockKey)
                 }
@@ -40,6 +40,6 @@ class RedisRemoteLockManager(
         private val logger = LoggerFactory.getLogger(RedisRemoteLockManager::class.java)
         private val setParams = SetParams()
                 .nx() // only set if not already set
-                .px(Duration.ofDays(1).toMillis()) // limit the duration of a lock to 24 hours
+                .px(1.days.inWholeMilliseconds) // limit the duration of a lock to 24 hours
     }
 }
