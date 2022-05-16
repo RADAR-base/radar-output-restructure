@@ -1,6 +1,6 @@
 service:
   # Whether to run the application as a polling service.
-  enable: true
+  enable: false
   # Polling interval in seconds.
   interval: 30
 
@@ -118,7 +118,7 @@ cleaner:
   # Enable cleaning up old source files
   enable: true
   # Interval in seconds to clean data
-  interval: 50  # 21 minutes
+  interval: 1260  # 21 minutes
   # Number of days after which a source file is considered old
   age: 7
 
