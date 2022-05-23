@@ -1,11 +1,13 @@
 package org.radarbase.output.config
 
 import com.azure.core.credential.BasicAuthenticationCredential
+import com.azure.core.util.HttpClientOptions
 import com.azure.storage.blob.BlobServiceClient
 import com.azure.storage.blob.BlobServiceClientBuilder
 import com.azure.storage.common.StorageSharedKeyCredential
 import org.radarbase.output.config.RestructureConfig.Companion.copyEnv
 import org.slf4j.LoggerFactory
+import java.time.Duration
 
 data class AzureConfig(
     /** URL to reach object store at. */
@@ -24,7 +26,15 @@ data class AzureConfig(
     val accountKey: String?,
     /** Azure SAS token for a configured service. */
     val sasToken: String?,
-) {
+    /** HTTP connect timeout. */
+    val connectTimeout: Long? = null,
+    /** HTTP response timeout. */
+    val responseTimeout: Long? = null,
+    /** HTTP write timeout. */
+    val writeTimeout: Long? = null,
+    /** HTTP read timeout. */
+    val readTimeout: Long? = null,
+    ) {
     fun createAzureClient(): BlobServiceClient = BlobServiceClientBuilder().apply {
         endpoint(endpoint)
         when {
@@ -35,6 +45,12 @@ data class AzureConfig(
             !sasToken.isNullOrEmpty() -> sasToken(sasToken)
             else -> logger.warn("No Azure credentials supplied. Assuming a public blob storage.")
         }
+        clientOptions(HttpClientOptions().apply {
+            connectTimeout = this@AzureConfig.connectTimeout.toDurationOrNull()
+            responseTimeout = this@AzureConfig.responseTimeout.toDurationOrNull()
+            writeTimeout = this@AzureConfig.writeTimeout.toDurationOrNull()
+            readTimeout = this@AzureConfig.readTimeout.toDurationOrNull()
+        })
     }.buildClient()
 
     fun withEnv(prefix: String): AzureConfig = this
@@ -46,5 +62,8 @@ data class AzureConfig(
 
     companion object {
         private val logger = LoggerFactory.getLogger(AzureConfig::class.java)
+        private fun Long?.toDurationOrNull(): Duration? = this
+            ?.takeIf { it > 0 }
+            ?.let { Duration.ofSeconds(it) }
     }
 }
