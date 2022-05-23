@@ -43,9 +43,11 @@ class CsvAvroConverter(
             csvWriter.writeNext(recordHeader, false)
             CsvAvroDataConverter(recordHeader)
         } else {
-            CsvAvroDataConverter(CSVReader(reader).use {
-                requireNotNull(it.readNext()) { "No header found" }
-            })
+            CsvAvroDataConverter(
+                CSVReader(reader).use {
+                    requireNotNull(it.readNext()) { "No header found" }
+                }
+            )
         }
     }
 

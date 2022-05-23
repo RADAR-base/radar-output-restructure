@@ -31,8 +31,11 @@ import kotlin.io.path.*
 
 class LocalTargetStorage(private val config: LocalConfig) : TargetStorage {
     init {
-        logger.info("Local storage configured with user id {}:{} (-1 if not configured)",
-            config.userId, config.groupId)
+        logger.info(
+            "Local storage configured with user id {}:{} (-1 if not configured)",
+            config.userId,
+            config.groupId,
+        )
     }
 
     override suspend fun initialize() = Unit
@@ -73,8 +76,11 @@ class LocalTargetStorage(private val config: LocalConfig) : TargetStorage {
     }
 
     override fun createDirectories(directory: Path) {
-        directory.createDirectories(PosixFilePermissions.asFileAttribute(
-            PosixFilePermissions.fromString("rwxr-xr-x")))
+        directory.createDirectories(
+            PosixFilePermissions.asFileAttribute(
+                PosixFilePermissions.fromString("rwxr-xr-x"),
+            ),
+        )
         directory.updateUser()
     }
 

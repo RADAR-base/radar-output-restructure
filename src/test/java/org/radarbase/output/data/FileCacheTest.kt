@@ -78,7 +78,8 @@ class FileCacheTest {
                 output = path.parent,
                 temp = tmpPath
             ),
-            source = ResourceConfig("hdfs", hdfs = HdfsConfig(listOf("test"))))
+            source = ResourceConfig("hdfs", hdfs = HdfsConfig(listOf("test"))),
+        )
 
         setUp(config)
 
@@ -98,8 +99,10 @@ class FileCacheTest {
 
         FileCache(factory, "topic", path, tmpDir, accountant).useSuspended { cache ->
             cache.initialize(exampleRecord)
-            cache.writeRecord(exampleRecord,
-                Accountant.Transaction(topicPartition, 0L, lastModified))
+            cache.writeRecord(
+                record = exampleRecord,
+                transaction = Accountant.Transaction(topicPartition, 0L, lastModified),
+            )
         }
 
         println("Gzip: " + path.fileSize())
@@ -122,14 +125,18 @@ class FileCacheTest {
 
         FileCache(factory, "topic", path, tmpDir, accountant).useSuspended { cache ->
             cache.initialize(exampleRecord)
-            cache.writeRecord(exampleRecord,
-                Accountant.Transaction(topicPartition, 0, lastModified))
+            cache.writeRecord(
+                record = exampleRecord,
+                transaction = Accountant.Transaction(topicPartition, 0, lastModified),
+            )
         }
 
         FileCache(factory, "topic", path, tmpDir, accountant).useSuspended { cache ->
             cache.initialize(exampleRecord)
-            cache.writeRecord(exampleRecord,
-                Accountant.Transaction(topicPartition, 0, lastModified))
+            cache.writeRecord(
+                record = exampleRecord,
+                transaction = Accountant.Transaction(topicPartition, 0, lastModified),
+            )
         }
 
         println("Gzip appended: " + path.fileSize())
@@ -148,8 +155,10 @@ class FileCacheTest {
     fun testPlain() = runTest {
         FileCache(factory, "topic", path, tmpDir, accountant).useSuspended { cache ->
             cache.initialize(exampleRecord)
-            cache.writeRecord(exampleRecord,
-                Accountant.Transaction(topicPartition, 0, lastModified))
+            cache.writeRecord(
+                record = exampleRecord,
+                transaction = Accountant.Transaction(topicPartition, 0, lastModified),
+            )
         }
 
         println("Plain: " + path.fileSize())
@@ -163,14 +172,18 @@ class FileCacheTest {
     fun testPlainAppend() = runTest {
         FileCache(factory, "topic", path, tmpDir, accountant).useSuspended { cache ->
             cache.initialize(exampleRecord)
-            cache.writeRecord(exampleRecord,
-                Accountant.Transaction(topicPartition, 0, lastModified))
+            cache.writeRecord(
+                record = exampleRecord,
+                transaction = Accountant.Transaction(topicPartition, 0, lastModified),
+            )
         }
 
         FileCache(factory, "topic", path, tmpDir, accountant).useSuspended { cache ->
             cache.initialize(exampleRecord)
-            cache.writeRecord(exampleRecord,
-                Accountant.Transaction(topicPartition, 1, lastModified))
+            cache.writeRecord(
+                record = exampleRecord,
+                transaction = Accountant.Transaction(topicPartition, 1, lastModified),
+            )
         }
 
         println("Plain appended: " + path.fileSize())

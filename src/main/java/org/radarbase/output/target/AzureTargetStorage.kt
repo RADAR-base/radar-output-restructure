@@ -34,8 +34,11 @@ class AzureTargetStorage(private val config: AzureConfig) : TargetStorage {
     private lateinit var containerClient: BlobContainerClient
 
     init {
-        logger.info("Azure Blob storage configured with endpoint {} in container {}",
-            config.endpoint, config.container)
+        logger.info(
+            "Azure Blob storage configured with endpoint {} in container {}",
+            config.endpoint,
+            config.container,
+        )
     }
 
     override suspend fun initialize() {
@@ -68,10 +71,12 @@ class AzureTargetStorage(private val config: AzureConfig) : TargetStorage {
     override suspend fun status(path: Path): TargetStorage.PathStatus? =
         withContext(Dispatchers.IO) {
             try {
-                TargetStorage.PathStatus(blob(path)
-                    .getPropertiesWithResponse(null, null, null)
-                    .value
-                    .blobSize)
+                TargetStorage.PathStatus(
+                    blob(path)
+                        .getPropertiesWithResponse(null, null, null)
+                        .value
+                        .blobSize,
+                )
             } catch (ex: Exception) {
                 null
             }

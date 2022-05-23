@@ -39,18 +39,22 @@ data class AzureConfig(
         endpoint(endpoint)
         when {
             !username.isNullOrEmpty() && !password.isNullOrEmpty() -> credential(
-                BasicAuthenticationCredential(username, password))
+                BasicAuthenticationCredential(username, password),
+            )
             !accountName.isNullOrEmpty() && !accountKey.isNullOrEmpty() -> credential(
-                StorageSharedKeyCredential(accountName, accountKey))
+                StorageSharedKeyCredential(accountName, accountKey),
+            )
             !sasToken.isNullOrEmpty() -> sasToken(sasToken)
             else -> logger.warn("No Azure credentials supplied. Assuming a public blob storage.")
         }
-        clientOptions(HttpClientOptions().apply {
-            connectTimeout = this@AzureConfig.connectTimeout.toDurationOrNull()
-            responseTimeout = this@AzureConfig.responseTimeout.toDurationOrNull()
-            writeTimeout = this@AzureConfig.writeTimeout.toDurationOrNull()
-            readTimeout = this@AzureConfig.readTimeout.toDurationOrNull()
-        })
+        clientOptions(
+            HttpClientOptions().apply {
+                connectTimeout = this@AzureConfig.connectTimeout.toDurationOrNull()
+                responseTimeout = this@AzureConfig.responseTimeout.toDurationOrNull()
+                writeTimeout = this@AzureConfig.writeTimeout.toDurationOrNull()
+                readTimeout = this@AzureConfig.readTimeout.toDurationOrNull()
+            },
+        )
     }.buildClient()
 
     fun withEnv(prefix: String): AzureConfig = this

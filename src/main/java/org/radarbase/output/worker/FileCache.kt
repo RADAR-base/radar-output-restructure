@@ -129,7 +129,6 @@ class FileCache(
         return result
     }
 
-
     fun markError() {
         this.hasError.set(true)
     }
@@ -155,9 +154,11 @@ class FileCache(
                     ) {
                         withContext(Dispatchers.IO) {
                             try {
-                                dedupTmp.moveTo(tmpPath,
+                                dedupTmp.moveTo(
+                                    tmpPath,
                                     StandardCopyOption.REPLACE_EXISTING,
-                                    StandardCopyOption.ATOMIC_MOVE)
+                                    StandardCopyOption.ATOMIC_MOVE,
+                                )
                             } catch (ex: AtomicMoveNotSupportedException) {
                                 dedupTmp.moveTo(tmpPath, StandardCopyOption.REPLACE_EXISTING)
                             }
@@ -203,15 +204,19 @@ class FileCache(
                 i++
             }
             if (corruptPath != null) {
-                logger.error("Original file {} could not be read: {}." + " Moved to {}.",
+                logger.error(
+                    "Original file {} could not be read: {}." + " Moved to {}.",
                     source,
                     ex,
-                    corruptPath)
+                    corruptPath,
+                )
                 targetStorage.move(source, corruptPath)
             } else {
-                logger.error("Original file {} could not be read: {}." + " Too many corrupt backups stored, removing file.",
+                logger.error(
+                    "Original file {} could not be read: {}." + " Too many corrupt backups stored, removing file.",
                     source,
-                    ex)
+                    ex,
+                )
             }
             false
         }

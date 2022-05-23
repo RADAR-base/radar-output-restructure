@@ -11,7 +11,6 @@ fun Path.toKey() = if (startsWith(rootPath)) {
     rootPath.relativize(this).toString()
 } else toString()
 
-
 inline fun <S : BucketArgs, reified T : BucketArgs.Builder<out T, out S>> T.bucketBuild(
     bucket: String,
     configure: T.() -> T = { this },

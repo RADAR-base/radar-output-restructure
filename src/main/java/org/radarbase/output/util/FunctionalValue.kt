@@ -29,7 +29,7 @@ abstract class FunctionalValue<T> protected constructor(protected val value: T) 
      * @param function read-only function to apply.
      * @param <V> type of output.
      * @return value computed by given function.
-    </V> */
+     */
     abstract fun <V> read(function: (T) -> V): V
 
     /**
@@ -53,5 +53,4 @@ abstract class FunctionalValue<T> protected constructor(protected val value: T) 
     override fun hashCode(): Int {
         return read { it.hashCode() }
     }
-
 }

@@ -53,16 +53,16 @@ class TimestampFileCache(
     fun contains(record: GenericRecord): Boolean {
         if (header != null) {
             val recordHeader = converterFactory.headerFor(record)
-            if (!recordHeader.contentEquals(header)) {
-                throw IllegalArgumentException(
-                    "Header mismatch: record header ${recordHeader.contentToString()}" +
-                        " does not match target header ${header.contentToString()}")
+            require(recordHeader.contentEquals(header)) {
+                "Header mismatch: record header ${recordHeader.contentToString()}" +
+                    " does not match target header ${header.contentToString()}"
             }
         }
 
         val recordDate = getDate(
             record.get("key") as? GenericRecord,
-            record.get("value") as? GenericRecord)?.toDouble()
+            record.get("value") as? GenericRecord,
+        )?.toDouble()
 
         return recordDate == null || recordDate in times
     }

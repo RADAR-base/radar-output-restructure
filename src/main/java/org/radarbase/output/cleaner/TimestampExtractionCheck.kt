@@ -62,30 +62,39 @@ class TimestampExtractionCheck(
 
         do {
             val (path) = pathFactory.getRecordOrganization(
-                topicFile.topic, record, suffix)
+                topicFile.topic,
+                record,
+                suffix
+            )
 
             try {
                 when (cacheStore.contains(path, record)) {
                     TimestampFileCacheStore.FindResult.FILE_NOT_FOUND -> {
-                        logger.warn("Target {} for record of {} (offset {}) has not been created yet.",
+                        logger.warn(
+                            "Target {} for record of {} (offset {}) has not been created yet.",
                             path,
                             topicFile.path,
-                            offset)
+                            offset,
+                        )
                         return false
                     }
                     TimestampFileCacheStore.FindResult.NOT_FOUND -> {
-                        logger.warn("Target {} does not contain record of {} (offset {})",
+                        logger.warn(
+                            "Target {} does not contain record of {} (offset {})",
                             path,
                             topicFile.path,
-                            offset)
+                            offset,
+                        )
                         return false
                     }
                     TimestampFileCacheStore.FindResult.FOUND -> return true
                     TimestampFileCacheStore.FindResult.BAD_SCHEMA -> {
-                        logger.debug("Schema of {} does not match schema of {} (offset {})",
+                        logger.debug(
+                            "Schema of {} does not match schema of {} (offset {})",
                             path,
                             topicFile.path,
-                            offset)
+                            offset,
+                        )
                         suffix += 1 // continue next suffix
                     }
                 }

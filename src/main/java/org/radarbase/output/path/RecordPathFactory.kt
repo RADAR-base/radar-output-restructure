@@ -42,10 +42,12 @@ abstract class RecordPathFactory : Plugin {
                     .ofPattern(it)
                     .withZone(UTC)
             } catch (ex: IllegalArgumentException) {
-                logger.error("Cannot use time bin format {}, using {} instead",
+                logger.error(
+                    "Cannot use time bin format {}, using {} instead",
                     it,
                     timeBinFormat,
-                    ex)
+                    ex,
+                )
             }
         }
     }
@@ -144,7 +146,8 @@ abstract class RecordPathFactory : Plugin {
             ?.takeIf { it.isNotEmpty() }
             ?: defaultValue
 
-        private val observationKeySchema = Schema.Parser().parse("""
+        private val observationKeySchema = Schema.Parser().parse(
+            """
             {
               "namespace": "org.radarcns.kafka",
               "type": "record",
@@ -156,7 +159,8 @@ abstract class RecordPathFactory : Plugin {
                 {"name": "sourceId", "type": "string", "doc": "Unique identifier associated with the source."}
               ]
             }
-        """.trimIndent())
+            """.trimIndent()
+        )
 
         fun GenericRecord.getFieldOrNull(fieldName: String): Schema.Field? {
             return schema.fields

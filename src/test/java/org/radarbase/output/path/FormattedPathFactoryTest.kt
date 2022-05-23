@@ -94,9 +94,9 @@ internal class FormattedPathFactoryTest {
     }
 
     private fun createFactory(format: String): FormattedPathFactory = FormattedPathFactory().apply {
-        init(mapOf(
-            "format" to format,
-        ))
+        init(
+            mapOf("format" to format),
+        )
         extension = ".csv.gz"
     }
 }

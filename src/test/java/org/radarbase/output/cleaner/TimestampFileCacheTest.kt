@@ -16,6 +16,7 @@ import org.mockito.kotlin.mock
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.compression.IdentityCompression
 import org.radarbase.output.config.LocalConfig
+import org.radarbase.output.data.JsonAvroConverterTest.Companion.resourceStream
 import org.radarbase.output.format.CsvAvroConverterFactory
 import org.radarbase.output.target.LocalTargetStorage
 import org.radarbase.output.util.ResourceContext.Companion.resourceContext
@@ -39,19 +40,25 @@ internal class TimestampFileCacheTest {
             on { targetStorage } doReturn LocalTargetStorage(LocalConfig())
             on { compression } doReturn IdentityCompression()
         }
-        schema = Schema.Parser().parse(javaClass.getResourceAsStream("android_phone_light.avsc"))
+        schema = Schema.Parser().parse(javaClass.resourceStream("android_phone_light.avsc"))
         now = System.currentTimeMillis() / 1000.0
         record = GenericRecordBuilder(schema)
-            .set("key", GenericRecordBuilder(schema.getField("key")!!.schema())
-                .set("projectId", "p")
-                .set("userId", "u")
-                .set("sourceId", "s")
-                .build())
-            .set("value", GenericRecordBuilder(schema.getField("value")!!.schema())
-                .set("time", now)
-                .set("timeReceived", now + 1.0)
-                .set("light", 1.0f)
-                .build())
+            .set(
+                "key",
+                GenericRecordBuilder(schema.getField("key")!!.schema())
+                    .set("projectId", "p")
+                    .set("userId", "u")
+                    .set("sourceId", "s")
+                    .build(),
+            )
+            .set(
+                "value",
+                GenericRecordBuilder(schema.getField("value")!!.schema())
+                    .set("time", now)
+                    .set("timeReceived", now + 1.0)
+                    .set("light", 1.0f)
+                    .build(),
+            )
             .build()
     }
 
@@ -101,10 +108,13 @@ internal class TimestampFileCacheTest {
         val targetPath = path.resolve("test.avro")
 
         val otherRecord = GenericRecordBuilder(record)
-            .set("value", GenericRecordBuilder(record.get("value") as GenericData.Record)
-                .set("time", now + 1.0)
-                .set("timeReceived", now + 2.0)
-                .build())
+            .set(
+                "value",
+                GenericRecordBuilder(record.get("value") as GenericData.Record)
+                    .set("time", now + 1.0)
+                    .set("timeReceived", now + 2.0)
+                    .build(),
+            )
             .build()
 
         writeRecord(targetPath, otherRecord)

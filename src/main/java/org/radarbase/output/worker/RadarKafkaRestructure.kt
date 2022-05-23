@@ -132,15 +132,17 @@ class RadarKafkaRestructure(
         accountant: Accountant,
         seenFiles: OffsetRangeSet,
     ): ProcessingStatistics {
-        return RestructureWorker(sourceStorage,
+        return RestructureWorker(
+            sourceStorage,
             accountant,
-            fileStoreFactory).useSuspended { worker ->
+            fileStoreFactory
+        ).useSuspended { worker ->
             try {
                 val topicPaths = TopicFileList(
                     topic,
                     sourceStorage.listTopicFiles(topic, topicPath, maxFilesPerTopic) { f ->
-                        !seenFiles.contains(f.range)
-                            && f.lastModified.durationSince() >= minimumFileAge
+                        !seenFiles.contains(f.range) &&
+                            f.lastModified.durationSince() >= minimumFileAge
                     },
                 )
 

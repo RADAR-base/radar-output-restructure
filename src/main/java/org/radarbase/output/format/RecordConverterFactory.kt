@@ -92,8 +92,10 @@ interface RecordConverterFactory : Format {
     ): Pair<Array<String>?, List<Double>>?
 
     suspend fun contains(
-        source: Path, record: GenericRecord,
-        compression: Compression, usingFields: Set<String>,
+        source: Path,
+        record: GenericRecord,
+        compression: Compression,
+        usingFields: Set<String>,
         ignoreFields: Set<String>,
     ): Boolean
 
@@ -122,10 +124,12 @@ interface RecordConverterFactory : Format {
                 val subSchema = record.schema
                 for (field in subSchema.fields) {
                     val subData = record.get(field.pos())
-                    createHeader(headers,
+                    createHeader(
+                        headers,
                         subData,
                         field.schema(),
-                        prefix + '.'.toString() + field.name())
+                        prefix + '.'.toString() + field.name(),
+                    )
                 }
             }
             Schema.Type.MAP -> {
@@ -145,8 +149,10 @@ interface RecordConverterFactory : Format {
                 val type = GenericData().resolveUnion(schema, data)
                 createHeader(headers, data, schema.types[type], prefix)
             }
-            Schema.Type.BYTES, Schema.Type.FIXED, Schema.Type.ENUM, Schema.Type.STRING, Schema.Type.INT, Schema.Type.LONG, Schema.Type.DOUBLE, Schema.Type.FLOAT, Schema.Type.BOOLEAN, Schema.Type.NULL -> headers.add(
-                prefix)
+            Schema.Type.BYTES, Schema.Type.FIXED, Schema.Type.ENUM, Schema.Type.STRING,
+            Schema.Type.INT, Schema.Type.LONG, Schema.Type.DOUBLE, Schema.Type.FLOAT,
+            Schema.Type.BOOLEAN, Schema.Type.NULL ->
+                headers.add(prefix)
             else -> throw IllegalArgumentException("Cannot parse field type " + schema.type)
         }
     }

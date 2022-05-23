@@ -107,8 +107,10 @@ class OffsetRangeSet {
             { it.key },
             { (_, intervals) ->
                 intervals.read { factory(OffsetIntervals(it)) }
-            }),
-        factory)
+            },
+        ),
+        factory,
+    )
 
     override fun toString(): String = "OffsetRangeSet$ranges"
 
@@ -156,13 +158,15 @@ class OffsetRangeSet {
     fun copyForTopic(topic: String) = OffsetRangeSet(
         ranges.entries
             .filter { it.key.topic == topic }
-            .associateByTo(ConcurrentHashMap(),
+            .associateByTo(
+                ConcurrentHashMap(),
                 { it.key },
                 { (_, intervals) ->
                     intervals.read { factory(OffsetIntervals(it)) }
-                }),
-        factory)
-
+                },
+            ),
+        factory,
+    )
 
     data class Range(val from: Long, val to: Long?, val lastProcessed: Instant = Instant.now()) {
         @JsonIgnore

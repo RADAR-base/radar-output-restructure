@@ -31,12 +31,13 @@ class AzureSourceStorage(
                 iterable = iterable.take(maxKeys)
             }
             iterable.map {
-                SimpleFileStatus(Paths.get(it.name),
+                SimpleFileStatus(
+                    Paths.get(it.name),
                     it.isPrefix ?: false,
-                    it.properties?.lastModified?.toInstant())
+                    it.properties?.lastModified?.toInstant(),
+                )
             }
         }
-
 
     override suspend fun createTopicFile(topic: String, status: SimpleFileStatus): TopicFile {
         var topicFile = super.createTopicFile(topic, status)
@@ -51,7 +52,8 @@ class AzureSourceStorage(
                     topicFile = topicFile.copy(
                         range = topicFile.range.mapRange {
                             it.copy(to = endOffset)
-                        })
+                        },
+                    )
                 }
             } catch (ex: Exception) {
                 // skip reading end offset

@@ -31,11 +31,13 @@ data class S3Config(
         } else {
             credentials(accessToken, secretKey)
         }
-        httpClient(HttpUtils.newDefaultHttpClient(
-            connectTimeout.toMillisOrDefault(),
-            writeTimeout.toMillisOrDefault(),
-            readTimeout.toMillisOrDefault(),
-        ))
+        httpClient(
+            HttpUtils.newDefaultHttpClient(
+                connectTimeout.toMillisOrDefault(),
+                writeTimeout.toMillisOrDefault(),
+                readTimeout.toMillisOrDefault(),
+            )
+        )
     }.build()
 
     fun withEnv(prefix: String): S3Config = this

@@ -79,8 +79,10 @@ class SourceDataCleaner(
                         val accountant = createResource { AccountantImpl(fileStoreFactory, topic) }
                             .apply { initialize(this@coroutineScope) }
                         val extractionCheck = createResource {
-                            TimestampExtractionCheck(sourceStorage,
-                                fileStoreFactory)
+                            TimestampExtractionCheck(
+                                sourceStorage,
+                                fileStoreFactory,
+                            )
                         }
                         deleteOldFiles(accountant, extractionCheck, topic, topicPath).toLong()
                     }

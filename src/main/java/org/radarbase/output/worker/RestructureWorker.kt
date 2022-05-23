@@ -47,11 +47,18 @@ internal class RestructureWorker(
         val numberFormat = NumberFormat.getNumberInstance()
 
         if (numOffsets == null) {
-            logger.info("Processing topic {}: converting {} files",
-                topic, numberFormat.format(numFiles))
+            logger.info(
+                "Processing topic {}: converting {} files",
+                topic,
+                numberFormat.format(numFiles)
+            )
         } else {
-            logger.info("Processing topic {}: converting {} files with {} records",
-                topic, numberFormat.format(numFiles), numberFormat.format(numOffsets))
+            logger.info(
+                "Processing topic {}: converting {} files with {} records",
+                topic,
+                numberFormat.format(numFiles),
+                numberFormat.format(numOffsets)
+            )
         }
 
         val seenOffsets = accountant.offsets
@@ -70,8 +77,12 @@ internal class RestructureWorker(
                         .also { size ->
                             val expectedSize = file.range.range.size
                             if (expectedSize != null && size != expectedSize) {
-                                logger.warn("File {} contains {} records instead of expected {}",
-                                    file.path, size, expectedSize)
+                                logger.warn(
+                                    "File {} contains {} records instead of expected {}",
+                                    file.path,
+                                    size,
+                                    expectedSize,
+                                )
                             }
                         }
                 } catch (exc: JsonMappingException) {
@@ -105,7 +116,8 @@ internal class RestructureWorker(
     @Throws(IOException::class)
     private suspend fun processFile(
         file: TopicFile,
-        progressBar: ProgressBar, seenOffsets: OffsetRangeSet,
+        progressBar: ProgressBar,
+        seenOffsets: OffsetRangeSet,
     ): Long {
         logger.debug("Reading {}", file.path)
 
@@ -125,9 +137,11 @@ internal class RestructureWorker(
                     var currentOffset = offset
                     while (reader.hasNext()) {
                         val alreadyContains = time("accounting.check") {
-                            seenOffsets.contains(file.range.topicPartition,
+                            seenOffsets.contains(
+                                file.range.topicPartition,
                                 transaction.offset,
-                                transaction.lastModified)
+                                transaction.lastModified,
+                            )
                         }
                         if (!alreadyContains) {
                             // Get the fields
@@ -154,7 +168,10 @@ internal class RestructureWorker(
         var currentSuffix = 0
         do {
             val (path) = pathFactory.getRecordOrganization(
-                transaction.topicPartition.topic, record, currentSuffix)
+                transaction.topicPartition.topic,
+                record,
+                attempt = currentSuffix
+            )
 
             // Write data
             val response = time("write") {

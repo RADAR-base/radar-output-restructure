@@ -57,4 +57,3 @@ class JsonAvroConverter(
         val factory: RecordConverterFactory = JsonAvroConverterFactory()
     }
 }
-

@@ -69,7 +69,9 @@ class Application(
 
     override val redisHolder: RedisHolder = RedisHolder(JedisPool(config.redis.uri))
     override val remoteLockManager: RemoteLockManager = RedisRemoteLockManager(
-        redisHolder, config.redis.lockPrefix)
+        redisHolder,
+        config.redis.lockPrefix,
+    )
 
     override val offsetPersistenceFactory: OffsetPersistenceFactory =
         OffsetRedisPersistence(redisHolder)
@@ -90,10 +92,14 @@ class Application(
     override fun newFileCacheStore(accountant: Accountant) = FileCacheStore(this, accountant)
 
     fun start() {
-        System.setProperty("kotlinx.coroutines.scheduler.max.pool.size",
-            config.worker.numThreads.toString())
-        System.setProperty("kotlinx.coroutines.scheduler.core.pool.size",
-            config.worker.numThreads.toString())
+        System.setProperty(
+            "kotlinx.coroutines.scheduler.max.pool.size",
+            config.worker.numThreads.toString(),
+        )
+        System.setProperty(
+            "kotlinx.coroutines.scheduler.core.pool.size",
+            config.worker.numThreads.toString(),
+        )
 
         try {
             config.paths.temp.createDirectories()
@@ -118,8 +124,10 @@ class Application(
     }
 
     private fun runService() {
-        logger.info("Running as a Service with poll interval of {} seconds",
-            config.service.interval)
+        logger.info(
+            "Running as a Service with poll interval of {} seconds",
+            config.service.interval,
+        )
         logger.info("Press Ctrl+C to exit...")
 
         runBlocking {
@@ -163,20 +171,24 @@ class Application(
         fun main(args: Array<String>) {
             val commandLineArgs = parseArgs(args)
 
-            logger.info("Starting at {}...",
-                DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(LocalDateTime.now()))
+            logger.info(
+                "Starting at {}...",
+                DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(LocalDateTime.now()),
+            )
 
             // Enable singleton timer statements in the code.
             Timer.isEnabled = commandLineArgs.enableTimer
 
             val application = try {
-                Application(RestructureConfig
-                    .load(commandLineArgs.configFile)
-                    .withEnv()
-                    .apply {
-                        addArgs(commandLineArgs)
-                        validate()
-                    })
+                Application(
+                    RestructureConfig
+                        .load(commandLineArgs.configFile)
+                        .withEnv()
+                        .apply {
+                            addArgs(commandLineArgs)
+                            validate()
+                        }
+                )
             } catch (ex: IllegalArgumentException) {
                 logger.error("Illegal argument", ex)
                 exitProcess(1)

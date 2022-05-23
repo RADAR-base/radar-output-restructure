@@ -48,8 +48,10 @@ class OffsetRedisPersistence(
                 }
             }
         } catch (ex: IOException) {
-            logger.error("Error reading offsets from Redis: {}. Processing all offsets.",
-                ex.toString())
+            logger.error(
+                "Error reading offsets from Redis: {}. Processing all offsets.",
+                ex.toString(),
+            )
             null
         }
     }
@@ -70,12 +72,15 @@ class OffsetRedisPersistence(
 
         override suspend fun doWrite(): Unit = time("accounting.offsets") {
             try {
-                val offsets = RedisOffsetRangeSet(offsets.map { topicPartition, offsetIntervals ->
-                    RedisOffsetIntervals(
-                        topicPartition.topic,
-                        topicPartition.partition,
-                        offsetIntervals.toList())
-                })
+                val offsets = RedisOffsetRangeSet(
+                    offsets.map { topicPartition, offsetIntervals ->
+                        RedisOffsetIntervals(
+                            topicPartition.topic,
+                            topicPartition.partition,
+                            offsetIntervals.toList(),
+                        )
+                    }
+                )
 
                 redisHolder.execute { redis ->
                     redis.set(path.toString(), redisOffsetWriter.writeValueAsString(offsets))

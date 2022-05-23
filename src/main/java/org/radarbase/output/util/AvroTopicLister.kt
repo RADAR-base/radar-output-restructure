@@ -14,8 +14,8 @@ class AvroTopicLister(
         val fileStatuses = storage.list(context, maxKeys = 256)
 
         val avroFile = fileStatuses.find { file ->
-            !file.isDirectory
-                && file.path.fileName.toString().endsWith(".avro", true)
+            !file.isDirectory &&
+                file.path.fileName.toString().endsWith(".avro", true)
         }
 
         if (avroFile != null) {

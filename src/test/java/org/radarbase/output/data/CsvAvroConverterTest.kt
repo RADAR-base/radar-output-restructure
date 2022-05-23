@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.radarbase.output.compression.GzipCompression
 import org.radarbase.output.compression.IdentityCompression
+import org.radarbase.output.data.JsonAvroConverterTest.Companion.resourceStream
 import org.radarbase.output.format.CsvAvroConverter
 import org.radarbase.output.util.ResourceContext.Companion.resourceContext
 import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
@@ -52,10 +53,10 @@ class CsvAvroConverterTest {
     @Throws(IOException::class)
     fun writeRecord() {
         val parser = Parser()
-        val schema = parser.parse(javaClass.getResourceAsStream("full.avsc"))
+        val schema = parser.parse(javaClass.resourceStream("full.avsc"))
         val reader = GenericDatumReader<GenericRecord>(schema)
         val decoder =
-            DecoderFactory.get().jsonDecoder(schema, javaClass.getResourceAsStream("full.json"))
+            DecoderFactory.get().jsonDecoder(schema, javaClass.resourceStream("full.json"))
         val record = reader.read(null, decoder)
 
         val writer = StringWriter()
@@ -63,10 +64,24 @@ class CsvAvroConverterTest {
         val converter = factory.converterFor(writer, record, true, StringReader("test"))
 
         val map = converter.convertRecord(record)
-        val keys = listOf("a", "b", "c", "d", "e", "f", "g", "h", "i.some",
-            "i.other", "j.0", "j.1", "k", "l.la", "m")
-        val expectedKeys = LinkedHashSet(keys)
-        assertEquals(expectedKeys, map.keys)
+        val keys = listOf(
+            "a",
+            "b",
+            "c",
+            "d",
+            "e",
+            "f",
+            "g",
+            "h",
+            "i.some",
+            "i.other",
+            "j.0",
+            "j.1",
+            "k",
+            "l.la",
+            "m",
+        )
+        assertEquals(keys.toSet(), map.keys)
 
         val actualIterator = map.values.iterator()
         val expectedIterator = listOf<Any>(
@@ -84,26 +99,33 @@ class CsvAvroConverterTest {
             "some",
             "Y",
             "",
-            "false").iterator()
+            "false",
+        ).iterator()
 
         var i = 0
         while (actualIterator.hasNext()) {
-            assertTrue(expectedIterator.hasNext(),
-                "Actual value has more entries than expected value")
+            assertTrue(
+                expectedIterator.hasNext(),
+                "Actual value has more entries than expected value",
+            )
             val actual = actualIterator.next()
             val expected = expectedIterator.next()
 
             if (expected is ByteArray) {
-                assertEquals(Base64.getEncoder().withoutPadding().encodeToString(expected),
+                assertEquals(
+                    Base64.getEncoder().withoutPadding().encodeToString(expected),
                     actual,
-                    "Array for argument " + keys[i] + " does not match")
+                    "Array for argument " + keys[i] + " does not match",
+                )
             } else {
                 assertEquals(expected, actual, "Value for argument " + keys[i] + " does not match")
             }
             i++
         }
-        assertFalse(expectedIterator.hasNext(),
-            "Actual value has fewer entries than expected value")
+        assertFalse(
+            expectedIterator.hasNext(),
+            "Actual value has fewer entries than expected value",
+        )
 
         converter.writeRecord(record)
 
@@ -117,8 +139,10 @@ class CsvAvroConverterTest {
     @Test
     @Throws(IOException::class)
     fun differentSchema() {
-        val schemaA =
-            SchemaBuilder.record("A").fields().name("a").type("string").noDefault().endRecord()
+        val schemaA = SchemaBuilder.record("A")
+            .fields()
+            .name("a").type("string").noDefault()
+            .endRecord()
         val recordA = GenericRecordBuilder(schemaA).set("a", "something").build()
 
         val writer = StringWriter()
@@ -137,26 +161,33 @@ class CsvAvroConverterTest {
         println(writer.toString())
     }
 
-
     @Test
     @Throws(IOException::class)
     fun differentSchema2() {
-        val schemaA =
-            SchemaBuilder.record("A").fields().name("a").type("string").noDefault().name("b")
-                .type("string").noDefault().endRecord()
-        val recordA =
-            GenericRecordBuilder(schemaA).set("a", "something").set("b", "2nd something").build()
+        val schemaA = SchemaBuilder.record("A")
+            .fields()
+            .name("a").type("string").noDefault()
+            .name("b").type("string").noDefault()
+            .endRecord()
+        val recordA = GenericRecordBuilder(schemaA)
+            .set("a", "something")
+            .set("b", "2nd something")
+            .build()
 
         val writer = StringWriter()
-        val converter = CsvAvroConverter
-            .factory.converterFor(writer, recordA, true, StringReader("test"))
+        val converter = CsvAvroConverter.factory
+            .converterFor(writer, recordA, true, StringReader("test"))
         converter.writeRecord(recordA)
 
-        val schemaB =
-            SchemaBuilder.record("B").fields().name("b").type("string").noDefault().name("a")
-                .type("string").noDefault().endRecord()
-        val recordB =
-            GenericRecordBuilder(schemaB).set("b", "something").set("a", "2nd something").build()
+        val schemaB = SchemaBuilder.record("B")
+            .fields()
+            .name("b").type("string").noDefault()
+            .name("a").type("string").noDefault()
+            .endRecord()
+        val recordB = GenericRecordBuilder(schemaB)
+            .set("b", "something")
+            .set("a", "2nd something")
+            .build()
 
         /* Same number of columns and same header but different order,
         so CsvAvroConverter.write() will return false signifying that
@@ -203,10 +234,8 @@ class CsvAvroConverterTest {
         val toPath = dir.resolve("test.dedup")
         path.bufferedWriter().useSuspended { writer -> writeTestNumbers(writer) }
         CsvAvroConverter.factory.deduplicate("t", path, toPath, IdentityCompression())
-        assertEquals(listOf("a,b", "1,3", "3,4", "1,2", "a,a", "3,3"),
-            withContext(Dispatchers.IO) { Files.readAllLines(toPath) })
+        assertEquals(listOf("a,b", "1,3", "3,4", "1,2", "a,a", "3,3"), toPath.readAllLines())
     }
-
 
     @Test
     @Throws(IOException::class)
@@ -214,12 +243,15 @@ class CsvAvroConverterTest {
         val path = dir.resolve("test")
         val toPath = dir.resolve("test.dedup")
         path.bufferedWriter().useSuspended { writer -> writeTestNumbers(writer) }
-        CsvAvroConverter.factory.deduplicate("t", path, toPath, IdentityCompression(),
-            distinctFields = setOf("a"))
-        assertEquals(listOf("a,b", "1,2", "a,a", "3,3"),
-            withContext(Dispatchers.IO) { Files.readAllLines(toPath) })
+        CsvAvroConverter.factory.deduplicate(
+            fileName = "t",
+            source = path,
+            target = toPath,
+            compression = IdentityCompression(),
+            distinctFields = setOf("a")
+        )
+        assertEquals(listOf("a,b", "1,2", "a,a", "3,3"), toPath.readAllLines())
     }
-
 
     @Test
     @Throws(IOException::class)
@@ -227,10 +259,14 @@ class CsvAvroConverterTest {
         val path = dir.resolve("test")
         val toPath = dir.resolve("test.dedup")
         path.bufferedWriter().useSuspended { writer -> writeTestNumbers(writer) }
-        CsvAvroConverter.factory.deduplicate("t", path, toPath, IdentityCompression(),
-            ignoreFields = setOf("a"))
-        assertEquals(listOf("a,b", "3,4", "1,2", "a,a", "3,3"),
-            withContext(Dispatchers.IO) { Files.readAllLines(toPath) })
+        CsvAvroConverter.factory.deduplicate(
+            fileName = "t",
+            source = path,
+            target = toPath,
+            compression = IdentityCompression(),
+            ignoreFields = setOf("a"),
+        )
+        assertEquals(listOf("a,b", "3,4", "1,2", "a,a", "3,3"), toPath.readAllLines())
     }
 
     @Test
@@ -242,22 +278,28 @@ class CsvAvroConverterTest {
         resourceContext {
             val writer = resourceChain { path.outputStream() }
                 .chain { GZIPOutputStream(it) }
-                .chain { it.writer() }
-                .result
+                .conclude { it.writer() }
             writeTestNumbers(writer)
         }
-        CsvAvroConverter.factory.deduplicate("t", path, toPath, GzipCompression())
+        CsvAvroConverter.factory.deduplicate(
+            fileName = "t",
+            source = path,
+            target = toPath,
+            compression = GzipCompression(),
+        )
         val storedLines = resourceContext {
             resourceChain { toPath.inputStream() }
                 .chain { GZIPInputStream(it) }
-                .chain { it.reader() }
-                .result
+                .conclude { it.reader() }
                 .readLines()
         }
         assertEquals(listOf("a,b", "1,3", "3,4", "1,2", "a,a", "3,3"), storedLines)
     }
 
     companion object {
+        suspend fun Path.readAllLines(): List<String> = withContext(Dispatchers.IO) {
+            Files.readAllLines(this@readAllLines)
+        }
 
         @Throws(IOException::class)
         internal fun writeTestNumbers(writer: Writer) {

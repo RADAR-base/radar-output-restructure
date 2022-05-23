@@ -57,7 +57,6 @@ internal class RedisRemoteLockManagerTest {
         }
     }
 
-
     @Test
     fun testNonOverlappingLockSameManager() = runTest {
         lockManager1.acquireLock("t").useSuspended { l1 ->

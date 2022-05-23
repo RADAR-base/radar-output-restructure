@@ -147,8 +147,9 @@ object TimeUtil {
         null
     }
 
-    fun Instant.toDouble() = (epochSecond.toBigDecimal()
-        + (nano.toBigDecimal().divide(NANO_MULTIPLIER, 9, RoundingMode.HALF_UP))
+    fun Instant.toDouble() = (
+        epochSecond.toBigDecimal() +
+            (nano.toBigDecimal().divide(NANO_MULTIPLIER, 9, RoundingMode.HALF_UP))
         ).toDouble()
 
     private fun JsonNode.getOrNull(fieldName: String): JsonNode? = fields().asSequence()
@@ -157,8 +158,8 @@ object TimeUtil {
 
     private fun Schema.Field.hasType(type: Schema.Type): Boolean {
         val s = schema()
-        return s.type == type
-            || (s.type == Schema.Type.UNION && s.types.any { it.type == type })
+        return s.type == type ||
+            (s.type == Schema.Type.UNION && s.types.any { it.type == type })
     }
 
     fun Temporal.durationSince(): Duration = Duration.between(this, Instant.now())

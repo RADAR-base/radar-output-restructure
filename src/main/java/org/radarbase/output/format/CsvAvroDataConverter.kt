@@ -50,10 +50,12 @@ internal class CsvAvroDataConverter(
                 val subSchema = record.schema
                 for (field in subSchema.fields) {
                     val subData = record.get(field.pos())
-                    convertAvro(values,
+                    convertAvro(
+                        values,
                         subData,
                         field.schema(),
-                        prefix + '.'.toString() + field.name())
+                        prefix + '.'.toString() + field.name(),
+                    )
                 }
             }
             Schema.Type.MAP -> {
@@ -81,7 +83,8 @@ internal class CsvAvroDataConverter(
                 checkHeader(prefix, values.size)
                 values.add(BASE64_ENCODER.encodeToString((data as GenericFixed).bytes()))
             }
-            Schema.Type.STRING, Schema.Type.ENUM, Schema.Type.INT, Schema.Type.LONG, Schema.Type.DOUBLE, Schema.Type.FLOAT, Schema.Type.BOOLEAN -> {
+            Schema.Type.STRING, Schema.Type.ENUM, Schema.Type.INT, Schema.Type.LONG,
+            Schema.Type.DOUBLE, Schema.Type.FLOAT, Schema.Type.BOOLEAN -> {
                 checkHeader(prefix, values.size)
                 values.add(data.toString())
             }

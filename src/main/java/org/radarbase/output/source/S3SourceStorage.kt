@@ -74,7 +74,8 @@ class S3SourceStorage(
                     topicFile = topicFile.copy(
                         range = topicFile.range.mapRange {
                             it.copy(to = endOffset)
-                        })
+                        }
+                    )
                 }
             } catch (ex: Exception) {
                 // skip reading end offset
@@ -144,9 +145,9 @@ class S3SourceStorage(
         suspend fun <T> faultTolerant(action: () -> T): T {
             return flow { emit(action()) }
                 .retryWhen { cause, attempt ->
-                    if (cause is ErrorResponseException &&
-                        (cause.errorResponse().code() == "NoSuchKey"
-                            || cause.errorResponse().code() == "ResourceNotFound")
+                    if (
+                        cause is ErrorResponseException &&
+                        cause.errorResponse().code() in arrayOf("NoSuchKey", "ResourceNotFound")
                     ) {
                         throw FileNotFoundException()
                     }

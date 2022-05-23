@@ -48,24 +48,29 @@ class CsvAvroConverterFactory : RecordConverterFactory {
                     return false
                 }
 
-                Pair(header, lineMap.values
-                    .toIntArray()
-                    .apply { sort() })
+                Pair(
+                    header,
+                    lineMap.values
+                        .toIntArray()
+                        .apply { sort() },
+                )
             }
         }
 
         source.inputStream().useSuspended { input ->
             processLines(input, compression) { _, lines ->
                 var indexIndex = 0
-                writeLines(target,
+                writeLines(
+                    target,
                     fileName,
                     compression,
-                    sequenceOf(header) + lines.filterIndexed { i, _ ->
+                    lines = sequenceOf(header) + lines.filterIndexed { i, _ ->
                         if (indexIndex < lineIndexes.size && lineIndexes[indexIndex] == i) {
                             indexIndex += 1
                             true
                         } else false
-                    })
+                    },
+                )
             }
         }
         return true
@@ -113,16 +118,19 @@ class CsvAvroConverterFactory : RecordConverterFactory {
                     ?.let { Pair(it, parser) }
             }
 
-            Pair(header, if (parsers.isEmpty()) emptyList() else {
-                lines.mapNotNull { line ->
-                    for ((index, parser) in parsers) {
-                        parser(line[index])?.let {
-                            return@mapNotNull it
+            Pair(
+                header,
+                if (parsers.isEmpty()) emptyList() else {
+                    lines.mapNotNull { line ->
+                        for ((index, parser) in parsers) {
+                            parser(line[index])?.let {
+                                return@mapNotNull it
+                            }
                         }
-                    }
-                    null
-                }.toList()
-            })
+                        null
+                    }.toList()
+                },
+            )
         }
     }
 

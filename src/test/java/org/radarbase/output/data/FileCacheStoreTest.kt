@@ -96,60 +96,89 @@ class FileCacheStoreTest {
             record = GenericRecordBuilder(simpleSchema).set("a", "something").build()
             var transaction: Accountant.Transaction =
                 Accountant.Transaction(topicPartition1, i1++.toLong(), lastModified)
-            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
-                cache.writeRecord(f1, record, transaction))
+            assertEquals(
+                FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
+                cache.writeRecord(f1, record, transaction),
+            )
             record = GenericRecordBuilder(simpleSchema).set("a", "somethingElse").build()
             transaction = Accountant.Transaction(topicPartition1, i1++.toLong(), lastModified)
-            assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE,
-                cache.writeRecord(f1, record, transaction))
+            assertEquals(
+                FileCacheStore.WriteResponse.CACHE_AND_WRITE,
+                cache.writeRecord(f1, record, transaction),
+            )
             record = GenericRecordBuilder(simpleSchema).set("a", "something").build()
             transaction = Accountant.Transaction(topicPartition0, i0.toLong(), lastModified)
-            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
-                cache.writeRecord(f2, record, transaction))
+            assertEquals(
+                FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
+                cache.writeRecord(f2, record, transaction),
+            )
             record = GenericRecordBuilder(simpleSchema).set("a", "third").build()
             transaction = Accountant.Transaction(topicPartition1, i1++.toLong(), lastModified)
-            assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE,
-                cache.writeRecord(f1, record, transaction))
+            assertEquals(
+                FileCacheStore.WriteResponse.CACHE_AND_WRITE,
+                cache.writeRecord(f1, record, transaction),
+            )
             record = GenericRecordBuilder(simpleSchema).set("a", "f3").build()
             transaction = Accountant.Transaction(topicPartition1, i1++.toLong(), lastModified)
-            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
-                cache.writeRecord(f3, record, transaction))
+            assertEquals(
+                FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
+                cache.writeRecord(f3, record, transaction),
+            )
             record = GenericRecordBuilder(simpleSchema).set("a", "f2").build()
             transaction = Accountant.Transaction(topicPartition1, i1++.toLong(), lastModified)
-            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
-                cache.writeRecord(f2, record, transaction))
+            assertEquals(
+                FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
+                cache.writeRecord(f2, record, transaction),
+            )
             record = GenericRecordBuilder(simpleSchema).set("a", "f3").build()
             transaction = Accountant.Transaction(topicPartition1, i1++.toLong(), lastModified)
-            assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE,
-                cache.writeRecord(f3, record, transaction))
+            assertEquals(
+                FileCacheStore.WriteResponse.CACHE_AND_WRITE,
+                cache.writeRecord(f3, record, transaction),
+            )
             record = GenericRecordBuilder(simpleSchema).set("a", "f4").build()
             transaction = Accountant.Transaction(topicPartition1, i1++.toLong(), lastModified)
-            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
-                cache.writeRecord(f4, record, transaction))
+            assertEquals(
+                FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
+                cache.writeRecord(f4, record, transaction),
+            )
             record = GenericRecordBuilder(simpleSchema).set("a", "f3").build()
             transaction = Accountant.Transaction(topicPartition1, i1++.toLong(), lastModified)
-            assertEquals(FileCacheStore.WriteResponse.CACHE_AND_WRITE,
-                cache.writeRecord(f3, record, transaction))
+            assertEquals(
+                FileCacheStore.WriteResponse.CACHE_AND_WRITE,
+                cache.writeRecord(f3, record, transaction),
+            )
             record =
                 GenericRecordBuilder(conflictSchema).set("a", "f3").set("b", "conflict").build()
             transaction = Accountant.Transaction(topicPartition1, i1.toLong(), lastModified)
-            assertEquals(FileCacheStore.WriteResponse.CACHE_AND_NO_WRITE,
-                cache.writeRecord(f3, record, transaction))
+            assertEquals(
+                FileCacheStore.WriteResponse.CACHE_AND_NO_WRITE,
+                cache.writeRecord(f3, record, transaction),
+            )
             record =
                 GenericRecordBuilder(conflictSchema).set("a", "f1").set("b", "conflict").build()
             // Cannot write to file even though the file is not in cache since schema is different
-            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_NO_WRITE,
-                cache.writeRecord(f1, record, transaction))
+            assertEquals(
+                FileCacheStore.WriteResponse.NO_CACHE_AND_NO_WRITE,
+                cache.writeRecord(f1, record, transaction),
+            )
             // Can write the same record to a new file
-            assertEquals(FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
-                cache.writeRecord(newFile, record, transaction))
+            assertEquals(
+                FileCacheStore.WriteResponse.NO_CACHE_AND_WRITE,
+                cache.writeRecord(newFile, record, transaction),
+            )
         }
 
         val offsets = OffsetRangeSet()
 
-        verify(accountant, times(7)).process(check {
-            offsets.addAll(it.offsets)
-        })
+        verify(
+            accountant,
+            times(7),
+        ).process(
+            check {
+                offsets.addAll(it.offsets)
+            }
+        )
 
         assertTrue(offsets.contains(offsetRange0))
         assertTrue(offsets.contains(offsetRange1))

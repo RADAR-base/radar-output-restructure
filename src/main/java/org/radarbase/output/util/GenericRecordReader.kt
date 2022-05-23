@@ -13,16 +13,18 @@ class GenericRecordReader(
 ) : Closeable, Iterator<GenericRecord> {
     private var tmpRecord: GenericRecord? = null
 
-    constructor(input: SeekableInput) : this(DataFileReader(
-        input,
-        GenericDatumReader(
-            null,
-            null,
-            GenericData().apply {
-                isFastReaderEnabled = true
-            }
+    constructor(input: SeekableInput) : this(
+        DataFileReader(
+            input,
+            GenericDatumReader(
+                null,
+                null,
+                GenericData().apply {
+                    isFastReaderEnabled = true
+                },
+            ),
         ),
-    ))
+    )
 
     override fun hasNext(): Boolean = reader.hasNext()
 
