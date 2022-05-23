@@ -9,7 +9,7 @@ class AvroTopicLister(
     override suspend fun listLevel(
         context: Path,
         descend: suspend (Path) -> Unit,
-        emit: suspend (Path) -> Unit
+        emit: suspend (Path) -> Unit,
     ) {
         val fileStatuses = storage.list(context, maxKeys = 256)
 

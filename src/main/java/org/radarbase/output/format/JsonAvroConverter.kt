@@ -28,11 +28,11 @@ import java.io.Writer
  * Writes an Avro record to JSON format.
  */
 class JsonAvroConverter(
-        writer: Writer,
-        private val converter: JsonAvroDataConverter
+    writer: Writer,
+    private val converter: JsonAvroDataConverter,
 ) : RecordConverter {
     private val generator: JsonGenerator = JSON_FACTORY.createGenerator(writer)
-            .setPrettyPrinter(MinimalPrettyPrinter("\n"))
+        .setPrettyPrinter(MinimalPrettyPrinter("\n"))
 
     @Throws(IOException::class)
     override fun writeRecord(record: GenericRecord): Boolean {
@@ -40,7 +40,8 @@ class JsonAvroConverter(
         return true
     }
 
-    override fun convertRecord(record: GenericRecord): Map<String, Any?> = converter.convertRecord(record)
+    override fun convertRecord(record: GenericRecord): Map<String, Any?> =
+        converter.convertRecord(record)
 
     @Throws(IOException::class)
     override fun flush() = generator.flush()

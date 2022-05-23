@@ -35,7 +35,7 @@ class AzureTargetStorage(private val config: AzureConfig) : TargetStorage {
 
     init {
         logger.info("Azure Blob storage configured with endpoint {} in container {}",
-                config.endpoint, config.container)
+            config.endpoint, config.container)
     }
 
     override suspend fun initialize() {

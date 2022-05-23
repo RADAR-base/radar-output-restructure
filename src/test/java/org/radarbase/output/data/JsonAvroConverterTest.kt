@@ -45,17 +45,20 @@ class JsonAvroConverterTest {
             requireNotNull(javaClass.getResourceAsStream("full.avsc")) { "Missing full.avsc" }
         )
         val reader = GenericDatumReader<GenericRecord>(schema)
-        val decoder = DecoderFactory.get().jsonDecoder(schema, requireNotNull(javaClass.getResourceAsStream("full.json")) { "Missing full.json" })
+        val decoder = DecoderFactory.get().jsonDecoder(schema,
+            requireNotNull(javaClass.getResourceAsStream("full.json")) { "Missing full.json" })
         val record = reader.read(null, decoder)
 
         val map = JsonAvroConverter
-                .factory.converterFor(StringWriter(), record, false, StringReader("test")).convertRecord(record)
+            .factory.converterFor(StringWriter(), record, false, StringReader("test"))
+            .convertRecord(record)
         val writer = ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT).writer()
         val result = writer.writeValueAsString(map)
 
-        val expected = requireNotNull(javaClass.getResourceAsStream("full.json")) { "Missing full.json" }
-            .reader()
-            .useLines { it.joinToString("\n") }
+        val expected =
+            requireNotNull(javaClass.getResourceAsStream("full.json")) { "Missing full.json" }
+                .reader()
+                .useLines { it.joinToString("\n") }
 
         println(result)
 
@@ -65,8 +68,8 @@ class JsonAvroConverterTest {
 
         val ignoreLines = listOf(2, 3, 13)
         expectedLines.indices
-                .filterNot { ignoreLines.contains(it) }
-                .forEach { assertEquals(expectedLines[it], resultLines[it]) }
+            .filterNot { ignoreLines.contains(it) }
+            .forEach { assertEquals(expectedLines[it], resultLines[it]) }
     }
 
     @Test

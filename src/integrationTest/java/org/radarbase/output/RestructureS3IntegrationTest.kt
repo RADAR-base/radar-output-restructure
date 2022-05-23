@@ -19,24 +19,26 @@ class RestructureS3IntegrationTest {
     fun integration() = runTest {
         Timer.isEnabled = true
         val sourceConfig = S3Config(
-                endpoint ="http://localhost:9000",
-                accessToken = "minioadmin",
-                secretKey = "minioadmin",
-                bucket = "source")
+            endpoint = "http://localhost:9000",
+            accessToken = "minioadmin",
+            secretKey = "minioadmin",
+            bucket = "source")
         val targetConfig = S3Config(
-                endpoint ="http://localhost:9000",
-                accessToken = "minioadmin",
-                secretKey = "minioadmin",
-                bucket = "target")
+            endpoint = "http://localhost:9000",
+            accessToken = "minioadmin",
+            secretKey = "minioadmin",
+            bucket = "target")
         val config = RestructureConfig(
-                source = ResourceConfig("s3", s3 = sourceConfig),
-                target = ResourceConfig("s3", s3 = targetConfig),
-                paths = PathConfig(inputs = listOf(Paths.get("in"))),
-                worker = WorkerConfig(minimumFileAge = 0L)
+            source = ResourceConfig("s3", s3 = sourceConfig),
+            target = ResourceConfig("s3", s3 = targetConfig),
+            paths = PathConfig(inputs = listOf(Paths.get("in"))),
+            worker = WorkerConfig(minimumFileAge = 0L)
         )
         val application = Application(config)
         val sourceClient = sourceConfig.createS3Client()
-        if (!sourceClient.bucketExists(BucketExistsArgs.Builder().bucketBuild(sourceConfig.bucket))) {
+        if (!sourceClient.bucketExists(BucketExistsArgs.Builder()
+                .bucketBuild(sourceConfig.bucket))
+        ) {
             sourceClient.makeBucket(MakeBucketArgs.Builder().bucketBuild(sourceConfig.bucket))
         }
 
@@ -67,8 +69,10 @@ class RestructureS3IntegrationTest {
             launch { assertEquals(1L, redis.del("offsets/android_phone_acceleration.json")) }
         }
 
-        val firstParticipantOutput = "output/STAGING_PROJECT/1543bc93-3c17-4381-89a5-c5d6272b827c/application_server_status"
-        val secondParticipantOutput = "output/radar-test-root/4ab9b985-6eec-4e51-9a29-f4c571c89f99/android_phone_acceleration"
+        val firstParticipantOutput =
+            "output/STAGING_PROJECT/1543bc93-3c17-4381-89a5-c5d6272b827c/application_server_status"
+        val secondParticipantOutput =
+            "output/radar-test-root/4ab9b985-6eec-4e51-9a29-f4c571c89f99/android_phone_acceleration"
 
         val files = coroutineScope {
             launch(Dispatchers.IO) {

@@ -11,21 +11,23 @@ class TreeLister<T, C>(
     suspend fun list(
         context: C,
         limit: Int = Int.MAX_VALUE,
-        predicate: ((T) -> Boolean)? = null
+        predicate: ((T) -> Boolean)? = null,
     ): List<T> = listTo(mutableListOf(), context, limit, predicate)
 
     suspend fun <S : MutableCollection<T>> listTo(
         collection: S,
         context: C,
         limit: Int = Int.MAX_VALUE,
-        predicate: ((T) -> Boolean)? = null
+        predicate: ((T) -> Boolean)? = null,
     ): S = coroutineScope {
         val channel = Channel<T>(capacity = limit)
         val producer = launch {
             coroutineScope {
                 descend(
                     context,
-                    if (predicate == null) channel::send else ({ value -> if (predicate(value)) channel.send(value) }),
+                    if (predicate == null) channel::send else ({ value ->
+                        if (predicate(value)) channel.send(value)
+                    }),
                 )
             }
             channel.close()
@@ -51,7 +53,7 @@ class TreeLister<T, C>(
         suspend fun listLevel(
             context: C,
             descend: suspend (C) -> Unit,
-            emit: suspend (T) -> Unit
+            emit: suspend (T) -> Unit,
         )
     }
 }

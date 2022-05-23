@@ -80,11 +80,21 @@ class OffsetRangeRedisTest {
 
         redisHolder.execute { redis ->
             val range = redisOffsetReader.readValue<OffsetRedisPersistence.Companion.RedisOffsetRangeSet>(redis.get(testFile.toString()))
-            assertEquals(OffsetRedisPersistence.Companion.RedisOffsetRangeSet(listOf(
-                    OffsetRedisPersistence.Companion.RedisOffsetIntervals("a", 0, listOf(
-                            OffsetRangeSet.Range(0, 2, lastModified),
-                            OffsetRangeSet.Range(4, 4, lastModified)))
-            )), range)
+            assertEquals(
+                OffsetRedisPersistence.Companion.RedisOffsetRangeSet(
+                    listOf(
+                        OffsetRedisPersistence.Companion.RedisOffsetIntervals(
+                            topic = "a",
+                            partition = 0,
+                            ranges = listOf(
+                                OffsetRangeSet.Range(0, 2, lastModified),
+                                OffsetRangeSet.Range(4, 4, lastModified),
+                            ),
+                        ),
+                    ),
+                ),
+                range
+            )
         }
 
         val rangeSet = offsetPersistence.read(testFile)

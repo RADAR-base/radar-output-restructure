@@ -37,7 +37,7 @@ interface OffsetPersistenceFactory {
     fun writer(scope: CoroutineScope, path: Path, startSet: OffsetRangeSet? = null): Writer
 
     /** Offset Writer to given persistence type. */
-    interface Writer: SuspendedCloseable {
+    interface Writer : SuspendedCloseable {
         /** Current offsets. */
         val offsets: OffsetRangeSet
 

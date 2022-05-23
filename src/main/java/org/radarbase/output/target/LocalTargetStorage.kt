@@ -32,19 +32,20 @@ import kotlin.io.path.*
 class LocalTargetStorage(private val config: LocalConfig) : TargetStorage {
     init {
         logger.info("Local storage configured with user id {}:{} (-1 if not configured)",
-                config.userId, config.groupId)
+            config.userId, config.groupId)
     }
 
     override suspend fun initialize() = Unit
 
     @Throws(IOException::class)
-    override suspend fun status(path: Path): TargetStorage.PathStatus? = withContext(Dispatchers.IO) {
-        if (path.exists()) {
-            TargetStorage.PathStatus(path.fileSize())
-        } else {
-            null
+    override suspend fun status(path: Path): TargetStorage.PathStatus? =
+        withContext(Dispatchers.IO) {
+            if (path.exists()) {
+                TargetStorage.PathStatus(path.fileSize())
+            } else {
+                null
+            }
         }
-    }
 
     @Throws(IOException::class)
     override suspend fun newInputStream(path: Path): InputStream = withContext(Dispatchers.IO) {

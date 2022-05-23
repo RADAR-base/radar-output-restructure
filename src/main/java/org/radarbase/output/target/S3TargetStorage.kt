@@ -39,7 +39,7 @@ class S3TargetStorage(config: S3Config) : TargetStorage {
 
     init {
         logger.info("Object storage configured with endpoint {} in bucket {}",
-                config.endpoint, config.bucket)
+            config.endpoint, config.bucket)
 
     }
 

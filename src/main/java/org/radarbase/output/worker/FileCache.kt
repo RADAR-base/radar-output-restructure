@@ -130,7 +130,6 @@ class FileCache(
     }
 
 
-
     fun markError() {
         this.hasError.set(true)
     }
@@ -204,10 +203,15 @@ class FileCache(
                 i++
             }
             if (corruptPath != null) {
-                logger.error("Original file {} could not be read: {}." + " Moved to {}.", source, ex, corruptPath)
+                logger.error("Original file {} could not be read: {}." + " Moved to {}.",
+                    source,
+                    ex,
+                    corruptPath)
                 targetStorage.move(source, corruptPath)
             } else {
-                logger.error("Original file {} could not be read: {}." + " Too many corrupt backups stored, removing file.", source, ex)
+                logger.error("Original file {} could not be read: {}." + " Too many corrupt backups stored, removing file.",
+                    source,
+                    ex)
             }
             false
         }

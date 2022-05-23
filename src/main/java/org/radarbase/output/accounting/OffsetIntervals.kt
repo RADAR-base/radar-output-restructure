@@ -25,9 +25,9 @@ class OffsetIntervals {
         val searchIndex = offsetsFrom.binarySearch(range.from)
         val index = if (searchIndex >= 0) searchIndex else -searchIndex - 2
         val rangeTo = range.to ?: range.from
-        return (index >= 0
-                && rangeTo <= offsetsTo[index]
-                && range.lastProcessed <= lastProcessed[index])
+        return index >= 0 &&
+            rangeTo <= offsetsTo[index] &&
+            range.lastProcessed <= lastProcessed[index]
     }
 
     fun contains(offset: Long, lastModified: Instant): Boolean {
@@ -38,9 +38,9 @@ class OffsetIntervals {
         }
 
         val indexBefore = -searchIndex - 2
-        return (indexBefore >= 0
-                && offset <= offsetsTo[indexBefore]
-                && lastModified <= lastProcessed[indexBefore])
+        return indexBefore >= 0 &&
+            offset <= offsetsTo[indexBefore] &&
+            lastModified <= lastProcessed[indexBefore]
     }
 
     fun add(offset: Long, lastModified: Instant) {
@@ -122,7 +122,7 @@ class OffsetIntervals {
     }
 
     fun forEach(
-            action: (offsetFrom: Long, offsetTo: Long, lastModified: Instant) -> Unit
+        action: (offsetFrom: Long, offsetTo: Long, lastModified: Instant) -> Unit,
     ) = repeat(lastProcessed.size) { i ->
         action(offsetsFrom[i], offsetsTo[i], lastProcessed[i])
     }
@@ -133,10 +133,12 @@ class OffsetIntervals {
 
     fun size(): Int = offsetsFrom.size()
 
-    override fun toString(): String {
-        return ("[" + lastProcessed.indices.joinToString(", ") { i ->
+    override fun toString(): String = buildString {
+        append('[')
+        lastProcessed.indices.joinTo(this@buildString, separator = ", ") { i ->
             "(${offsetsFrom[i]} - ${offsetsTo[i]}, ${lastProcessed[i]})"
-        } + "]")
+        }
+        append(']')
     }
 
     fun remove(range: OffsetRangeSet.Range) {
@@ -145,12 +147,12 @@ class OffsetIntervals {
 
         var index = offsetsFrom.binarySearch(from)
 
-        if (index < 0) {  // search comes between -index - 2 and -index - 1
+        if (index < 0) { // search comes between -index - 2 and -index - 1
             index = -index - 1 // is the next stored offsetFrom index after from
             // There is a previous from index. Check for overlap
             if (index > 0) {
                 val prevIndex = index - 1
-                if (from <= offsetsTo[prevIndex]) {  // there is overlap
+                if (from <= offsetsTo[prevIndex]) { // there is overlap
                     if (to < offsetsTo[prevIndex]) { // the range falls inside an existing interval
                         // create new interval after the removed range. The interval before the
                         // range remains.
@@ -165,7 +167,7 @@ class OffsetIntervals {
         // remove intervals inside range
         while (offsetsFrom[index] >= from && offsetsTo[index] <= to) {
             removeAt(index)
-            if (index == offsetsTo.size()) {  // last interval has been removed
+            if (index == offsetsTo.size()) { // last interval has been removed
                 return
             }
         }
@@ -199,6 +201,6 @@ class OffsetIntervals {
     }
 
     companion object {
-        private fun <T: Comparable<T>> max(a: T, b: T): T = if (a >= b) a else b
+        private fun <T : Comparable<T>> max(a: T, b: T): T = if (a >= b) a else b
     }
 }

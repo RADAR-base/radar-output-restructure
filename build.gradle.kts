@@ -12,6 +12,7 @@ plugins {
     id("com.avast.gradle.docker-compose")
     id("com.github.ben-manes.versions")
     id("io.github.gradle-nexus.publish-plugin")
+    id("org.jlleitschuh.gradle.ktlint") version "10.3.0"
 }
 
 group = "org.radarbase"
@@ -24,8 +25,8 @@ repositories {
 description = "RADAR-base output restructuring"
 val website = "https://radar-base.org"
 val githubRepoName = "RADAR-base/radar-output-restructure"
-val githubUrl = "https://github.com/${githubRepoName}"
-val issueUrl = "${githubUrl}/issues"
+val githubUrl = "https://github.com/$githubRepoName"
+val issueUrl = "$githubUrl/issues"
 
 sourceSets {
     create("integrationTest") {
@@ -120,8 +121,8 @@ dependencies {
 application {
     mainClass.set("org.radarbase.output.Application")
     applicationDefaultJvmArgs = listOf(
-         "-Djava.security.egd=file:/dev/./urandom",
-         "-Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager",
+        "-Djava.security.egd=file:/dev/./urandom",
+        "-Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager",
     )
 }
 
@@ -204,7 +205,6 @@ publishing {
                         email.set("joris@thehyve.nl")
                         organization.set("The Hyve")
                     }
-
                 }
                 issueManagement {
                     system.set("GitHub")
@@ -215,7 +215,7 @@ publishing {
                     url.set(website)
                 }
                 scm {
-                    connection.set("scm:git:${githubUrl}")
+                    connection.set("scm:git:$githubUrl")
                     url.set(githubUrl)
                 }
             }
@@ -306,6 +306,11 @@ tasks.named<DependencyUpdatesTask>("dependencyUpdates").configure {
     rejectVersionIf {
         isNonStable(candidate.version)
     }
+}
+
+ktlint {
+    version.set("0.45.2")
+    disabledRules.set(setOf("no-wildcard-imports"))
 }
 
 tasks.wrapper {

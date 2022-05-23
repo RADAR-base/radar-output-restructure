@@ -53,13 +53,13 @@ class TimestampFileCacheStore(private val factory: FileStoreFactory) {
     suspend fun contains(path: Path, record: GenericRecord): FindResult {
         return try {
             val fileCache = caches[path]
-                    ?: time("cleaner.cache") {
-                        ensureCapacity()
-                        TimestampFileCache(factory, path).apply {
-                            initialize()
-                            caches[path] = this
-                        }
+                ?: time("cleaner.cache") {
+                    ensureCapacity()
+                    TimestampFileCache(factory, path).apply {
+                        initialize()
+                        caches[path] = this
                     }
+                }
 
             time("cleaner.contains") {
                 if (fileCache.contains(record)) FindResult.FOUND else FindResult.NOT_FOUND
@@ -80,7 +80,7 @@ class TimestampFileCacheStore(private val factory: FileStoreFactory) {
     private fun ensureCapacity() {
         if (caches.size == maxCacheSize) {
             val cacheList = ArrayList(caches.values)
-                    .sorted()
+                .sorted()
             for (i in 0 until cacheList.size / 2) {
                 caches.remove(cacheList[i].path)
             }

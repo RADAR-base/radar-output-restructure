@@ -33,7 +33,7 @@ import java.util.concurrent.TimeUnit
  * Accesses a OffsetRange json object a Redis entry.
  */
 class OffsetRedisPersistence(
-    private val redisHolder: RedisHolder
+    private val redisHolder: RedisHolder,
 ) : OffsetPersistenceFactory {
 
     override suspend fun read(path: Path): OffsetRangeSet? {
@@ -41,14 +41,15 @@ class OffsetRedisPersistence(
             redisHolder.execute { redis ->
                 redis[path.toString()]?.let { value ->
                     redisOffsetReader.readValue<RedisOffsetRangeSet>(value)
-                            .partitions
-                            .fold(OffsetRangeSet()) { set, (topic, partition, ranges) ->
-                                set.apply { addAll(TopicPartition(topic, partition), ranges) }
-                            }
+                        .partitions
+                        .fold(OffsetRangeSet()) { set, (topic, partition, ranges) ->
+                            set.apply { addAll(TopicPartition(topic, partition), ranges) }
+                        }
                 }
             }
         } catch (ex: IOException) {
-            logger.error("Error reading offsets from Redis: {}. Processing all offsets.", ex.toString())
+            logger.error("Error reading offsets from Redis: {}. Processing all offsets.",
+                ex.toString())
             null
         }
     }
@@ -56,24 +57,24 @@ class OffsetRedisPersistence(
     override fun writer(
         scope: CoroutineScope,
         path: Path,
-        startSet: OffsetRangeSet?
+        startSet: OffsetRangeSet?,
     ): OffsetPersistenceFactory.Writer = RedisWriter(scope, path, startSet)
 
     private inner class RedisWriter(
         scope: CoroutineScope,
         private val path: Path,
-        startSet: OffsetRangeSet?
+        startSet: OffsetRangeSet?,
     ) : PostponedWriter(scope, "offsets", 1, TimeUnit.SECONDS),
-            OffsetPersistenceFactory.Writer {
+        OffsetPersistenceFactory.Writer {
         override val offsets: OffsetRangeSet = startSet ?: OffsetRangeSet()
 
         override suspend fun doWrite(): Unit = time("accounting.offsets") {
             try {
                 val offsets = RedisOffsetRangeSet(offsets.map { topicPartition, offsetIntervals ->
                     RedisOffsetIntervals(
-                            topicPartition.topic,
-                            topicPartition.partition,
-                            offsetIntervals.toList())
+                        topicPartition.topic,
+                        topicPartition.partition,
+                        offsetIntervals.toList())
                 })
 
                 redisHolder.execute { redis ->
@@ -87,12 +88,14 @@ class OffsetRedisPersistence(
 
     companion object {
         data class RedisOffsetRangeSet(
-                val partitions: List<RedisOffsetIntervals>)
+            val partitions: List<RedisOffsetIntervals>,
+        )
 
         data class RedisOffsetIntervals(
-                val topic: String,
-                val partition: Int,
-                val ranges: List<OffsetRangeSet.Range>)
+            val topic: String,
+            val partition: Int,
+            val ranges: List<OffsetRangeSet.Range>,
+        )
 
         private val logger = LoggerFactory.getLogger(OffsetRedisPersistence::class.java)
         private val mapper = jacksonObjectMapper().apply {

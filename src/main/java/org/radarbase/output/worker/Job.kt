@@ -44,13 +44,17 @@ class Job(
         }
     }
 
-    suspend fun schedule(factory: FileStoreFactory) = repeatWithFixedInterval(intervalSeconds.seconds, intervalSeconds.seconds / 4)
-        .collect { run(factory) }
+    suspend fun schedule(factory: FileStoreFactory) =
+        repeatWithFixedInterval(intervalSeconds.seconds, intervalSeconds.seconds / 4)
+            .collect { run(factory) }
 
     companion object {
         private val logger = LoggerFactory.getLogger(Job::class.java)
 
-        fun repeatWithFixedInterval(period: Duration, initialDelay: Duration = Duration.ZERO): Flow<Unit> = flow {
+        fun repeatWithFixedInterval(
+            period: Duration,
+            initialDelay: Duration = Duration.ZERO,
+        ): Flow<Unit> = flow {
             delay(initialDelay)
             while (currentCoroutineContext().isActive) {
                 emit(Unit)

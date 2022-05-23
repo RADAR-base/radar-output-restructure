@@ -29,10 +29,10 @@ import kotlin.io.path.outputStream
 import kotlin.time.Duration.Companion.seconds
 
 class S3SourceStorage(
-        private val s3Client: MinioClient,
-        config: S3Config,
-        private val tempPath: Path
-): SourceStorage {
+    private val s3Client: MinioClient,
+    config: S3Config,
+    private val tempPath: Path,
+) : SourceStorage {
     private val bucket = config.bucket
     private val readEndOffset = config.endOffsetFromTags
 
@@ -72,9 +72,9 @@ class S3SourceStorage(
                 val endOffset = tags.get()["endOffset"]?.toLongOrNull()
                 if (endOffset != null) {
                     topicFile = topicFile.copy(
-                            range = topicFile.range.mapRange {
-                                it.copy(to = endOffset)
-                            })
+                        range = topicFile.range.mapRange {
+                            it.copy(to = endOffset)
+                        })
                 }
             } catch (ex: Exception) {
                 // skip reading end offset
@@ -96,7 +96,7 @@ class S3SourceStorage(
 
     override fun createReader(): SourceStorage.SourceStorageReader = S3SourceStorageReader()
 
-    private inner class S3SourceStorageReader: SourceStorage.SourceStorageReader {
+    private inner class S3SourceStorageReader : SourceStorage.SourceStorageReader {
         private val tempDir = TemporaryDirectory(tempPath, "worker-")
 
         override suspend fun newInput(file: TopicFile): SeekableInput =

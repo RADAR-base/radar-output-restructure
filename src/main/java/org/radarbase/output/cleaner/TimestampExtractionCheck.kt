@@ -11,7 +11,7 @@ import java.io.IOException
 
 class TimestampExtractionCheck(
     sourceStorage: SourceStorage,
-    fileStoreFactory: FileStoreFactory
+    fileStoreFactory: FileStoreFactory,
 ) : ExtractionCheck {
     private val cacheStore = TimestampFileCacheStore(fileStoreFactory)
     private val reader = sourceStorage.createReader()
@@ -53,26 +53,39 @@ class TimestampExtractionCheck(
         reader.closeAndJoin()
     }
 
-    private suspend fun containsRecord(topicFile: TopicFile, offset: Long, record: GenericRecord): Boolean {
+    private suspend fun containsRecord(
+        topicFile: TopicFile,
+        offset: Long,
+        record: GenericRecord,
+    ): Boolean {
         var suffix = 0
 
         do {
             val (path) = pathFactory.getRecordOrganization(
-                    topicFile.topic, record, suffix)
+                topicFile.topic, record, suffix)
 
             try {
                 when (cacheStore.contains(path, record)) {
                     TimestampFileCacheStore.FindResult.FILE_NOT_FOUND -> {
-                        logger.warn("Target {} for record of {} (offset {}) has not been created yet.", path, topicFile.path, offset)
+                        logger.warn("Target {} for record of {} (offset {}) has not been created yet.",
+                            path,
+                            topicFile.path,
+                            offset)
                         return false
                     }
                     TimestampFileCacheStore.FindResult.NOT_FOUND -> {
-                        logger.warn("Target {} does not contain record of {} (offset {})", path, topicFile.path, offset)
+                        logger.warn("Target {} does not contain record of {} (offset {})",
+                            path,
+                            topicFile.path,
+                            offset)
                         return false
                     }
                     TimestampFileCacheStore.FindResult.FOUND -> return true
                     TimestampFileCacheStore.FindResult.BAD_SCHEMA -> {
-                        logger.debug("Schema of {} does not match schema of {} (offset {})", path, topicFile.path, offset)
+                        logger.debug("Schema of {} does not match schema of {} (offset {})",
+                            path,
+                            topicFile.path,
+                            offset)
                         suffix += 1 // continue next suffix
                     }
                 }

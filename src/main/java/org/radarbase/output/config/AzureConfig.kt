@@ -34,7 +34,7 @@ data class AzureConfig(
     val writeTimeout: Long? = null,
     /** HTTP read timeout. */
     val readTimeout: Long? = null,
-    ) {
+) {
     fun createAzureClient(): BlobServiceClient = BlobServiceClientBuilder().apply {
         endpoint(endpoint)
         when {

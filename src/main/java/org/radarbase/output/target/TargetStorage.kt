@@ -54,7 +54,8 @@ interface TargetStorage {
      * It should be closed by the caller.
      */
     @Throws(IOException::class)
-    suspend fun newBufferedReader(path: Path): BufferedReader = newInputStream(path).bufferedReader()
+    suspend fun newBufferedReader(path: Path): BufferedReader =
+        newInputStream(path).bufferedReader()
 
     /** Create given directory, by recursively creating all parent directories. */
     @Throws(IOException::class)
@@ -62,6 +63,6 @@ interface TargetStorage {
 
     data class PathStatus(
         /** Size in bytes */
-        val size: Long
+        val size: Long,
     )
 }

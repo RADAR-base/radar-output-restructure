@@ -24,8 +24,13 @@ import java.util.concurrent.TimeUnit
  * Progress bar.
  * Based on https://stackoverflow.com/a/43381186/574082.
  */
-class ProgressBar(private val label: String, private val total: Long, private val numStripes: Int, updateInterval: Long,
-                  updateIntervalUnit: TimeUnit) {
+class ProgressBar(
+    private val label: String,
+    private val total: Long,
+    private val numStripes: Int,
+    updateInterval: Long,
+    updateIntervalUnit: TimeUnit,
+) {
     private val startTime: Long = System.nanoTime()
     private val updateIntervalNanos: Long = updateIntervalUnit.toNanos(updateInterval)
     private var lastUpdate = 0L
@@ -85,8 +90,8 @@ class ProgressBar(private val label: String, private val total: Long, private va
         val free = r.maxMemory() - r.totalMemory() + r.freeMemory()
 
         builder.append("MemFree ")
-                .append(free / 1000000)
-                .append(" MB")
+            .append(free / 1000000)
+            .append(" MB")
     }
 
     private fun percentage(builder: StringBuilder, progressPercent: Float) {

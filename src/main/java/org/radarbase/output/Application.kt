@@ -49,7 +49,7 @@ import kotlin.system.exitProcess
 
 /** Main application.  */
 class Application(
-        config: RestructureConfig
+    config: RestructureConfig,
 ) : FileStoreFactory {
 
     override val config = config.apply { validate() }
@@ -64,13 +64,15 @@ class Application(
     override val sourceStorage: SourceStorage
         get() = sourceStorageFactory.createSourceStorage()
 
-    override val targetStorage: TargetStorage = TargetStorageFactory(config.target).createTargetStorage()
+    override val targetStorage: TargetStorage =
+        TargetStorageFactory(config.target).createTargetStorage()
 
     override val redisHolder: RedisHolder = RedisHolder(JedisPool(config.redis.uri))
     override val remoteLockManager: RemoteLockManager = RedisRemoteLockManager(
-            redisHolder, config.redis.lockPrefix)
+        redisHolder, config.redis.lockPrefix)
 
-    override val offsetPersistenceFactory: OffsetPersistenceFactory = OffsetRedisPersistence(redisHolder)
+    override val offsetPersistenceFactory: OffsetPersistenceFactory =
+        OffsetRedisPersistence(redisHolder)
 
     override val workerSemaphore = Semaphore(config.worker.numThreads * 2)
 
@@ -116,7 +118,8 @@ class Application(
     }
 
     private fun runService() {
-        logger.info("Running as a Service with poll interval of {} seconds", config.service.interval)
+        logger.info("Running as a Service with poll interval of {} seconds",
+            config.service.interval)
         logger.info("Press Ctrl+C to exit...")
 
         runBlocking {
@@ -131,7 +134,7 @@ class Application(
         const val CACHE_SIZE_DEFAULT = 100
 
         internal fun LongAdder.format(): String =
-                NumberFormat.getNumberInstance().format(sum())
+            NumberFormat.getNumberInstance().format(sum())
 
         private fun parseArgs(args: Array<String>): CommandLineArgs {
             val commandLineArgs = CommandLineArgs()
@@ -161,7 +164,7 @@ class Application(
             val commandLineArgs = parseArgs(args)
 
             logger.info("Starting at {}...",
-                    DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(LocalDateTime.now()))
+                DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(LocalDateTime.now()))
 
             // Enable singleton timer statements in the code.
             Timer.isEnabled = commandLineArgs.enableTimer

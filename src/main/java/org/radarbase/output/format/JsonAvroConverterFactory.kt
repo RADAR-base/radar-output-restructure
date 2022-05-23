@@ -18,10 +18,12 @@ class JsonAvroConverterFactory : RecordConverterFactory {
     private val converter = JsonAvroDataConverter()
 
     @Throws(IOException::class)
-    override fun converterFor(writer: Writer,
-                              record: GenericRecord,
-                              writeHeader: Boolean,
-                              reader: Reader): RecordConverter = JsonAvroConverter(writer, converter)
+    override fun converterFor(
+        writer: Writer,
+        record: GenericRecord,
+        writeHeader: Boolean,
+        reader: Reader,
+    ): RecordConverter = JsonAvroConverter(writer, converter)
 
     override suspend fun readTimeSeconds(
         source: InputStream,
@@ -41,7 +43,13 @@ class JsonAvroConverterFactory : RecordConverterFactory {
         )
     }
 
-    override suspend fun contains(source: Path, record: GenericRecord, compression: Compression, usingFields: Set<String>, ignoreFields: Set<String>): Boolean {
+    override suspend fun contains(
+        source: Path,
+        record: GenericRecord,
+        compression: Compression,
+        usingFields: Set<String>,
+        ignoreFields: Set<String>,
+    ): Boolean {
         val recordString = JSON_WRITER.writeValueAsString(converter.convertRecord(record))
 
         return resourceContext {

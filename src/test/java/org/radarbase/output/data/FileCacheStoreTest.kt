@@ -72,8 +72,10 @@ class FileCacheStoreTest {
         val topicPartition0 = TopicPartition("t", 0)
         val topicPartition1 = TopicPartition("t", 1)
 
-        val offsetRange0 = TopicPartitionOffsetRange(topicPartition0, OffsetRangeSet.Range(0, 0, lastModified))
-        val offsetRange1 = TopicPartitionOffsetRange(topicPartition1, OffsetRangeSet.Range(0, 8, lastModified))
+        val offsetRange0 =
+            TopicPartitionOffsetRange(topicPartition0, OffsetRangeSet.Range(0, 0, lastModified))
+        val offsetRange1 =
+            TopicPartitionOffsetRange(topicPartition1, OffsetRangeSet.Range(0, 8, lastModified))
 
         val factory = Application(
             RestructureConfig(
@@ -82,7 +84,9 @@ class FileCacheStoreTest {
                     temp = tmpDir
                 ),
                 worker = WorkerConfig(cacheSize = 2),
-                source = ResourceConfig("hdfs", hdfs = HdfsConfig(listOf("test")))))
+                source = ResourceConfig("hdfs", hdfs = HdfsConfig(listOf("test"))),
+            ),
+        )
 
         val accountant = mock<Accountant>()
         factory.newFileCacheStore(accountant).useSuspended { cache ->

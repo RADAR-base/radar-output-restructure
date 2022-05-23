@@ -40,7 +40,12 @@ interface RecordConverterFactory : Format {
      * @throws IOException if the converter could not be created
      */
     @Throws(IOException::class)
-    fun converterFor(writer: Writer, record: GenericRecord, writeHeader: Boolean, reader: Reader): RecordConverter
+    fun converterFor(
+        writer: Writer,
+        record: GenericRecord,
+        writeHeader: Boolean,
+        reader: Reader,
+    ): RecordConverter
 
     val hasHeader: Boolean
         get() = false
@@ -81,11 +86,16 @@ interface RecordConverterFactory : Format {
         return true
     }
 
-    suspend fun readTimeSeconds(source: InputStream, compression: Compression): Pair<Array<String>?, List<Double>>?
+    suspend fun readTimeSeconds(
+        source: InputStream,
+        compression: Compression,
+    ): Pair<Array<String>?, List<Double>>?
 
-    suspend fun contains(source: Path, record: GenericRecord,
-                 compression: Compression, usingFields: Set<String>,
-                 ignoreFields: Set<String>): Boolean
+    suspend fun contains(
+        source: Path, record: GenericRecord,
+        compression: Compression, usingFields: Set<String>,
+        ignoreFields: Set<String>,
+    ): Boolean
 
     override fun matchesFilename(name: String): Boolean {
         return name.matches((".*" + Pattern.quote(extension) + "(\\.[^.]+)?").toRegex())
@@ -100,14 +110,22 @@ interface RecordConverterFactory : Format {
         return headers.toTypedArray()
     }
 
-    private fun createHeader(headers: MutableList<String>, data: Any?, schema: Schema, prefix: String) {
+    private fun createHeader(
+        headers: MutableList<String>,
+        data: Any?,
+        schema: Schema,
+        prefix: String,
+    ) {
         when (schema.type) {
             Schema.Type.RECORD -> {
                 val record = data as GenericRecord
                 val subSchema = record.schema
                 for (field in subSchema.fields) {
                     val subData = record.get(field.pos())
-                    createHeader(headers, subData, field.schema(), prefix + '.'.toString() + field.name())
+                    createHeader(headers,
+                        subData,
+                        field.schema(),
+                        prefix + '.'.toString() + field.name())
                 }
             }
             Schema.Type.MAP -> {
@@ -127,7 +145,8 @@ interface RecordConverterFactory : Format {
                 val type = GenericData().resolveUnion(schema, data)
                 createHeader(headers, data, schema.types[type], prefix)
             }
-            Schema.Type.BYTES, Schema.Type.FIXED, Schema.Type.ENUM, Schema.Type.STRING, Schema.Type.INT, Schema.Type.LONG, Schema.Type.DOUBLE, Schema.Type.FLOAT, Schema.Type.BOOLEAN, Schema.Type.NULL -> headers.add(prefix)
+            Schema.Type.BYTES, Schema.Type.FIXED, Schema.Type.ENUM, Schema.Type.STRING, Schema.Type.INT, Schema.Type.LONG, Schema.Type.DOUBLE, Schema.Type.FLOAT, Schema.Type.BOOLEAN, Schema.Type.NULL -> headers.add(
+                prefix)
             else -> throw IllegalArgumentException("Cannot parse field type " + schema.type)
         }
     }

@@ -7,7 +7,7 @@ import kotlin.time.Duration.Companion.days
 
 class RedisRemoteLockManager(
     private val redisHolder: RedisHolder,
-    private val keyPrefix: String
+    private val keyPrefix: String,
 ) : RemoteLockManager {
     private val uuid: String = UUID.randomUUID().toString()
 
@@ -25,7 +25,7 @@ class RedisRemoteLockManager(
     }
 
     private inner class RemoteLock(
-        private val lockKey: String
+        private val lockKey: String,
     ) : RemoteLockManager.RemoteLock {
         override suspend fun closeAndJoin() {
             redisHolder.execute { redis ->
@@ -39,7 +39,7 @@ class RedisRemoteLockManager(
     companion object {
         private val logger = LoggerFactory.getLogger(RedisRemoteLockManager::class.java)
         private val setParams = SetParams()
-                .nx() // only set if not already set
-                .px(1.days.inWholeMilliseconds) // limit the duration of a lock to 24 hours
+            .nx() // only set if not already set
+            .px(1.days.inWholeMilliseconds) // limit the duration of a lock to 24 hours
     }
 }

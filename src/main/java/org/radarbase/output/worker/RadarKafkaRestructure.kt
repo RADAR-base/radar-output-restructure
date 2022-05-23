@@ -49,8 +49,8 @@ import kotlin.coroutines.coroutineContext
  *    - Acquire a lock before processing to avoid multiple processing of files
  */
 class RadarKafkaRestructure(
-    private val fileStoreFactory: FileStoreFactory
-): Closeable {
+    private val fileStoreFactory: FileStoreFactory,
+) : Closeable {
     private val sourceStorage = fileStoreFactory.sourceStorage
 
     private val lockManager = fileStoreFactory.remoteLockManager
@@ -64,9 +64,9 @@ class RadarKafkaRestructure(
     init {
         val config = fileStoreFactory.config
         excludeTopics = config.topics
-                .mapNotNullTo(HashSet()) { (topic, conf) ->
-                    topic.takeIf { conf.exclude }
-                }
+            .mapNotNullTo(HashSet()) { (topic, conf) ->
+                topic.takeIf { conf.exclude }
+            }
 
         val workerConfig = config.worker
         maxFilesPerTopic = workerConfig.maxFilesPerTopic ?: Int.MAX_VALUE
@@ -130,9 +130,11 @@ class RadarKafkaRestructure(
         topic: String,
         topicPath: Path,
         accountant: Accountant,
-        seenFiles: OffsetRangeSet
+        seenFiles: OffsetRangeSet,
     ): ProcessingStatistics {
-        return RestructureWorker(sourceStorage, accountant, fileStoreFactory).useSuspended { worker ->
+        return RestructureWorker(sourceStorage,
+            accountant,
+            fileStoreFactory).useSuspended { worker ->
             try {
                 val topicPaths = TopicFileList(
                     topic,
@@ -157,9 +159,10 @@ class RadarKafkaRestructure(
         supervisor.cancel()
     }
 
-    private suspend fun topicPaths(root: Path): List<Path> = sourceStorage.listTopics(root, excludeTopics)
-        // different services start on different topics to decrease lock contention
-        .shuffled()
+    private suspend fun topicPaths(root: Path): List<Path> =
+        sourceStorage.listTopics(root, excludeTopics)
+            // different services start on different topics to decrease lock contention
+            .shuffled()
 
     private data class ProcessingStatistics(
         val fileCount: Long,

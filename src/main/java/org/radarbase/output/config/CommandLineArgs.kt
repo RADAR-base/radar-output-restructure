@@ -24,35 +24,48 @@ class CommandLineArgs {
     @Parameter(description = "<input_path_1> [<input_path_2> ...]", variableArity = true)
     var inputPaths: List<String>? = null
 
-    @Parameter(names = ["-F", "--config-file"], description = "Config file. By default, $RESTRUCTURE_CONFIG_FILE_NAME is tried.")
+    @Parameter(names = ["-F", "--config-file"],
+        description = "Config file. By default, $RESTRUCTURE_CONFIG_FILE_NAME is tried.")
     var configFile: String? = null
 
     @Parameter(names = ["-C", "--clean"], description = "Run with old file cleaning enabled.")
     var clean: Boolean? = null
 
-    @Parameter(names = ["--no-restructure"], description = "Disable restructuring. Only useful if --clean is selected.")
+    @Parameter(names = ["--no-restructure"],
+        description = "Disable restructuring. Only useful if --clean is selected.")
     var noRestructure: Boolean? = null
 
-    @Parameter(names = ["-f", "--format"], description = "Format to use when converting the files. JSON and CSV are available by default.")
+    @Parameter(names = ["-f", "--format"],
+        description = "Format to use when converting the files. JSON and CSV are available by default.")
     var format: String? = null
 
-    @Parameter(names = ["-c", "--compression"], description = "Compression to use when converting the files. Gzip is available by default.")
+    @Parameter(names = ["-c", "--compression"],
+        description = "Compression to use when converting the files. Gzip is available by default.")
     var compression: String? = null
 
     // Default set to false because causes loss of records from Biovotion data. https://github.com/RADAR-base/Restructure-HDFS-topic/issues/16
-    @Parameter(names = ["-d", "--deduplicate"], description = "Boolean to define if to use deduplication or not.")
+    @Parameter(names = ["-d", "--deduplicate"],
+        description = "Boolean to define if to use deduplication or not.")
     var deduplicate: Boolean? = null
 
-    @Parameter(names = ["-n", "--nameservice"], description = "The HDFS name services to connect to. Eg - '<HOST>' for single configurations or <CLUSTER_ID> for high availability web services.", validateWith = [NonEmptyValidator::class])
+    @Parameter(names = ["-n", "--nameservice"],
+        description = "The HDFS name services to connect to. Eg - '<HOST>' for single configurations or <CLUSTER_ID> for high availability web services.",
+        validateWith = [NonEmptyValidator::class])
     var hdfsName: String? = null
 
-    @Parameter(names = ["-o", "--output-directory"], description = "The output folder where the files are to be extracted.", validateWith = [NonEmptyValidator::class])
+    @Parameter(names = ["-o", "--output-directory"],
+        description = "The output folder where the files are to be extracted.",
+        validateWith = [NonEmptyValidator::class])
     var outputDirectory: String? = null
 
-    @Parameter(names = ["-h", "--help"], help = true, description = "Display the usage of the program with available options.")
+    @Parameter(names = ["-h", "--help"],
+        help = true,
+        description = "Display the usage of the program with available options.")
     var help: Boolean = false
 
-    @Parameter(names = ["-t", "--num-threads"], description = "Number of threads to use for processing", validateWith = [PositiveInteger::class])
+    @Parameter(names = ["-t", "--num-threads"],
+        description = "Number of threads to use for processing",
+        validateWith = [PositiveInteger::class])
     var numThreads: Int? = null
 
     @Parameter(names = ["--timer"], description = "Enable timers")
@@ -61,15 +74,19 @@ class CommandLineArgs {
     @Parameter(names = ["--tmp-dir"], description = "Temporary staging directory")
     var tmpDir: String? = null
 
-    @Parameter(names = ["-s", "--cache-size"], description = "Number of files to keep in cache in a single thread.", validateWith = [PositiveInteger::class])
+    @Parameter(names = ["-s", "--cache-size"],
+        description = "Number of files to keep in cache in a single thread.",
+        validateWith = [PositiveInteger::class])
     var cacheSize: Int? = null
 
-    @Parameter(names = ["--max-files-per-topic"], description = "Maximum number of records to process, per topic. Set below 1 to disable this option.")
+    @Parameter(names = ["--max-files-per-topic"],
+        description = "Maximum number of records to process, per topic. Set below 1 to disable this option.")
     var maxFilesPerTopic: Int? = null
 
     @Parameter(names = ["-S", "--service"], description = "Run the output generation as a service")
     var asService: Boolean? = null
 
-    @Parameter(names = ["-i", "--interval"], description = "Polling interval when running as a service (seconds)")
+    @Parameter(names = ["-i", "--interval"],
+        description = "Polling interval when running as a service (seconds)")
     var pollInterval: Long? = null
 }

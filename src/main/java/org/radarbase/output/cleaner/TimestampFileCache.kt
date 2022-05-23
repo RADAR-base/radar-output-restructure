@@ -27,9 +27,9 @@ import java.nio.file.Path
 
 /** Keeps path handles of a path.  */
 class TimestampFileCache(
-        private val factory: FileStoreFactory,
-        /** File that the cache is maintaining.  */
-        val path: Path
+    private val factory: FileStoreFactory,
+    /** File that the cache is maintaining.  */
+    val path: Path,
 ) : Comparable<TimestampFileCache> {
     private val converterFactory: RecordConverterFactory = factory.recordConverter
     private var lastUse: Long = 0
@@ -55,14 +55,14 @@ class TimestampFileCache(
             val recordHeader = converterFactory.headerFor(record)
             if (!recordHeader.contentEquals(header)) {
                 throw IllegalArgumentException(
-                        "Header mismatch: record header ${recordHeader.contentToString()}" +
-                                " does not match target header ${header.contentToString()}")
+                    "Header mismatch: record header ${recordHeader.contentToString()}" +
+                        " does not match target header ${header.contentToString()}")
             }
         }
 
         val recordDate = getDate(
-                record.get("key") as? GenericRecord,
-                record.get("value") as? GenericRecord)?.toDouble()
+            record.get("key") as? GenericRecord,
+            record.get("value") as? GenericRecord)?.toDouble()
 
         return recordDate == null || recordDate in times
     }

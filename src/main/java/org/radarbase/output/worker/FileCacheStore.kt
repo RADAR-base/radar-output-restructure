@@ -66,7 +66,11 @@ class FileCacheStore(
      * @throws IOException when failing to open a file or writing to it.
      */
     @Throws(IOException::class)
-    suspend fun writeRecord(path: Path, record: GenericRecord, transaction: Accountant.Transaction): WriteResponse {
+    suspend fun writeRecord(
+        path: Path,
+        record: GenericRecord,
+        transaction: Accountant.Transaction,
+    ): WriteResponse {
         val existingCache: FileCache? = caches[path]
         val fileCache = existingCache
             ?: try {
@@ -79,7 +83,11 @@ class FileCacheStore(
         return writeRecord(fileCache, record, transaction, existingCache != null)
     }
 
-    private suspend fun createCache(path: Path, record: GenericRecord, transaction: Accountant.Transaction): FileCache {
+    private suspend fun createCache(
+        path: Path,
+        record: GenericRecord,
+        transaction: Accountant.Transaction,
+    ): FileCache {
         ensureCapacity()
 
         val dir = path.parent
@@ -121,25 +129,26 @@ class FileCacheStore(
     }
 
     @Throws(IOException::class)
-    private suspend fun writeSchema(topic: String, path: Path, schema: Schema) = time("write.schema") {
-        // Write was successful, finalize the write operation
-        val schemaPath = path.resolveSibling("schema-$topic.json")
-        // First check if we already checked this path, because otherwise the storage.exists call
-        // will take too much time.
-        if (schemasAdded.putIfAbsent(schemaPath, schemaPath) == null) {
-            withContext(Dispatchers.IO) {
-                val storage = factory.targetStorage
+    private suspend fun writeSchema(topic: String, path: Path, schema: Schema) =
+        time("write.schema") {
+            // Write was successful, finalize the write operation
+            val schemaPath = path.resolveSibling("schema-$topic.json")
+            // First check if we already checked this path, because otherwise the storage.exists call
+            // will take too much time.
+            if (schemasAdded.putIfAbsent(schemaPath, schemaPath) == null) {
+                withContext(Dispatchers.IO) {
+                    val storage = factory.targetStorage
 
-                if (storage.status(schemaPath) == null) {
-                    val tmpSchemaPath = createTempFile(tmpDir.path, "schema-$topic", ".json")
-                    tmpSchemaPath.outputStream().use { out ->
-                        out.write(schema.toString(true).toByteArray())
+                    if (storage.status(schemaPath) == null) {
+                        val tmpSchemaPath = createTempFile(tmpDir.path, "schema-$topic", ".json")
+                        tmpSchemaPath.outputStream().use { out ->
+                            out.write(schema.toString(true).toByteArray())
+                        }
+                        storage.store(tmpSchemaPath, schemaPath)
                     }
-                    storage.store(tmpSchemaPath, schemaPath)
                 }
             }
         }
-    }
 
     /**
      * Ensure that a new file cache can be added. Evict files used the longest ago from cache if needed.
@@ -148,7 +157,7 @@ class FileCacheStore(
     private suspend fun ensureCapacity() {
         if (caches.size == maxCacheSize) {
             val cacheList = ArrayList(caches.values)
-                    .sorted()
+                .sorted()
             for (i in 0 until cacheList.size / 2) {
                 val rmCache = cacheList[i]
                 caches.remove(rmCache.path)
@@ -184,14 +193,17 @@ class FileCacheStore(
      */
     enum class WriteResponse(
         /** Whether the write operation was successful. */
-        val isSuccessful: Boolean
+        val isSuccessful: Boolean,
     ) {
         /** Cache hit and write was successful.  */
         CACHE_AND_WRITE(true),
+
         /** Cache hit and write was unsuccessful because of a mismatch in number of columns.  */
         CACHE_AND_NO_WRITE(false),
+
         /** Cache miss and write was successful.  */
         NO_CACHE_AND_WRITE(true),
+
         /** Cache miss and write was unsuccessful because of a mismatch in number of columns.  */
         NO_CACHE_AND_NO_WRITE(false);
 

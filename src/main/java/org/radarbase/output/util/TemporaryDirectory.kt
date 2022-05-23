@@ -34,7 +34,7 @@ class TemporaryDirectory(root: Path, prefix: String) : Closeable {
         root.createDirectories()
         path = createTempDirectory(root, prefix)
         shutdownHook = Thread({ this.doClose() },
-                "remove-" + path.toString().replace("/".toRegex(), "-"))
+            "remove-" + path.toString().replace("/".toRegex(), "-"))
         try {
             Runtime.getRuntime().addShutdownHook(shutdownHook)
         } catch (ex: IllegalStateException) {
@@ -70,14 +70,14 @@ class TemporaryDirectory(root: Path, prefix: String) : Closeable {
 
     private fun deleteTree() {
         path.toFile().walkBottomUp()
-                .forEach {
-                    try {
-                        it.delete()
-                    } catch (ex: Exception) {
-                        logger.warn("Cannot delete temporary path {}: {}",
-                                it, ex.toString())
-                    }
+            .forEach {
+                try {
+                    it.delete()
+                } catch (ex: Exception) {
+                    logger.warn("Cannot delete temporary path {}: {}",
+                        it, ex.toString())
                 }
+            }
     }
 
     override fun close() {

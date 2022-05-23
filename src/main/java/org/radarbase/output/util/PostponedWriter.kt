@@ -34,7 +34,7 @@ abstract class PostponedWriter(
     private val name: String,
     timeout: Long,
     timeoutUnit: TimeUnit,
-): SuspendedCloseable {
+) : SuspendedCloseable {
     private var writeFuture: Job? = null
     private val modificationMutex = Mutex()
     private val workMutex = Mutex()

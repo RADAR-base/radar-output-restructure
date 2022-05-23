@@ -110,7 +110,8 @@ object Timer {
 
         operator fun plusAssign(nanoTime: Long) = add(nanoTime)
 
-        fun toTimerEntry(): TimerEntry = TimerEntry(invocations.sum(), Duration.ofNanos(totalTime.sum()), threads.size)
+        fun toTimerEntry(): TimerEntry =
+            TimerEntry(invocations.sum(), Duration.ofNanos(totalTime.sum()), threads.size)
     }
 
     data class TimerEntry(val invocations: Long, val totalTime: Duration, val numThreads: Int)

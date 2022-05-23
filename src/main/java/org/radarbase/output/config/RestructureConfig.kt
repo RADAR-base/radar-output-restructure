@@ -84,7 +84,7 @@ data class RestructureConfig(
         inline fun <T, V> T.copyOnChange(
             original: V,
             modification: (V) -> V,
-            doCopy: T.(V) -> T
+            doCopy: T.(V) -> T,
         ): T {
             val newValue = modification(original)
             return if (newValue != original) {

@@ -4,7 +4,7 @@ interface SuspendedCloseable {
     suspend fun closeAndJoin()
 
     companion object {
-        suspend inline fun <S: SuspendedCloseable?, T> S.useSuspended(action: (S) -> T): T {
+        suspend inline fun <S : SuspendedCloseable?, T> S.useSuspended(action: (S) -> T): T {
             return if (this == null) {
                 @Suppress("KotlinConstantConditions")
                 return action(this)
@@ -29,7 +29,7 @@ interface SuspendedCloseable {
             }
         }
 
-        suspend inline fun <S: AutoCloseable?, T> S.useSuspended(action: (S) -> T): T {
+        suspend inline fun <S : AutoCloseable?, T> S.useSuspended(action: (S) -> T): T {
             return if (this == null) {
                 @Suppress("KotlinConstantConditions")
                 action(this)

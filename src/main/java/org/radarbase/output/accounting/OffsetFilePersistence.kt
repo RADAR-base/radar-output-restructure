@@ -37,8 +37,8 @@ import kotlin.io.path.createTempFile
  * not present.
  */
 class OffsetFilePersistence(
-    private val targetStorage: TargetStorage
-): OffsetPersistenceFactory {
+    private val targetStorage: TargetStorage,
+) : OffsetPersistenceFactory {
     override suspend fun read(path: Path): OffsetRangeSet? {
         return try {
             if (targetStorage.status(path) != null) {
@@ -46,7 +46,7 @@ class OffsetFilePersistence(
                     OffsetRangeSet().also { set ->
                         targetStorage.newBufferedReader(path).useLines { lines ->
                             lines
-                                .drop(1)  // ignore header
+                                .drop(1) // ignore header
                                 .map(::parseLine)
                                 .forEach(set::add)
                         }
@@ -62,7 +62,7 @@ class OffsetFilePersistence(
     override fun writer(
         scope: CoroutineScope,
         path: Path,
-        startSet: OffsetRangeSet?
+        startSet: OffsetRangeSet?,
     ): OffsetPersistenceFactory.Writer = FileWriter(scope, path, startSet)
 
     private fun parseLine(line: String): TopicPartitionOffsetRange {
@@ -79,11 +79,12 @@ class OffsetFilePersistence(
         } else Instant.now()
 
         return TopicPartitionOffsetRange(
-                topic,
-                cols[2].toInt(),
-                cols[0].toLong(),
-                cols[1].toLong(),
-                lastModified)
+            topic,
+            cols[2].toInt(),
+            cols[0].toLong(),
+            cols[1].toLong(),
+            lastModified,
+        )
     }
 
     companion object {
@@ -94,9 +95,9 @@ class OffsetFilePersistence(
     private inner class FileWriter(
         scope: CoroutineScope,
         private val path: Path,
-        startSet: OffsetRangeSet?
-    ): PostponedWriter(scope, "offsets", 1, TimeUnit.SECONDS),
-            OffsetPersistenceFactory.Writer {
+        startSet: OffsetRangeSet?,
+    ) : PostponedWriter(scope, "offsets", 1, TimeUnit.SECONDS),
+        OffsetPersistenceFactory.Writer {
         override val offsets: OffsetRangeSet = startSet ?: OffsetRangeSet()
 
         override suspend fun doWrite() = time("accounting.offsets") {

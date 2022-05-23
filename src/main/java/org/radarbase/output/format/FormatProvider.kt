@@ -22,7 +22,8 @@ interface FormatProvider<T : Format> : Plugin {
     val formats: List<T>
 
     operator fun get(format: String): T = requireNotNull(formats
-            .firstOrNull { r -> r.formats
-                    .any { s -> s.equals(format, ignoreCase = true) }
-            }) { "Format $format is not supported" }
+        .firstOrNull { r ->
+            r.formats
+                .any { s -> s.equals(format, ignoreCase = true) }
+        }) { "Format $format is not supported" }
 }

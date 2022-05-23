@@ -13,7 +13,7 @@ data class FormatConfig(
         enable = false,
         distinctFields = emptySet(),
         ignoreFields = emptySet(),
-    )
+    ),
 ) : PluginConfig {
     fun createFactory(): FormatFactory = factory.toPluginInstance(properties)
     fun createConverter(): RecordConverterFactory = createFactory()[type]

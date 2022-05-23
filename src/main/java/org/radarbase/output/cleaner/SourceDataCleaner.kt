@@ -26,17 +26,18 @@ import java.util.concurrent.atomic.LongAdder
 import kotlin.coroutines.coroutineContext
 
 class SourceDataCleaner(
-    private val fileStoreFactory: FileStoreFactory
+    private val fileStoreFactory: FileStoreFactory,
 ) : Closeable {
     private val lockManager = fileStoreFactory.remoteLockManager
     private val sourceStorage = fileStoreFactory.sourceStorage
     private val excludeTopics: Set<String> = fileStoreFactory.config.topics
-            .mapNotNullTo(HashSet()) { (topic, conf) ->
-                topic.takeIf { conf.excludeFromDelete }
-            }
-    private val maxFilesPerTopic: Int = fileStoreFactory.config.cleaner.maxFilesPerTopic ?: Int.MAX_VALUE
+        .mapNotNullTo(HashSet()) { (topic, conf) ->
+            topic.takeIf { conf.excludeFromDelete }
+        }
+    private val maxFilesPerTopic: Int =
+        fileStoreFactory.config.cleaner.maxFilesPerTopic ?: Int.MAX_VALUE
     private val deleteThreshold: Instant? = Instant.now()
-            .minus(fileStoreFactory.config.cleaner.age.toLong(), ChronoUnit.DAYS)
+        .minus(fileStoreFactory.config.cleaner.age.toLong(), ChronoUnit.DAYS)
 
     val deletedFileCount = LongAdder()
     private val supervisor = SupervisorJob()
@@ -76,8 +77,11 @@ class SourceDataCleaner(
                 coroutineScope {
                     resourceContext {
                         val accountant = createResource { AccountantImpl(fileStoreFactory, topic) }
-                                .apply { initialize(this@coroutineScope) }
-                        val extractionCheck = createResource { TimestampExtractionCheck(sourceStorage, fileStoreFactory) }
+                            .apply { initialize(this@coroutineScope) }
+                        val extractionCheck = createResource {
+                            TimestampExtractionCheck(sourceStorage,
+                                fileStoreFactory)
+                        }
                         deleteOldFiles(accountant, extractionCheck, topic, topicPath).toLong()
                     }
                 }
@@ -92,7 +96,7 @@ class SourceDataCleaner(
         accountant: Accountant,
         extractionCheck: ExtractionCheck,
         topic: String,
-        topicPath: Path
+        topicPath: Path,
     ): Int {
         val offsets = accountant.offsets.copyForTopic(topic)
 
@@ -121,9 +125,10 @@ class SourceDataCleaner(
             }
     }
 
-    private suspend fun topicPaths(path: Path): List<Path> = sourceStorage.listTopics(path, excludeTopics)
-        // different services start on different topics to decrease lock contention
-        .shuffled()
+    private suspend fun topicPaths(path: Path): List<Path> =
+        sourceStorage.listTopics(path, excludeTopics)
+            // different services start on different topics to decrease lock contention
+            .shuffled()
 
     override fun close() {
         supervisor.cancel()

@@ -19,7 +19,7 @@ import java.nio.file.Path
 import kotlin.io.path.inputStream
 import kotlin.io.path.outputStream
 
-class CsvAvroConverterFactory: RecordConverterFactory {
+class CsvAvroConverterFactory : RecordConverterFactory {
     override val extension: String = ".csv"
 
     override val formats: Collection<String> = setOf("csv")
@@ -39,9 +39,9 @@ class CsvAvroConverterFactory: RecordConverterFactory {
                 val fields = fieldIndexes(header, distinctFields, ignoreFields)
                 var count = 0
                 val lineMap = lines
-                        .onEach { count += 1 }
-                        .mapIndexed { idx, line -> Pair(ArrayWrapper(line.byIndex(fields)), idx) }
-                        .toMap(HashMap())
+                    .onEach { count += 1 }
+                    .mapIndexed { idx, line -> Pair(ArrayWrapper(line.byIndex(fields)), idx) }
+                    .toMap(HashMap())
 
                 if (lineMap.size == count) {
                     logger.debug("File {} is already deduplicated. Skipping.", fileName)
@@ -49,20 +49,23 @@ class CsvAvroConverterFactory: RecordConverterFactory {
                 }
 
                 Pair(header, lineMap.values
-                        .toIntArray()
-                        .apply { sort() })
+                    .toIntArray()
+                    .apply { sort() })
             }
         }
 
         source.inputStream().useSuspended { input ->
             processLines(input, compression) { _, lines ->
                 var indexIndex = 0
-                writeLines(target, fileName, compression, sequenceOf(header) + lines.filterIndexed { i, _ ->
-                    if (indexIndex < lineIndexes.size && lineIndexes[indexIndex] == i) {
-                        indexIndex += 1
-                        true
-                    } else false
-                })
+                writeLines(target,
+                    fileName,
+                    compression,
+                    sequenceOf(header) + lines.filterIndexed { i, _ ->
+                        if (indexIndex < lineIndexes.size && lineIndexes[indexIndex] == i) {
+                            indexIndex += 1
+                            true
+                        } else false
+                    })
             }
         }
         return true
@@ -97,14 +100,17 @@ class CsvAvroConverterFactory: RecordConverterFactory {
         fieldTimeParser("value.timeCompleted") { it.parseTime() },
     )
 
-    override suspend fun readTimeSeconds(source: InputStream, compression: Compression): Pair<Array<String>, List<Double>>? {
+    override suspend fun readTimeSeconds(
+        source: InputStream,
+        compression: Compression,
+    ): Pair<Array<String>, List<Double>>? {
         return processLines(source, compression) { header, lines ->
             header ?: return@processLines null
 
             val parsers = fieldTimeParsers.mapNotNull { (key, parser) ->
                 header.indexOf(key)
-                        .takeIf { it >= 0 }
-                        ?.let { Pair(it, parser) }
+                    .takeIf { it >= 0 }
+                    ?.let { Pair(it, parser) }
             }
 
             Pair(header, if (parsers.isEmpty()) emptyList() else {
@@ -209,7 +215,7 @@ class CsvAvroConverterFactory: RecordConverterFactory {
 
         @Throws(IndexOutOfBoundsException::class)
         inline fun <reified T> Array<T>.byIndex(
-                indexes: IntArray?
+            indexes: IntArray?,
         ): Array<T> = if (indexes == null) this else {
             Array(indexes.size) { i -> this[indexes[i]] }
         }

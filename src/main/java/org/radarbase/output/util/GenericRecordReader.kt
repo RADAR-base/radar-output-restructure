@@ -9,14 +9,20 @@ import org.radarbase.output.util.Timer.time
 import java.io.Closeable
 
 class GenericRecordReader(
-    private val reader: DataFileReader<GenericRecord>
-): Closeable, Iterator<GenericRecord> {
+    private val reader: DataFileReader<GenericRecord>,
+) : Closeable, Iterator<GenericRecord> {
     private var tmpRecord: GenericRecord? = null
 
-    constructor(input: SeekableInput) : this(DataFileReader(input,
-        GenericDatumReader(null, null, GenericData().apply {
-            isFastReaderEnabled = true
-        })))
+    constructor(input: SeekableInput) : this(DataFileReader(
+        input,
+        GenericDatumReader(
+            null,
+            null,
+            GenericData().apply {
+                isFastReaderEnabled = true
+            }
+        ),
+    ))
 
     override fun hasNext(): Boolean = reader.hasNext()
 

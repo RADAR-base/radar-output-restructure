@@ -18,7 +18,7 @@ import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
  * Instances of this class may only be used from a single thread. When the resourceContext is
  * finished, the managed resources are closed in the reversed order that they were created.
  */
-class ResourceContext: SuspendedCloseable {
+class ResourceContext : SuspendedCloseable {
     private val resources: MutableList<SuspendedCloseable> = mutableListOf()
 
     /** Add a given resource to be closed when this ResourceContext is closed. */
@@ -31,25 +31,25 @@ class ResourceContext: SuspendedCloseable {
     }
 
     /** Create a resource with [supplier] to be closed when this ResourceContext is closed. */
-    inline fun <T: Any> createResource(supplier: () -> T): T = supplier()
+    inline fun <T : Any> createResource(supplier: () -> T): T = supplier()
         .also { resource(it) }
 
     /**
      * Create a resource chain with [supplier] to be closed when this ResourceContext is closed.
      * The chain can be extended with more [Chain.chain] calls and finished with [Chain.conclude].
      */
-    inline fun <T: Any> resourceChain(supplier: () -> T): Chain<T> {
+    inline fun <T : Any> resourceChain(supplier: () -> T): Chain<T> {
         return Chain(createResource(supplier))
     }
 
-    inner class Chain<T: Any>(
+    inner class Chain<T : Any>(
         val result: T,
     ) {
         /**
          * Chain next resource from [supplier] with the previous [result] as an argument.
          * @return another resource chain to do further chaining with.
          */
-        inline fun <R: AutoCloseable> chain(
+        inline fun <R : AutoCloseable> chain(
             supplier: (T) -> R,
         ): Chain<R> = Chain(conclude(supplier))
 
@@ -58,7 +58,7 @@ class ResourceContext: SuspendedCloseable {
          * It takes the previous [result] as an argument.
          * @return resource to use directly.
          */
-        inline fun <R: AutoCloseable> conclude(
+        inline fun <R : AutoCloseable> conclude(
             supplier: (T) -> R,
         ): R = supplier(result)
             .also { resource(it) }
@@ -89,6 +89,7 @@ class ResourceContext: SuspendedCloseable {
     }
 
     companion object {
-        suspend inline fun <T> resourceContext(exec: ResourceContext.() -> T): T = ResourceContext().useSuspended(exec)
+        suspend inline fun <T> resourceContext(exec: ResourceContext.() -> T): T =
+            ResourceContext().useSuspended(exec)
     }
 }

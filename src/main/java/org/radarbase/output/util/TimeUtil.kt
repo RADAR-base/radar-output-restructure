@@ -19,8 +19,10 @@ object TimeUtil {
      * @return date contained in the values of either record, or `null` if not found or
      * it cannot be parsed.
      */
-    fun getDate(key: GenericRecord?,
-                value: GenericRecord?): Instant? {
+    fun getDate(
+        key: GenericRecord?,
+        value: GenericRecord?,
+    ): Instant? {
         value?.timeOrNull("time")
             ?.let { return it }
 
@@ -98,11 +100,12 @@ object TimeUtil {
      * @return `Instant` representing the dateTime or `null` if the field cannot be
      * found or parsed.
      */
-    private fun GenericRecord.dateTimeOrNull(fieldName: String): Instant? = getFieldOrNull(fieldName)
-        ?.takeIf { it.hasType(Schema.Type.STRING) }
-        ?.let { get(it.pos()) }
-        ?.toString()
-        ?.parseDateTime()
+    private fun GenericRecord.dateTimeOrNull(fieldName: String): Instant? =
+        getFieldOrNull(fieldName)
+            ?.takeIf { it.hasType(Schema.Type.STRING) }
+            ?.let { get(it.pos()) }
+            ?.toString()
+            ?.parseDateTime()
 
     /**
      * Parse the date field of a record, if present.
@@ -145,8 +148,8 @@ object TimeUtil {
     }
 
     fun Instant.toDouble() = (epochSecond.toBigDecimal()
-            + (nano.toBigDecimal().divide(NANO_MULTIPLIER, 9, RoundingMode.HALF_UP))
-            ).toDouble()
+        + (nano.toBigDecimal().divide(NANO_MULTIPLIER, 9, RoundingMode.HALF_UP))
+        ).toDouble()
 
     private fun JsonNode.getOrNull(fieldName: String): JsonNode? = fields().asSequence()
         .find { (name, _) -> name.equals(fieldName, ignoreCase = true) }

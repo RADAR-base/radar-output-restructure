@@ -10,7 +10,7 @@ import java.io.IOException
 
 class RedisHolder(
     private val jedisPool: JedisPool,
-): Closeable {
+) : Closeable {
     @Throws(IOException::class)
     suspend fun <T> execute(routine: suspend (Jedis) -> T): T = withContext(Dispatchers.IO) {
         try {

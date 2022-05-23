@@ -56,8 +56,8 @@ open class FormattedPathFactory : RecordPathFactory() {
         if (illegalParameters.isNotEmpty()) {
             throw IllegalArgumentException(
                 "Cannot use path format $format: unknown parameters $illegalParameters." +
-                        " Legal parameter names are time formats (e.g., \${time:YYYYmmDD}" +
-                        " or the following: $knownParameters",
+                    " Legal parameter names are time formats (e.g., \${time:YYYYmmDD}" +
+                    " or the following: $knownParameters",
             )
         }
         if ("topic" !in parameters) {

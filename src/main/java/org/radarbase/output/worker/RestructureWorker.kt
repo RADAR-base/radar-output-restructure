@@ -28,7 +28,7 @@ internal class RestructureWorker(
     storage: SourceStorage,
     private val accountant: Accountant,
     fileStoreFactory: FileStoreFactory,
-): SuspendedCloseable {
+) : SuspendedCloseable {
     var processedFileCount: Long = 0
     var processedRecordsCount: Long = 0
     private val reader = storage.createReader()
@@ -48,14 +48,14 @@ internal class RestructureWorker(
 
         if (numOffsets == null) {
             logger.info("Processing topic {}: converting {} files",
-                    topic, numberFormat.format(numFiles))
+                topic, numberFormat.format(numFiles))
         } else {
             logger.info("Processing topic {}: converting {} files with {} records",
-                    topic, numberFormat.format(numFiles), numberFormat.format(numOffsets))
+                topic, numberFormat.format(numFiles), numberFormat.format(numOffsets))
         }
 
         val seenOffsets = accountant.offsets
-                .withFactory { ReadOnlyFunctionalValue(it) }
+            .withFactory { ReadOnlyFunctionalValue(it) }
 
         val progressBar = ProgressBar(topic, totalProgress, 50, 5, TimeUnit.SECONDS)
         progressBar.update(0)
@@ -67,13 +67,13 @@ internal class RestructureWorker(
             for (file in topicPaths.files) {
                 val processedSize = try {
                     this.processFile(file, progressBar, seenOffsets)
-                            .also { size ->
-                                val expectedSize = file.range.range.size
-                                if (expectedSize != null && size != expectedSize) {
-                                    logger.warn("File {} contains {} records instead of expected {}",
-                                            file.path, size, expectedSize)
-                                }
+                        .also { size ->
+                            val expectedSize = file.range.range.size
+                            if (expectedSize != null && size != expectedSize) {
+                                logger.warn("File {} contains {} records instead of expected {}",
+                                    file.path, size, expectedSize)
                             }
+                        }
                 } catch (exc: JsonMappingException) {
                     logger.error("Cannot map values", exc)
                     0L
@@ -103,8 +103,10 @@ internal class RestructureWorker(
     }
 
     @Throws(IOException::class)
-    private suspend fun processFile(file: TopicFile,
-                            progressBar: ProgressBar, seenOffsets: OffsetRangeSet): Long {
+    private suspend fun processFile(
+        file: TopicFile,
+        progressBar: ProgressBar, seenOffsets: OffsetRangeSet,
+    ): Long {
         logger.debug("Reading {}", file.path)
 
         val offset = file.range.range.from
@@ -116,7 +118,8 @@ internal class RestructureWorker(
                 logger.warn("File {} has zero length, skipping.", file.path)
                 return 0L
             }
-            val transaction = Accountant.Transaction(file.range.topicPartition, offset, file.lastModified)
+            val transaction =
+                Accountant.Transaction(file.range.topicPartition, offset, file.lastModified)
             withContext(Dispatchers.Default) {
                 GenericRecordReader(input).use { reader ->
                     var currentOffset = offset
@@ -145,12 +148,13 @@ internal class RestructureWorker(
 
     @Throws(IOException::class)
     private suspend fun writeRecord(
-            transaction: Accountant.Transaction,
-            record: GenericRecord) {
+        transaction: Accountant.Transaction,
+        record: GenericRecord,
+    ) {
         var currentSuffix = 0
         do {
             val (path) = pathFactory.getRecordOrganization(
-                    transaction.topicPartition.topic, record, currentSuffix)
+                transaction.topicPartition.topic, record, currentSuffix)
 
             // Write data
             val response = time("write") {

@@ -12,6 +12,7 @@ import java.time.Instant
 interface SourceStorage {
     /** Create a reader for the storage medium. It should be closed by the caller. */
     fun createReader(): SourceStorageReader
+
     /** List all files in the given directory. */
     suspend fun list(
         path: Path,
@@ -53,7 +54,7 @@ interface SourceStorage {
      * File reader for the storage medium.
      * All inputs opened by this reader should be closed before closing the reader itself.
      */
-    interface SourceStorageReader: SuspendedCloseable {
+    interface SourceStorageReader : SuspendedCloseable {
         /**
          * Open given file path as a SeekableInput.
          * For remote files, implementing this may download the file to a local cache before

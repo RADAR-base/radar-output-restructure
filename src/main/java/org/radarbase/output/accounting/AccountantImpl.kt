@@ -14,7 +14,7 @@ import kotlin.io.path.exists
 open class AccountantImpl(
     private val factory: FileStoreFactory,
     private val topic: String,
-): Accountant {
+) : Accountant {
     private lateinit var offsetFile: OffsetPersistenceFactory.Writer
 
     override val offsets: OffsetRangeSet
@@ -38,7 +38,7 @@ open class AccountantImpl(
     private suspend fun readDeprecatedOffsets(
         config: RestructureConfig,
         targetStorage: TargetStorage,
-        topic: String
+        topic: String,
     ): OffsetRangeSet? {
         val offsetsPath = config.paths.output
             .resolve(OFFSETS_FILE_NAME)
@@ -46,7 +46,7 @@ open class AccountantImpl(
 
         return if (offsetsPath.exists()) {
             OffsetFilePersistence(targetStorage).read(offsetsPath)
-                    .also { offsetsPath.deleteExisting() }
+                .also { offsetsPath.deleteExisting() }
         } else null
     }
 

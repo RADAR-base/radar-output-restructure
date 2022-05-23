@@ -69,16 +69,16 @@ class FileCacheTest {
         this.tmpDir = tmpPath
 
         val schema = SchemaBuilder.record("simple").fields()
-                .name("a").type("string").noDefault()
-                .endRecord()
+            .name("a").type("string").noDefault()
+            .endRecord()
         this.exampleRecord = GenericRecordBuilder(schema).set("a", "something").build()
 
         config = RestructureConfig(
-                paths = PathConfig(
-                        output = path.parent,
-                        temp = tmpPath
-                ),
-                source = ResourceConfig("hdfs", hdfs = HdfsConfig(listOf("test"))))
+            paths = PathConfig(
+                output = path.parent,
+                temp = tmpPath
+            ),
+            source = ResourceConfig("hdfs", hdfs = HdfsConfig(listOf("test"))))
 
         setUp(config)
 
@@ -99,7 +99,7 @@ class FileCacheTest {
         FileCache(factory, "topic", path, tmpDir, accountant).useSuspended { cache ->
             cache.initialize(exampleRecord)
             cache.writeRecord(exampleRecord,
-                    Accountant.Transaction(topicPartition, 0L, lastModified))
+                Accountant.Transaction(topicPartition, 0L, lastModified))
         }
 
         println("Gzip: " + path.fileSize())
@@ -123,13 +123,13 @@ class FileCacheTest {
         FileCache(factory, "topic", path, tmpDir, accountant).useSuspended { cache ->
             cache.initialize(exampleRecord)
             cache.writeRecord(exampleRecord,
-                    Accountant.Transaction(topicPartition, 0, lastModified))
+                Accountant.Transaction(topicPartition, 0, lastModified))
         }
 
         FileCache(factory, "topic", path, tmpDir, accountant).useSuspended { cache ->
             cache.initialize(exampleRecord)
             cache.writeRecord(exampleRecord,
-                    Accountant.Transaction(topicPartition, 0, lastModified))
+                Accountant.Transaction(topicPartition, 0, lastModified))
         }
 
         println("Gzip appended: " + path.fileSize())
@@ -149,7 +149,7 @@ class FileCacheTest {
         FileCache(factory, "topic", path, tmpDir, accountant).useSuspended { cache ->
             cache.initialize(exampleRecord)
             cache.writeRecord(exampleRecord,
-                    Accountant.Transaction(topicPartition, 0, lastModified))
+                Accountant.Transaction(topicPartition, 0, lastModified))
         }
 
         println("Plain: " + path.fileSize())
@@ -164,13 +164,13 @@ class FileCacheTest {
         FileCache(factory, "topic", path, tmpDir, accountant).useSuspended { cache ->
             cache.initialize(exampleRecord)
             cache.writeRecord(exampleRecord,
-                    Accountant.Transaction(topicPartition, 0, lastModified))
+                Accountant.Transaction(topicPartition, 0, lastModified))
         }
 
         FileCache(factory, "topic", path, tmpDir, accountant).useSuspended { cache ->
             cache.initialize(exampleRecord)
             cache.writeRecord(exampleRecord,
-                    Accountant.Transaction(topicPartition, 1, lastModified))
+                Accountant.Transaction(topicPartition, 1, lastModified))
         }
 
         println("Plain appended: " + path.fileSize())

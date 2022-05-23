@@ -12,5 +12,5 @@ interface RemoteLockManager {
         action()
     }
 
-    interface RemoteLock: SuspendedCloseable
+    interface RemoteLock : SuspendedCloseable
 }

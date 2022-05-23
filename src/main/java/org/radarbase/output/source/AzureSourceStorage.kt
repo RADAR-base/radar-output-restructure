@@ -15,10 +15,10 @@ import kotlin.io.path.createTempFile
 import kotlin.io.path.deleteIfExists
 
 class AzureSourceStorage(
-        client: BlobServiceClient,
-        config: AzureConfig,
-        private val tempPath: Path
-): SourceStorage {
+    client: BlobServiceClient,
+    config: AzureConfig,
+    private val tempPath: Path,
+) : SourceStorage {
     private val blobContainerClient = client.getBlobContainerClient(config.container)
     private val readOffsetFromMetadata = config.endOffsetFromMetadata
 
@@ -49,9 +49,9 @@ class AzureSourceStorage(
 
                 if (endOffset != null) {
                     topicFile = topicFile.copy(
-                            range = topicFile.range.mapRange {
-                                it.copy(to = endOffset)
-                            })
+                        range = topicFile.range.mapRange {
+                            it.copy(to = endOffset)
+                        })
                 }
             } catch (ex: Exception) {
                 // skip reading end offset
@@ -67,22 +67,24 @@ class AzureSourceStorage(
 
     override fun createReader(): SourceStorage.SourceStorageReader = AzureSourceStorageReader()
 
-    private inner class AzureSourceStorageReader: SourceStorage.SourceStorageReader {
+    private inner class AzureSourceStorageReader : SourceStorage.SourceStorageReader {
         private val tempDir = TemporaryDirectory(tempPath, "worker-")
 
-        override suspend fun newInput(file: TopicFile): SeekableInput = withContext(Dispatchers.IO) {
-            val fileName = createTempFile(tempDir.path, "${file.topic}-${file.path.fileName}", ".avro")
+        override suspend fun newInput(file: TopicFile): SeekableInput =
+            withContext(Dispatchers.IO) {
+                val fileName =
+                    createTempFile(tempDir.path, "${file.topic}-${file.path.fileName}", ".avro")
 
-            blobClient(file.path)
-                .downloadToFile(fileName.toString(), true)
+                blobClient(file.path)
+                    .downloadToFile(fileName.toString(), true)
 
-            object : SeekableFileInput(fileName.toFile()) {
-                override fun close() {
-                    super.close()
-                    fileName.deleteIfExists()
+                object : SeekableFileInput(fileName.toFile()) {
+                    override fun close() {
+                        super.close()
+                        fileName.deleteIfExists()
+                    }
                 }
             }
-        }
 
         override suspend fun closeAndJoin() = withContext(Dispatchers.IO) {
             tempDir.close()
