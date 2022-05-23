@@ -268,8 +268,9 @@ dockerCompose {
     isRequiredBy(integrationTest)
 }
 
-val check by tasks
-check.dependsOn(integrationTest)
+tasks["composeUp"].dependsOn("composePull")
+
+tasks["check"].dependsOn(integrationTest)
 
 tasks.withType<Test> {
     useJUnitPlatform()
