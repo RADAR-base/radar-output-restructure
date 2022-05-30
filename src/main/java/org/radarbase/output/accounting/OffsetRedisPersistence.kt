@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectWriter
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import kotlinx.coroutines.CoroutineScope
 import org.radarbase.output.util.PostponedWriter
 import org.radarbase.output.util.Timer.time
 import org.slf4j.LoggerFactory
@@ -32,46 +33,54 @@ import java.util.concurrent.TimeUnit
  * Accesses a OffsetRange json object a Redis entry.
  */
 class OffsetRedisPersistence(
-        private val redisHolder: RedisHolder
+    private val redisHolder: RedisHolder,
 ) : OffsetPersistenceFactory {
 
-    override fun read(path: Path): OffsetRangeSet? {
+    override suspend fun read(path: Path): OffsetRangeSet? {
         return try {
             redisHolder.execute { redis ->
                 redis[path.toString()]?.let { value ->
                     redisOffsetReader.readValue<RedisOffsetRangeSet>(value)
-                            .partitions
-                            .fold(OffsetRangeSet(), { set, (topic, partition, ranges) ->
-                                set.apply { addAll(TopicPartition(topic, partition), ranges) }
-                            })
+                        .partitions
+                        .fold(OffsetRangeSet()) { set, (topic, partition, ranges) ->
+                            set.apply { addAll(TopicPartition(topic, partition), ranges) }
+                        }
                 }
             }
         } catch (ex: IOException) {
-            logger.error("Error reading offsets from Redis: {}. Processing all offsets.", ex.toString())
+            logger.error(
+                "Error reading offsets from Redis: {}. Processing all offsets.",
+                ex.toString(),
+            )
             null
         }
     }
 
     override fun writer(
-            path: Path,
-            startSet: OffsetRangeSet?
-    ): OffsetPersistenceFactory.Writer = RedisWriter(path, startSet)
+        scope: CoroutineScope,
+        path: Path,
+        startSet: OffsetRangeSet?,
+    ): OffsetPersistenceFactory.Writer = RedisWriter(scope, path, startSet)
 
     private inner class RedisWriter(
-            private val path: Path,
-            startSet: OffsetRangeSet?
-    ) : PostponedWriter("offsets", 1, TimeUnit.SECONDS),
-            OffsetPersistenceFactory.Writer {
+        scope: CoroutineScope,
+        private val path: Path,
+        startSet: OffsetRangeSet?,
+    ) : PostponedWriter(scope, "offsets", 1, TimeUnit.SECONDS),
+        OffsetPersistenceFactory.Writer {
         override val offsets: OffsetRangeSet = startSet ?: OffsetRangeSet()
 
-        override fun doWrite(): Unit = time("accounting.offsets") {
+        override suspend fun doWrite(): Unit = time("accounting.offsets") {
             try {
-                val offsets = RedisOffsetRangeSet(offsets.map { topicPartition, offsetIntervals ->
-                    RedisOffsetIntervals(
+                val offsets = RedisOffsetRangeSet(
+                    offsets.map { topicPartition, offsetIntervals ->
+                        RedisOffsetIntervals(
                             topicPartition.topic,
                             topicPartition.partition,
-                            offsetIntervals.toList())
-                })
+                            offsetIntervals.toList(),
+                        )
+                    }
+                )
 
                 redisHolder.execute { redis ->
                     redis.set(path.toString(), redisOffsetWriter.writeValueAsString(offsets))
@@ -84,12 +93,14 @@ class OffsetRedisPersistence(
 
     companion object {
         data class RedisOffsetRangeSet(
-                val partitions: List<RedisOffsetIntervals>)
+            val partitions: List<RedisOffsetIntervals>,
+        )
 
         data class RedisOffsetIntervals(
-                val topic: String,
-                val partition: Int,
-                val ranges: List<OffsetRangeSet.Range>)
+            val topic: String,
+            val partition: Int,
+            val ranges: List<OffsetRangeSet.Range>,
+        )
 
         private val logger = LoggerFactory.getLogger(OffsetRedisPersistence::class.java)
         private val mapper = jacksonObjectMapper().apply {

@@ -1,12 +1,16 @@
 package org.radarbase.output.accounting
 
-import java.io.Closeable
+import org.radarbase.output.util.SuspendedCloseable
+import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 
 interface RemoteLockManager {
-    fun acquireLock(name: String): RemoteLock?
-    fun <T> tryRunLocked(name: String, action: () -> T): T? = acquireLock(name)?.use {
+    suspend fun acquireLock(name: String): RemoteLock?
+    suspend fun <T> tryWithLock(
+        name: String,
+        action: suspend () -> T,
+    ): T? = acquireLock(name)?.useSuspended {
         action()
     }
 
-    interface RemoteLock: Closeable
+    interface RemoteLock : SuspendedCloseable
 }

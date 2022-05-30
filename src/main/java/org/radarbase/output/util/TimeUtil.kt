@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.path.RecordPathFactory.Companion.getFieldOrNull
-import org.radarbase.output.path.RecordPathFactory.Companion.getOrNull
 import java.math.RoundingMode
 import java.time.*
 import java.time.format.DateTimeParseException
@@ -20,8 +19,10 @@ object TimeUtil {
      * @return date contained in the values of either record, or `null` if not found or
      * it cannot be parsed.
      */
-    fun getDate(key: GenericRecord?,
-                value: GenericRecord?): Instant? {
+    fun getDate(
+        key: GenericRecord?,
+        value: GenericRecord?,
+    ): Instant? {
         value?.timeOrNull("time")
             ?.let { return it }
 
@@ -99,11 +100,12 @@ object TimeUtil {
      * @return `Instant` representing the dateTime or `null` if the field cannot be
      * found or parsed.
      */
-    private fun GenericRecord.dateTimeOrNull(fieldName: String): Instant? = getFieldOrNull(fieldName)
-        ?.takeIf { it.hasType(Schema.Type.STRING) }
-        ?.let { get(it.pos()) }
-        ?.toString()
-        ?.parseDateTime()
+    private fun GenericRecord.dateTimeOrNull(fieldName: String): Instant? =
+        getFieldOrNull(fieldName)
+            ?.takeIf { it.hasType(Schema.Type.STRING) }
+            ?.let { get(it.pos()) }
+            ?.toString()
+            ?.parseDateTime()
 
     /**
      * Parse the date field of a record, if present.
@@ -145,9 +147,10 @@ object TimeUtil {
         null
     }
 
-    fun Instant.toDouble() = (epochSecond.toBigDecimal()
-            + (nano.toBigDecimal().divide(NANO_MULTIPLIER, 9, RoundingMode.HALF_UP))
-            ).toDouble()
+    fun Instant.toDouble() = (
+        epochSecond.toBigDecimal() +
+            (nano.toBigDecimal().divide(NANO_MULTIPLIER, 9, RoundingMode.HALF_UP))
+        ).toDouble()
 
     private fun JsonNode.getOrNull(fieldName: String): JsonNode? = fields().asSequence()
         .find { (name, _) -> name.equals(fieldName, ignoreCase = true) }
@@ -155,8 +158,8 @@ object TimeUtil {
 
     private fun Schema.Field.hasType(type: Schema.Type): Boolean {
         val s = schema()
-        return s.type == type
-            || (s.type == Schema.Type.UNION && s.types.any { it.type == type })
+        return s.type == type ||
+            (s.type == Schema.Type.UNION && s.types.any { it.type == type })
     }
 
     fun Temporal.durationSince(): Duration = Duration.between(this, Instant.now())

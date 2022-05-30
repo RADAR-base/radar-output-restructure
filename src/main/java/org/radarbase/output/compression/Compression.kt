@@ -23,6 +23,7 @@ import java.io.OutputStream
 
 interface Compression : Format {
     override val extension: String
+
     @Throws(IOException::class)
     fun compress(fileName: String, out: OutputStream): OutputStream
 

@@ -24,6 +24,10 @@ data class TopicPartition(val topic: String, val partition: Int) : Comparable<To
 
     override fun hashCode() = hash
 
-    override fun compareTo(other: TopicPartition) = compareValuesBy(this, other,
-            TopicPartition::topic, TopicPartition::partition)
+    override fun compareTo(other: TopicPartition) = compareValuesBy(
+        this,
+        other,
+        TopicPartition::topic,
+        TopicPartition::partition
+    )
 }

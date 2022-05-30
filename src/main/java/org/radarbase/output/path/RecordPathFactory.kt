@@ -39,10 +39,15 @@ abstract class RecordPathFactory : Plugin {
         properties["timeBinFormat"]?.let {
             try {
                 timeBinFormat = DateTimeFormatter
-                        .ofPattern(it)
-                        .withZone(UTC)
+                    .ofPattern(it)
+                    .withZone(UTC)
             } catch (ex: IllegalArgumentException) {
-                logger.error("Cannot use time bin format {}, using {} instead", it, timeBinFormat, ex)
+                logger.error(
+                    "Cannot use time bin format {}, using {} instead",
+                    it,
+                    timeBinFormat,
+                    ex,
+                )
             }
         }
     }
@@ -113,34 +118,36 @@ abstract class RecordPathFactory : Plugin {
     abstract fun getCategory(key: GenericRecord, value: GenericRecord): String
 
     open fun getTimeBin(time: Instant?): String = time
-            ?.let { timeBinFormat.format(time)}
-            ?: "unknown_date"
+        ?.let { timeBinFormat.format(time) }
+        ?: "unknown_date"
 
     /**
      * Organization of a record.
      */
     data class RecordOrganization(
-            /** Path that the record should be stored in. */
-            val path: Path,
-            /** Category or partition that the record belongs to. */
-            val category: String,
-            /** Time contained in the record, if any. */
-            val time: Instant?)
+        /** Path that the record should be stored in. */
+        val path: Path,
+        /** Category or partition that the record belongs to. */
+        val category: String,
+        /** Time contained in the record, if any. */
+        val time: Instant?,
+    )
 
     companion object {
         private val logger = LoggerFactory.getLogger(RecordPathFactory::class.java)
         private val ILLEGAL_CHARACTER_PATTERN = Pattern.compile("[^a-zA-Z0-9_-]+")
 
         val HOURLY_TIME_BIN_FORMAT: DateTimeFormatter = DateTimeFormatter
-                .ofPattern("yyyyMMdd_HH'00'")
-                .withZone(UTC)
+            .ofPattern("yyyyMMdd_HH'00'")
+            .withZone(UTC)
 
         fun sanitizeId(id: Any?, defaultValue: String): String = id
-                ?.let { ILLEGAL_CHARACTER_PATTERN.matcher(it.toString()).replaceAll("") }
-                ?.takeIf { it.isNotEmpty() }
-                ?: defaultValue
+            ?.let { ILLEGAL_CHARACTER_PATTERN.matcher(it.toString()).replaceAll("") }
+            ?.takeIf { it.isNotEmpty() }
+            ?: defaultValue
 
-        private val observationKeySchema = Schema.Parser().parse("""
+        private val observationKeySchema = Schema.Parser().parse(
+            """
             {
               "namespace": "org.radarcns.kafka",
               "type": "record",
@@ -152,7 +159,8 @@ abstract class RecordPathFactory : Plugin {
                 {"name": "sourceId", "type": "string", "doc": "Unique identifier associated with the source."}
               ]
             }
-        """.trimIndent())
+            """.trimIndent()
+        )
 
         fun GenericRecord.getFieldOrNull(fieldName: String): Schema.Field? {
             return schema.fields
@@ -160,6 +168,6 @@ abstract class RecordPathFactory : Plugin {
         }
 
         fun GenericRecord.getOrNull(fieldName: String): Any? = getFieldOrNull(fieldName)
-                ?.let { get(it.pos()) }
+            ?.let { get(it.pos()) }
     }
 }

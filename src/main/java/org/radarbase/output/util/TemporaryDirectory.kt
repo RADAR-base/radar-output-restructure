@@ -19,28 +19,30 @@ package org.radarbase.output.util
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.IOException
-import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.createDirectories
+import kotlin.io.path.createTempDirectory
+import kotlin.io.path.exists
 
 /** Temporary directory that will be removed on close or shutdown.  */
-class TemporaryDirectory @Throws(IOException::class)
-constructor(root: Path, prefix: String) : Closeable {
+class TemporaryDirectory(root: Path, prefix: String) : Closeable {
 
     private val shutdownHook: Thread
     val path: Path
 
     init {
-        Files.createDirectories(root)
-        path = Files.createTempDirectory(root, prefix)
-        shutdownHook = Thread(Runnable { this.doClose() },
-                "remove-" + path.toString().replace("/".toRegex(), "-"))
+        root.createDirectories()
+        path = createTempDirectory(root, prefix)
+        shutdownHook = Thread(
+            { this.doClose() },
+            "remove-" + path.toString().replace("/".toRegex(), "-"),
+        )
         try {
             Runtime.getRuntime().addShutdownHook(shutdownHook)
         } catch (ex: IllegalStateException) {
             close()
             throw ex
         }
-
     }
 
     private fun doClose() {
@@ -52,7 +54,7 @@ constructor(root: Path, prefix: String) : Closeable {
         }
 
         try {
-            if (Files.exists(path)) {
+            if (path.exists()) {
                 try {
                     Thread.sleep(500L)
                 } catch (ex: InterruptedException) {
@@ -68,16 +70,18 @@ constructor(root: Path, prefix: String) : Closeable {
     }
 
     private fun deleteTree() {
-        Files.walk(path)
-                .sorted(Comparator.reverseOrder())
-                .forEach {
-                    try {
-                        Files.deleteIfExists(it)
-                    } catch (ex: Exception) {
-                        logger.warn("Cannot delete temporary path {}: {}",
-                                it, ex.toString())
-                    }
+        path.toFile().walkBottomUp()
+            .forEach {
+                try {
+                    it.delete()
+                } catch (ex: Exception) {
+                    logger.warn(
+                        "Cannot delete temporary path {}: {}",
+                        it,
+                        ex.toString(),
+                    )
                 }
+            }
     }
 
     override fun close() {

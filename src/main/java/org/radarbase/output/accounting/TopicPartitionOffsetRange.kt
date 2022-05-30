@@ -21,18 +21,27 @@ import java.time.Instant
 
 /** Offset range for a topic partition.  */
 data class TopicPartitionOffsetRange(
-        val topicPartition: TopicPartition,
-        val range: OffsetRangeSet.Range) {
+    val topicPartition: TopicPartition,
+    val range: OffsetRangeSet.Range,
+) {
 
     @JsonIgnore
     val topic: String = topicPartition.topic
+
     @JsonIgnore
     val partition: Int = topicPartition.partition
 
     /** Full constructor.  */
-    constructor(topic: String, partition: Int, offsetFrom: Long, offsetTo: Long?, lastModified: Instant = Instant.now()) : this(
-            TopicPartition(topic, partition),
-            OffsetRangeSet.Range(offsetFrom, offsetTo, lastModified))
+    constructor(
+        topic: String,
+        partition: Int,
+        offsetFrom: Long,
+        offsetTo: Long?,
+        lastModified: Instant = Instant.now(),
+    ) : this(
+        TopicPartition(topic, partition),
+        OffsetRangeSet.Range(offsetFrom, offsetTo, lastModified),
+    )
 
     override fun toString(): String {
         return if (range.to == null) {
@@ -42,7 +51,12 @@ data class TopicPartitionOffsetRange(
         }
     }
 
-    fun mapRange(modification: (OffsetRangeSet.Range) -> OffsetRangeSet.Range) = copy(range = modification(range))
+    fun mapRange(
+        modification: (OffsetRangeSet.Range) -> OffsetRangeSet.Range,
+    ): TopicPartitionOffsetRange {
+        val newRange = modification(range)
+        return if (newRange != range) copy(range = newRange) else this
+    }
 
     companion object {
         private val filenameSplitRegex = "[+.]".toRegex()
@@ -50,14 +64,15 @@ data class TopicPartitionOffsetRange(
         @Throws(NumberFormatException::class, IndexOutOfBoundsException::class)
         fun parseFilename(filename: String, lastModified: Instant): TopicPartitionOffsetRange {
             val fileNameParts = filename.split(filenameSplitRegex)
-                    .dropLastWhile { it.isEmpty() || it == "avro" }
+                .dropLastWhile { it.isEmpty() || it == "avro" }
 
             return TopicPartitionOffsetRange(
-                    fileNameParts[0],
-                    fileNameParts[1].toInt(),
-                    fileNameParts[2].toLong(),
-                    fileNameParts.getOrNull(3)?.toLong(),
-                    lastModified)
+                topic = fileNameParts[0],
+                partition = fileNameParts[1].toInt(),
+                offsetFrom = fileNameParts[2].toLong(),
+                offsetTo = fileNameParts.getOrNull(3)?.toLong(),
+                lastModified = lastModified,
+            )
         }
     }
 }

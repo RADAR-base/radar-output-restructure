@@ -40,15 +40,15 @@ class OffsetRangeSet {
 
     @JvmOverloads
     constructor(
-            factory: (OffsetIntervals) -> FunctionalValue<OffsetIntervals> = { LockedFunctionalValue(it) }
+        factory: (OffsetIntervals) -> FunctionalValue<OffsetIntervals> = { LockedFunctionalValue(it) },
     ) {
         this.ranges = ConcurrentHashMap()
         this.factory = factory
     }
 
     private constructor(
-            ranges: ConcurrentMap<TopicPartition, FunctionalValue<OffsetIntervals>>,
-            factory: (OffsetIntervals) -> FunctionalValue<OffsetIntervals>
+        ranges: ConcurrentMap<TopicPartition, FunctionalValue<OffsetIntervals>>,
+        factory: (OffsetIntervals) -> FunctionalValue<OffsetIntervals>,
     ) {
         this.ranges = ranges
         this.factory = factory
@@ -69,7 +69,7 @@ class OffsetRangeSet {
         set.ranges.entries.forEach { (otherPartition, otherRanges) ->
             otherPartition.modifyIntervals { rangeList ->
                 otherRanges.read { it.toList() }
-                        .forEach { rangeList.add(it) }
+                    .forEach { rangeList.add(it) }
             }
         }
     }
@@ -100,37 +100,39 @@ class OffsetRangeSet {
     }
 
     fun withFactory(
-            factory: (OffsetIntervals) -> FunctionalValue<OffsetIntervals>
+        factory: (OffsetIntervals) -> FunctionalValue<OffsetIntervals>,
     ) = OffsetRangeSet(
-            ranges.entries.associateByTo(
-                    ConcurrentHashMap(),
-                    { it.key },
-                    { (_, intervals) ->
-                        intervals.read { factory(OffsetIntervals(it)) }
-                    }),
-            factory)
+        ranges.entries.associateByTo(
+            ConcurrentHashMap(),
+            { it.key },
+            { (_, intervals) ->
+                intervals.read { factory(OffsetIntervals(it)) }
+            },
+        ),
+        factory,
+    )
 
     override fun toString(): String = "OffsetRangeSet$ranges"
 
     fun <T> map(
-            mapping: (TopicPartition, OffsetIntervals) -> T
+        mapping: (TopicPartition, OffsetIntervals) -> T,
     ): List<T> = ranges.entries
-            .sortedBy { it.key }
-            .map { (key, value) ->
-                value.read { mapping(key, it) }
-            }
+        .sortedBy { it.key }
+        .map { (key, value) ->
+            value.read { mapping(key, it) }
+        }
 
     /**
      * Process all offset stream as a list. For any given topic/partition, this yields a
      * consistent result but values from different topic/partitions may not be consistent.
      */
     fun forEach(
-            action: (TopicPartition, OffsetIntervals) -> Unit
+        action: (TopicPartition, OffsetIntervals) -> Unit,
     ) = ranges.entries
-            .sortedBy { it.key }
-            .forEach { (key, value) ->
-                value.read { action(key, it) }
-            }
+        .sortedBy { it.key }
+        .forEach { (key, value) ->
+            value.read { action(key, it) }
+        }
 
     override fun equals(other: Any?): Boolean {
         if (other === this) {
@@ -146,28 +148,31 @@ class OffsetRangeSet {
     override fun hashCode(): Int = ranges.hashCode()
 
     private fun TopicPartition.modifyIntervals(consumer: (OffsetIntervals) -> Unit) = ranges
-            .computeIfAbsent(this) { factory(OffsetIntervals()) }
-            .modify(consumer)
+        .computeIfAbsent(this) { factory(OffsetIntervals()) }
+        .modify(consumer)
 
     private fun <V> TopicPartition.readIntervals(function: (OffsetIntervals) -> V) = ranges
-            .getOrDefault(this, EMPTY_VALUE)
-            .read(function)
+        .getOrDefault(this, EMPTY_VALUE)
+        .read(function)
 
     fun copyForTopic(topic: String) = OffsetRangeSet(
-            ranges.entries
-                    .filter { it.key.topic == topic }
-                    .associateByTo(ConcurrentHashMap(),
-                            { it.key },
-                            { (_, intervals) ->
-                                intervals.read { factory(OffsetIntervals(it)) }
-                            }),
-            factory)
-
+        ranges.entries
+            .filter { it.key.topic == topic }
+            .associateByTo(
+                ConcurrentHashMap(),
+                { it.key },
+                { (_, intervals) ->
+                    intervals.read { factory(OffsetIntervals(it)) }
+                },
+            ),
+        factory,
+    )
 
     data class Range(val from: Long, val to: Long?, val lastProcessed: Instant = Instant.now()) {
         @JsonIgnore
         val size: Long? = to?.let { it - from + 1 }
         fun ensureToOffset(): Range = if (to == null) copy(to = from) else this
+        fun incrementTo(): Range = if (to != null) copy(to = to + 1) else this
         override fun toString() = "($from - $to, $lastProcessed)"
     }
 

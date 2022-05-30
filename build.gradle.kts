@@ -12,10 +12,11 @@ plugins {
     id("com.avast.gradle.docker-compose")
     id("com.github.ben-manes.versions")
     id("io.github.gradle-nexus.publish-plugin")
+    id("org.jlleitschuh.gradle.ktlint") version "10.3.0"
 }
 
 group = "org.radarbase"
-version = "2.1.0.1"
+version = "2.2.0"
 
 repositories {
     mavenCentral()
@@ -24,8 +25,8 @@ repositories {
 description = "RADAR-base output restructuring"
 val website = "https://radar-base.org"
 val githubRepoName = "RADAR-base/radar-output-restructure"
-val githubUrl = "https://github.com/${githubRepoName}"
-val issueUrl = "${githubUrl}/issues"
+val githubUrl = "https://github.com/$githubRepoName"
+val issueUrl = "$githubUrl/issues"
 
 sourceSets {
     create("integrationTest") {
@@ -50,6 +51,8 @@ dependencies {
     runtimeOnly("org.xerial.snappy:snappy-java:$snappyVersion")
 
     implementation(kotlin("reflect"))
+    val coroutinesVersion: String by project
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
 
     val jacksonVersion: String by project
     api(platform("com.fasterxml.jackson:jackson-bom:$jacksonVersion"))
@@ -90,9 +93,12 @@ dependencies {
 
     val log4jVersion: String by project
     runtimeOnly("org.apache.logging.log4j:log4j-slf4j-impl:$log4jVersion")
+    runtimeOnly("org.apache.logging.log4j:log4j-api:$log4jVersion")
+    runtimeOnly("org.apache.logging.log4j:log4j-jul:$log4jVersion")
 
     val radarSchemasVersion: String by project
     testImplementation("org.radarbase:radar-schemas-commons:$radarSchemasVersion")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:$coroutinesVersion")
 
     val junitVersion: String by project
     testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")
@@ -114,6 +120,10 @@ dependencies {
 
 application {
     mainClass.set("org.radarbase.output.Application")
+    applicationDefaultJvmArgs = listOf(
+        "-Djava.security.egd=file:/dev/./urandom",
+        "-Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager",
+    )
 }
 
 distributions {
@@ -195,7 +205,6 @@ publishing {
                         email.set("joris@thehyve.nl")
                         organization.set("The Hyve")
                     }
-
                 }
                 issueManagement {
                     system.set("GitHub")
@@ -206,7 +215,7 @@ publishing {
                     url.set(website)
                 }
                 scm {
-                    connection.set("scm:git:${githubUrl}")
+                    connection.set("scm:git:$githubUrl")
                     url.set(githubUrl)
                 }
             }
@@ -259,8 +268,9 @@ dockerCompose {
     isRequiredBy(integrationTest)
 }
 
-val check by tasks
-check.dependsOn(integrationTest)
+tasks["composeUp"].dependsOn("composePull")
+
+tasks["check"].dependsOn(integrationTest)
 
 tasks.withType<Test> {
     useJUnitPlatform()
@@ -298,6 +308,11 @@ tasks.named<DependencyUpdatesTask>("dependencyUpdates").configure {
     }
 }
 
+ktlint {
+    version.set("0.45.2")
+    disabledRules.set(setOf("no-wildcard-imports"))
+}
+
 tasks.wrapper {
-    gradleVersion = "7.4.1"
+    gradleVersion = "7.4.2"
 }

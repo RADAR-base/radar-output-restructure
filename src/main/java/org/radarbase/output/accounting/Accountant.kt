@@ -16,79 +16,19 @@
 
 package org.radarbase.output.accounting
 
-import org.radarbase.output.FileStoreFactory
+import kotlinx.coroutines.CoroutineScope
 import org.radarbase.output.util.DirectFunctionalValue
+import org.radarbase.output.util.SuspendedCloseable
 import org.radarbase.output.util.Timer.time
-import org.slf4j.LoggerFactory
-import java.io.Closeable
-import java.io.Flushable
-import java.io.IOException
-import java.nio.file.Files
-import java.nio.file.Paths
 import java.time.Instant
 
-open class Accountant @Throws(IOException::class)
-constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
-    private val offsetFile: OffsetPersistenceFactory.Writer
-
+interface Accountant : SuspendedCloseable {
     val offsets: OffsetRangeSet
-        get() = offsetFile.offsets
 
-    init {
-        val offsetsKey = Paths.get("offsets", "$topic.json")
-
-        val offsetPersistence = factory.offsetPersistenceFactory
-        val offsets = offsetPersistence.read(offsetsKey)
-        offsetFile = offsetPersistence.writer(offsetsKey, offsets)
-        readDeprecatedOffsets(factory, topic)
-                ?.takeUnless { it.isEmpty }
-                ?.let {
-                    offsetFile.addAll(it)
-                    offsetFile.triggerWrite()
-                }
-    }
-
-    private fun readDeprecatedOffsets(factory: FileStoreFactory, topic: String): OffsetRangeSet? {
-        val offsetsPath = factory.config.paths.output
-                .resolve(OFFSETS_FILE_NAME)
-                .resolve("$topic.csv")
-
-        return if (Files.exists(offsetsPath)) {
-            OffsetFilePersistence(factory.targetStorage).read(offsetsPath)
-                    .also { Files.delete(offsetsPath) }
-        } else null
-    }
-
-    open fun remove(range: TopicPartitionOffsetRange) = time("accounting.remove") {
-        offsetFile.offsets.remove(range)
-        offsetFile.triggerWrite()
-    }
-
-    open fun process(ledger: Ledger) = time("accounting.process") {
-        offsetFile.addAll(ledger.offsets)
-        offsetFile.triggerWrite()
-    }
-
-    @Throws(IOException::class)
-    override fun close() = time("accounting.close") {
-        var exception: IOException? = null
-
-        try {
-            offsetFile.close()
-        } catch (ex: IOException) {
-            logger.error("Failed to close offsets", ex)
-            exception = ex
-        }
-
-        if (exception != null) {
-            throw exception
-        }
-    }
-
-    @Throws(IOException::class)
-    override fun flush() = time("accounting.flush") {
-        offsetFile.flush()
-    }
+    suspend fun initialize(scope: CoroutineScope)
+    suspend fun remove(range: TopicPartitionOffsetRange)
+    suspend fun process(ledger: Ledger)
+    suspend fun flush()
 
     class Ledger {
         internal val offsets: OffsetRangeSet = OffsetRangeSet { DirectFunctionalValue(it) }
@@ -98,10 +38,9 @@ constructor(factory: FileStoreFactory, topic: String) : Flushable, Closeable {
         }
     }
 
-    class Transaction(val topicPartition: TopicPartition, internal var offset: Long, internal val lastModified: Instant)
-
-    companion object {
-        private val logger = LoggerFactory.getLogger(Accountant::class.java)
-        private val OFFSETS_FILE_NAME = Paths.get("offsets")
-    }
+    class Transaction(
+        val topicPartition: TopicPartition,
+        internal var offset: Long,
+        internal val lastModified: Instant,
+    )
 }

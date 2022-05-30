@@ -1,11 +1,13 @@
 package org.radarbase.output.accounting
 
+import kotlinx.coroutines.test.runTest
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.not
 import org.hamcrest.Matchers.nullValue
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import redis.clients.jedis.JedisPool
 
 internal class RedisRemoteLockManagerTest {
@@ -26,42 +28,41 @@ internal class RedisRemoteLockManagerTest {
     }
 
     @Test
-    fun testExclusiveLock() {
-        lockManager1.acquireLock("t").use { l1 ->
+    fun testExclusiveLock() = runTest {
+        lockManager1.acquireLock("t").useSuspended { l1 ->
             assertThat(l1, not(nullValue()))
-            lockManager2.acquireLock("t").use { l2 ->
+            lockManager2.acquireLock("t").useSuspended { l2 ->
                 assertThat(l2, nullValue())
             }
         }
     }
 
     @Test
-    fun testGranularityLock() {
-        lockManager1.acquireLock("t1").use { l1 ->
+    fun testGranularityLock() = runTest {
+        lockManager1.acquireLock("t1").useSuspended { l1 ->
             assertThat(l1, not(nullValue()))
-            lockManager2.acquireLock("t2").use { l2 ->
+            lockManager2.acquireLock("t2").useSuspended { l2 ->
                 assertThat(l2, not(nullValue()))
             }
         }
     }
 
     @Test
-    fun testNonOverlappingLock() {
-        lockManager1.acquireLock("t").use { l1 ->
+    fun testNonOverlappingLock() = runTest {
+        lockManager1.acquireLock("t").useSuspended { l1 ->
             assertThat(l1, not(nullValue()))
         }
-        lockManager2.acquireLock("t").use { l2 ->
+        lockManager2.acquireLock("t").useSuspended { l2 ->
             assertThat(l2, not(nullValue()))
         }
     }
 
-
     @Test
-    fun testNonOverlappingLockSameManager() {
-        lockManager1.acquireLock("t").use { l1 ->
+    fun testNonOverlappingLockSameManager() = runTest {
+        lockManager1.acquireLock("t").useSuspended { l1 ->
             assertThat(l1, not(nullValue()))
         }
-        lockManager1.acquireLock("t").use { l2 ->
+        lockManager1.acquireLock("t").useSuspended { l2 ->
             assertThat(l2, not(nullValue()))
         }
     }

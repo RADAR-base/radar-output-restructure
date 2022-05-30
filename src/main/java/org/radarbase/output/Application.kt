@@ -18,6 +18,10 @@ package org.radarbase.output
 
 import com.beust.jcommander.JCommander
 import com.beust.jcommander.ParameterException
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import org.radarbase.output.accounting.*
 import org.radarbase.output.cleaner.SourceDataCleaner
 import org.radarbase.output.compression.Compression
@@ -36,19 +40,16 @@ import org.radarbase.output.worker.RadarKafkaRestructure
 import org.slf4j.LoggerFactory
 import redis.clients.jedis.JedisPool
 import java.io.IOException
-import java.nio.file.Files
 import java.text.NumberFormat
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.LongAdder
-import kotlin.Long.Companion.MAX_VALUE
+import kotlin.io.path.createDirectories
 import kotlin.system.exitProcess
 
 /** Main application.  */
 class Application(
-        config: RestructureConfig
+    config: RestructureConfig,
 ) : FileStoreFactory {
 
     override val config = config.apply { validate() }
@@ -63,83 +64,76 @@ class Application(
     override val sourceStorage: SourceStorage
         get() = sourceStorageFactory.createSourceStorage()
 
-    override val targetStorage: TargetStorage = TargetStorageFactory(config.target).createTargetStorage()
+    override val targetStorage: TargetStorage =
+        TargetStorageFactory(config.target).createTargetStorage()
 
     override val redisHolder: RedisHolder = RedisHolder(JedisPool(config.redis.uri))
     override val remoteLockManager: RemoteLockManager = RedisRemoteLockManager(
-            redisHolder, config.redis.lockPrefix)
+        redisHolder,
+        config.redis.lockPrefix,
+    )
 
-    override val offsetPersistenceFactory: OffsetPersistenceFactory = OffsetRedisPersistence(redisHolder)
+    override val offsetPersistenceFactory: OffsetPersistenceFactory =
+        OffsetRedisPersistence(redisHolder)
 
-    private val jobs = listOf(
-            Job("restructure", config.worker.enable, config.service.interval, ::runRestructure),
-            Job("clean", config.cleaner.enable, config.cleaner.interval, ::runCleaner))
-            .filter { it.isEnabled }
+    override val workerSemaphore = Semaphore(config.worker.numThreads * 2)
+
+    private val jobs: List<Job>
+
+    init {
+        val serviceMutex = Mutex()
+        jobs = listOfNotNull(
+            RadarKafkaRestructure.job(config, serviceMutex),
+            SourceDataCleaner.job(config, serviceMutex),
+        )
+    }
 
     @Throws(IOException::class)
     override fun newFileCacheStore(accountant: Accountant) = FileCacheStore(this, accountant)
 
     fun start() {
-        System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism",
-                (config.worker.numThreads - 1).toString())
+        System.setProperty(
+            "kotlinx.coroutines.scheduler.max.pool.size",
+            config.worker.numThreads.toString(),
+        )
+        System.setProperty(
+            "kotlinx.coroutines.scheduler.core.pool.size",
+            config.worker.numThreads.toString(),
+        )
 
         try {
-            Files.createDirectories(config.paths.temp)
+            config.paths.temp.createDirectories()
         } catch (ex: IOException) {
             logger.error("Failed to create temporary directory")
             return
         }
 
+        runBlocking {
+            launch { targetStorage.initialize() }
+        }
+
         if (config.service.enable) {
             runService()
         } else {
-            jobs.forEach { it.run() }
+            runBlocking {
+                jobs.forEach { job ->
+                    launch { job.run(this@Application) }
+                }
+            }
         }
     }
 
     private fun runService() {
-        logger.info("Running as a Service with poll interval of {} seconds", config.service.interval)
+        logger.info(
+            "Running as a Service with poll interval of {} seconds",
+            config.service.interval,
+        )
         logger.info("Press Ctrl+C to exit...")
-        val executorService = Executors.newSingleThreadScheduledExecutor()
 
-        jobs.forEach { it.schedule(executorService) }
-
-        try {
-            Thread.sleep(MAX_VALUE)
-        } catch (e: InterruptedException) {
-            logger.info("Interrupted, shutting down...")
-            executorService.shutdownNow()
-            try {
-                executorService.awaitTermination(MAX_VALUE, TimeUnit.SECONDS)
-                Thread.currentThread().interrupt()
-            } catch (ex: InterruptedException) {
-                logger.info("Interrupted again...")
+        runBlocking {
+            jobs.forEach { job ->
+                launch { job.schedule(this@Application) }
             }
-        }
-    }
-
-    private fun runCleaner() {
-        SourceDataCleaner(this).use { cleaner ->
-            for (input in config.paths.inputs) {
-                logger.info("Cleaning {}", input)
-                cleaner.process(input.toString())
-            }
-            logger.info("Cleaned up {} files",
-                    cleaner.deletedFileCount.format())
-        }
-    }
-
-    private fun runRestructure() {
-        RadarKafkaRestructure(this).use { restructure ->
-            for (input in config.paths.inputs) {
-                logger.info("In:  {}", input)
-                logger.info("Out: {}", pathFactory.root)
-                restructure.process(input.toString())
-            }
-
-            logger.info("Processed {} files and {} records",
-                    restructure.processedFileCount.format(),
-                    restructure.processedRecordsCount.format())
         }
     }
 
@@ -147,29 +141,28 @@ class Application(
         private val logger = LoggerFactory.getLogger(Application::class.java)
         const val CACHE_SIZE_DEFAULT = 100
 
-        private fun LongAdder.format(): String =
-                NumberFormat.getNumberInstance().format(sum())
+        internal fun LongAdder.format(): String =
+            NumberFormat.getNumberInstance().format(sum())
 
         private fun parseArgs(args: Array<String>): CommandLineArgs {
             val commandLineArgs = CommandLineArgs()
             JCommander.newBuilder()
-                    .addObject(commandLineArgs)
-                    .programName("radar-output-restructure")
-                    .build().run {
-                        try {
-                            parse(*args)
-                        } catch (ex: ParameterException) {
-                            logger.error(ex.message)
-                            usage()
-                            exitProcess(1)
-                        }
-
-                        if (commandLineArgs.help) {
-                            usage()
-                            exitProcess(0)
-                        }
+                .addObject(commandLineArgs)
+                .programName("radar-output-restructure")
+                .build().run {
+                    try {
+                        parse(*args)
+                    } catch (ex: ParameterException) {
+                        logger.error(ex.message)
+                        usage()
+                        exitProcess(1)
                     }
 
+                    if (commandLineArgs.help) {
+                        usage()
+                        exitProcess(0)
+                    }
+                }
 
             return commandLineArgs
         }
@@ -178,20 +171,24 @@ class Application(
         fun main(args: Array<String>) {
             val commandLineArgs = parseArgs(args)
 
-            logger.info("Starting at {}...",
-                    DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(LocalDateTime.now()))
+            logger.info(
+                "Starting at {}...",
+                DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(LocalDateTime.now()),
+            )
 
             // Enable singleton timer statements in the code.
             Timer.isEnabled = commandLineArgs.enableTimer
 
             val application = try {
-                Application(RestructureConfig
-                    .load(commandLineArgs.configFile)
-                    .withEnv()
-                    .apply {
-                        addArgs(commandLineArgs)
-                        validate()
-                    })
+                Application(
+                    RestructureConfig
+                        .load(commandLineArgs.configFile)
+                        .withEnv()
+                        .apply {
+                            addArgs(commandLineArgs)
+                            validate()
+                        }
+                )
             } catch (ex: IllegalArgumentException) {
                 logger.error("Illegal argument", ex)
                 exitProcess(1)

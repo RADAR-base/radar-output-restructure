@@ -28,20 +28,20 @@ class RadarHdfsRestructureTest {
     fun createHourTimestamp() {
         val factory = ObservationKeyPathFactory()
 
-        val currentTime: Long = 1493711175  // Tue May  2 07:46:15 UTC 2017
+        val currentTime: Long = 1493711175 // Tue May  2 07:46:15 UTC 2017
         val startTime = (currentTime - 3600) * 1000L
 
         val keySchema = SchemaBuilder.record("value").fields()
-                .name("start").type("long").noDefault()
-                .endRecord()
+            .name("start").type("long").noDefault()
+            .endRecord()
         val keyField = GenericRecordBuilder(keySchema)
-                .set("start", startTime).build()
+            .set("start", startTime).build()
 
         val valueSchema1 = SchemaBuilder.record("value").fields()
-                .name("time").type("double").noDefault()
-                .endRecord()
+            .name("time").type("double").noDefault()
+            .endRecord()
         val valueField1 = GenericRecordBuilder(valueSchema1)
-                .set("time", currentTime.toDouble()).build()
+            .set("time", currentTime.toDouble()).build()
 
         var date = getDate(keyField, valueField1)
         var result = factory.getTimeBin(date)
@@ -49,10 +49,10 @@ class RadarHdfsRestructureTest {
         assertEquals("20170502_0700", result)
 
         val valueSchema2 = SchemaBuilder.record("value").fields()
-                .name("a").type("double").noDefault()
-                .endRecord()
+            .name("a").type("double").noDefault()
+            .endRecord()
         val valueField2 = GenericRecordBuilder(valueSchema2)
-                .set("a", 0.1).build()
+            .set("a", 0.1).build()
         date = getDate(keyField, valueField2)
         result = factory.getTimeBin(date)
         assertEquals("20170502_0600", result)

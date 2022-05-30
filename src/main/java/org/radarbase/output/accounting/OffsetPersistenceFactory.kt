@@ -16,8 +16,8 @@
 
 package org.radarbase.output.accounting
 
-import java.io.Closeable
-import java.io.Flushable
+import kotlinx.coroutines.CoroutineScope
+import org.radarbase.output.util.SuspendedCloseable
 import java.nio.file.Path
 
 /**
@@ -28,16 +28,16 @@ interface OffsetPersistenceFactory {
     /**
      * Read offsets from the persistence store. On error, this will return null.
      */
-    fun read(path: Path): OffsetRangeSet?
+    suspend fun read(path: Path): OffsetRangeSet?
 
     /**
      * Create a writer to write offsets to the persistence store.
      * Always close the writer after use.
      */
-    fun writer(path: Path, startSet: OffsetRangeSet? = null): Writer
+    fun writer(scope: CoroutineScope, path: Path, startSet: OffsetRangeSet? = null): Writer
 
     /** Offset Writer to given persistence type. */
-    interface Writer : Closeable, Flushable {
+    interface Writer : SuspendedCloseable {
         /** Current offsets. */
         val offsets: OffsetRangeSet
 
@@ -55,6 +55,8 @@ interface OffsetPersistenceFactory {
          * Trigger an asynchronous write operation. If this is called multiple times before the
          * operation is executed, the operation will be executed only once.
          */
-        fun triggerWrite()
+        suspend fun triggerWrite()
+
+        suspend fun flush()
     }
 }

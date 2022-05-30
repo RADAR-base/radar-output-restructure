@@ -1,10 +1,12 @@
 package org.radarbase.output.accounting
 
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.radarbase.output.accounting.OffsetRedisPersistence.Companion.redisOffsetReader
+import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import redis.clients.jedis.JedisPool
 import java.io.IOException
 import java.nio.file.Path
@@ -27,16 +29,18 @@ class OffsetRangeRedisTest {
 
     @AfterEach
     fun tearDown() {
-        redisHolder.execute { it.del(testFile.toString()) }
+        runTest {
+            redisHolder.execute { it.del(testFile.toString()) }
+        }
     }
 
     @Test
     @Throws(IOException::class)
-    fun readEmpty() {
+    fun readEmpty() = runTest {
         assertNull(offsetPersistence.read(testFile))
 
         // will create on write
-        offsetPersistence.writer(testFile).close()
+        offsetPersistence.writer(this@runTest, testFile).closeAndJoin()
 
         assertEquals(true, offsetPersistence.read(testFile)?.isEmpty)
 
@@ -47,8 +51,8 @@ class OffsetRangeRedisTest {
 
     @Test
     @Throws(IOException::class)
-    fun write() {
-        offsetPersistence.writer(testFile).use { rangeFile ->
+    fun write() = runTest {
+        offsetPersistence.writer(this@runTest, testFile).useSuspended { rangeFile ->
             rangeFile.add(TopicPartitionOffsetRange.parseFilename("a+0+0+1", lastModified))
             rangeFile.add(TopicPartitionOffsetRange.parseFilename("a+0+1+2", lastModified))
         }
@@ -67,20 +71,33 @@ class OffsetRangeRedisTest {
 
     @Test
     @Throws(IOException::class)
-    fun cleanUp() {
-        offsetPersistence.writer(testFile).use { rangeFile ->
+    fun cleanUp() = runTest {
+        offsetPersistence.writer(this@runTest, testFile).useSuspended { rangeFile ->
             rangeFile.add(TopicPartitionOffsetRange.parseFilename("a+0+0+1", lastModified))
             rangeFile.add(TopicPartitionOffsetRange.parseFilename("a+0+1+2", lastModified))
             rangeFile.add(TopicPartitionOffsetRange.parseFilename("a+0+4+4", lastModified))
         }
 
         redisHolder.execute { redis ->
-            val range = redisOffsetReader.readValue<OffsetRedisPersistence.Companion.RedisOffsetRangeSet>(redis.get(testFile.toString()))
-            assertEquals(OffsetRedisPersistence.Companion.RedisOffsetRangeSet(listOf(
-                    OffsetRedisPersistence.Companion.RedisOffsetIntervals("a", 0, listOf(
-                            OffsetRangeSet.Range(0, 2, lastModified),
-                            OffsetRangeSet.Range(4, 4, lastModified)))
-            )), range)
+            val range =
+                redisOffsetReader.readValue<OffsetRedisPersistence.Companion.RedisOffsetRangeSet>(
+                    redis.get(testFile.toString())
+                )
+            assertEquals(
+                OffsetRedisPersistence.Companion.RedisOffsetRangeSet(
+                    listOf(
+                        OffsetRedisPersistence.Companion.RedisOffsetIntervals(
+                            topic = "a",
+                            partition = 0,
+                            ranges = listOf(
+                                OffsetRangeSet.Range(0, 2, lastModified),
+                                OffsetRangeSet.Range(4, 4, lastModified),
+                            ),
+                        ),
+                    ),
+                ),
+                range
+            )
         }
 
         val rangeSet = offsetPersistence.read(testFile)

@@ -13,7 +13,8 @@ class OffsetRangeSetTest {
 
     @Test
     fun containsGap() {
-        val am = TopicPartitionOffsetRange(topicPartition, OffsetRangeSet.Range(-1, 0, lastModified))
+        val am =
+            TopicPartitionOffsetRange(topicPartition, OffsetRangeSet.Range(-1, 0, lastModified))
         val az = TopicPartitionOffsetRange(topicPartition, OffsetRangeSet.Range(0, 0, lastModified))
         val a = TopicPartitionOffsetRange(topicPartition, OffsetRangeSet.Range(0, 1, lastModified))
         val c = TopicPartitionOffsetRange(topicPartition, OffsetRangeSet.Range(3, 4, lastModified))

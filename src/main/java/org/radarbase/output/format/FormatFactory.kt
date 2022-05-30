@@ -18,6 +18,7 @@ package org.radarbase.output.format
 
 class FormatFactory : FormatProvider<RecordConverterFactory> {
     override val formats: List<RecordConverterFactory> = listOf(
-            CsvAvroConverter.factory,
-            JsonAvroConverter.factory)
+        CsvAvroConverter.factory,
+        JsonAvroConverter.factory,
+    )
 }

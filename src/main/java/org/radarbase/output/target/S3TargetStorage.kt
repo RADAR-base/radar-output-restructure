@@ -17,7 +17,6 @@
 package org.radarbase.output.target
 
 import io.minio.*
-import io.minio.errors.ErrorResponseException
 import org.radarbase.output.config.S3Config
 import org.radarbase.output.source.S3SourceStorage.Companion.faultTolerant
 import org.radarbase.output.util.bucketBuild
@@ -26,8 +25,8 @@ import org.slf4j.LoggerFactory
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.io.InputStream
-import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.deleteExisting
 
 class S3TargetStorage(config: S3Config) : TargetStorage {
     private val bucket: String = config.bucket
@@ -39,9 +38,14 @@ class S3TargetStorage(config: S3Config) : TargetStorage {
     }
 
     init {
-        logger.info("Object storage configured with endpoint {} in bucket {}",
-                config.endpoint, config.bucket)
+        logger.info(
+            "Object storage configured with endpoint {} in bucket {}",
+            config.endpoint,
+            config.bucket,
+        )
+    }
 
+    override suspend fun initialize() {
         // Check if the bucket already exists.
         val bucketExistsRequest = BucketExistsArgs.Builder().bucketBuild(bucket)
         val isExist: Boolean = faultTolerant { s3Client.bucketExists(bucketExistsRequest) }
@@ -54,7 +58,7 @@ class S3TargetStorage(config: S3Config) : TargetStorage {
         }
     }
 
-    override fun status(path: Path): TargetStorage.PathStatus? {
+    override suspend fun status(path: Path): TargetStorage.PathStatus? {
         val statRequest = StatObjectArgs.Builder().objectBuild(bucket, path)
         return try {
             faultTolerant {
@@ -67,13 +71,13 @@ class S3TargetStorage(config: S3Config) : TargetStorage {
     }
 
     @Throws(IOException::class)
-    override fun newInputStream(path: Path): InputStream {
+    override suspend fun newInputStream(path: Path): InputStream {
         val getRequest = GetObjectArgs.Builder().objectBuild(bucket, path)
         return faultTolerant { s3Client.getObject(getRequest) }
     }
 
     @Throws(IOException::class)
-    override fun move(oldPath: Path, newPath: Path) {
+    override suspend fun move(oldPath: Path, newPath: Path) {
         val copyRequest = CopyObjectArgs.Builder().objectBuild(bucket, newPath) {
             source(CopySource.Builder().objectBuild(bucket, oldPath))
         }
@@ -82,16 +86,16 @@ class S3TargetStorage(config: S3Config) : TargetStorage {
     }
 
     @Throws(IOException::class)
-    override fun store(localPath: Path, newPath: Path) {
+    override suspend fun store(localPath: Path, newPath: Path) {
         val uploadRequest = UploadObjectArgs.Builder().objectBuild(bucket, newPath) {
             filename(localPath.toAbsolutePath().toString())
         }
         faultTolerant { s3Client.uploadObject(uploadRequest) }
-        Files.delete(localPath)
+        localPath.deleteExisting()
     }
 
     @Throws(IOException::class)
-    override fun delete(path: Path) {
+    override suspend fun delete(path: Path) {
         val removeRequest = RemoveObjectArgs.Builder().objectBuild(bucket, path)
         faultTolerant { s3Client.removeObject(removeRequest) }
     }

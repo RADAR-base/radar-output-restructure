@@ -29,10 +29,10 @@ import java.io.Writer
  * records need to have exactly the same hierarchy (or at least a subset of it.)
  */
 class CsvAvroConverter(
-        private val writer: Writer,
-        writeHeader: Boolean,
-        reader: Reader,
-        recordHeader: Array<String>
+    private val writer: Writer,
+    writeHeader: Boolean,
+    reader: Reader,
+    recordHeader: Array<String>,
 ) : RecordConverter {
 
     private val csvWriter = CSVWriter(writer)
@@ -43,9 +43,11 @@ class CsvAvroConverter(
             csvWriter.writeNext(recordHeader, false)
             CsvAvroDataConverter(recordHeader)
         } else {
-            CsvAvroDataConverter(CSVReader(reader).use {
-                requireNotNull(it.readNext()) { "No header found" }
-            })
+            CsvAvroDataConverter(
+                CSVReader(reader).use {
+                    requireNotNull(it.readNext()) { "No header found" }
+                }
+            )
         }
     }
 
@@ -68,7 +70,8 @@ class CsvAvroConverter(
         }
     }
 
-    override fun convertRecord(record: GenericRecord): Map<String, Any?> = converter.convertRecord(record)
+    override fun convertRecord(record: GenericRecord): Map<String, Any?> =
+        converter.convertRecord(record)
 
     @Throws(IOException::class)
     override fun close() = writer.close()

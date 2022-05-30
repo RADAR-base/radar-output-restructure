@@ -20,7 +20,8 @@ import org.radarbase.output.format.FormatProvider
 
 class CompressionFactory : FormatProvider<Compression> {
     override val formats: List<Compression> = listOf(
-            GzipCompression(),
-            IdentityCompression(),
-            ZipCompression())
+        GzipCompression(),
+        IdentityCompression(),
+        ZipCompression(),
+    )
 }
