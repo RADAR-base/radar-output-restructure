@@ -16,7 +16,7 @@ plugins {
 }
 
 group = "org.radarbase"
-version = "2.2.0"
+version = "2.2.1"
 
 repositories {
     mavenCentral()
@@ -314,5 +314,5 @@ ktlint {
 }
 
 tasks.wrapper {
-    gradleVersion = "7.4.2"
+    gradleVersion = "7.5.1"
 }
