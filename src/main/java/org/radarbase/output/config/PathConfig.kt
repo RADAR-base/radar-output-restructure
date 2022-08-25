@@ -5,9 +5,10 @@ import org.radarbase.output.path.RecordPathFactory
 import java.nio.file.Path
 import java.nio.file.Paths
 import kotlin.io.path.createTempDirectory
+import kotlin.reflect.jvm.jvmName
 
 data class PathConfig(
-    override val factory: String = FormattedPathFactory::class.qualifiedName!!,
+    override val factory: String = FormattedPathFactory::class.jvmName,
     override val properties: Map<String, String> = emptyMap(),
     /** Input paths referencing the source resource. */
     val inputs: List<Path> = emptyList(),

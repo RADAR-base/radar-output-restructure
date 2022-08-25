@@ -20,6 +20,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.generic.GenericRecordBuilder
 import org.radarbase.output.Plugin
+import org.radarbase.output.config.TopicConfig
 import org.radarbase.output.util.TimeUtil
 import org.slf4j.LoggerFactory
 import java.nio.file.Path
@@ -170,4 +171,6 @@ abstract class RecordPathFactory : Plugin {
         fun GenericRecord.getOrNull(fieldName: String): Any? = getFieldOrNull(fieldName)
             ?.let { get(it.pos()) }
     }
+
+    open fun addTopicConfiguration(topicConfig: Map<String, TopicConfig>) = Unit
 }

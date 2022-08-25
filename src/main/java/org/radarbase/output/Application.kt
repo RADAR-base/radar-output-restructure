@@ -58,6 +58,7 @@ class Application(
     override val pathFactory: RecordPathFactory = config.paths.createFactory().apply {
         extension = recordConverter.extension + compression.extension
         root = config.paths.output
+        addTopicConfiguration(config.topics)
     }
 
     private val sourceStorageFactory = SourceStorageFactory(config.source, config.paths.temp)
