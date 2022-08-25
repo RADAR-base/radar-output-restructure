@@ -59,12 +59,12 @@ open class FormattedPathFactory : RecordPathFactory() {
 
     override fun addTopicConfiguration(topicConfig: Map<String, TopicConfig>) {
         topicFormatters = topicConfig
-            .filter { (_, config) -> config.pathFormat.isNotEmpty() }
+            .filter { (_, config) -> config.pathProperties.isNotEmpty() }
             .mapValues { (_, config) ->
-                val topicFormat = config.pathFormat.getOrDefault("format", format)
-                val pluginClassNames = config.pathFormat["plugins"]
+                val topicFormat = config.pathProperties.getOrDefault("format", format)
+                val pluginClassNames = config.pathProperties["plugins"]
                 val topicPlugins = if (pluginClassNames != null) {
-                    instantiatePlugins(pluginClassNames, properties + config.pathFormat)
+                    instantiatePlugins(pluginClassNames, properties + config.pathProperties)
                 } else plugins
 
                 PathFormatter(topicFormat, topicPlugins)

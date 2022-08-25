@@ -163,9 +163,6 @@ topics:
       enable: false
   questionnaire_response:
     # Specify an alternative path format.
-    pathFormat: ${projectId}/${userId}/${topic}/${value:name}/${filename}
-    pathFormatPlugins: |
-      org.radarbase.output.path.FixedPathFormatterPlugin
-      org.radarbase.output.path.TimePathFormatterPlugin
-      org.radarbase.output.path.KeyPathFormatterPlugin
-      org.radarbase.output.path.ValuePathFormatterPlugin
+    pathProperties:
+      format: ${projectId}/${userId}/${topic}/${value:name}/${filename}
+      plugins: fixed value
