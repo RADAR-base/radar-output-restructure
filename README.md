@@ -138,16 +138,16 @@ target:
 
 Secrets can be provided as environment variables as well:
 
-| Environment variable | Corresponding value |
-| --- | --- |
-| `SOURCE_S3_ACCESS_TOKEN` | `source.s3.accessToken` |
-| `SOURCE_S3_SECRET_KEY` | `source.s3.secretKey` |
-| `SOURCE_AZURE_USERNAME` | `source.azure.username` |
-| `SOURCE_AZURE_PASSWORD` | `source.azure.password` |
+| Environment variable        | Corresponding value        |
+|-----------------------------|----------------------------|
+| `SOURCE_S3_ACCESS_TOKEN`    | `source.s3.accessToken`    |
+| `SOURCE_S3_SECRET_KEY`      | `source.s3.secretKey`      |
+| `SOURCE_AZURE_USERNAME`     | `source.azure.username`    |
+| `SOURCE_AZURE_PASSWORD`     | `source.azure.password`    |
 | `SOURCE_AZURE_ACCOUNT_NAME` | `source.azure.accountName` |
-| `SOURCE_AZURE_ACCOUNT_KEY` | `source.azure.accountKey` |
-| `SOURCE_AZURE_SAS_TOKEN` | `source.azure.sasToken` |
-| `REDIS_URL` | `redis.url` |
+| `SOURCE_AZURE_ACCOUNT_KEY`  | `source.azure.accountKey`  |
+| `SOURCE_AZURE_SAS_TOKEN`    | `source.azure.sasToken`    |
+| `REDIS_URL`                 | `redis.url`                |
 
 Replace `SOURCE` with `TARGET` in the variables above to configure the target storage.
 
@@ -192,10 +192,10 @@ Now the `radar-output-restructure` command should be available.
 To implement alternative storage paths, storage drivers or storage formats, put your custom JAR in
 `$APP_DIR/lib/radar-output-plugins`. To load them, use the following options:
 
-| Parameter                   | Base class                                          | Behaviour                                  | Default                   |
-| --------------------------- | --------------------------------------------------- | ------------------------------------------ | ------------------------- |
-| `paths: factory: ...`       | `org.radarbase.output.path.RecordPathFactory`         | Factory to create output path names with.  | ObservationKeyPathFactory |
-| `format: factory: ...`      | `org.radarbase.output.format.FormatFactory`           | Factory for output formats.                | FormatFactory             |
-| `compression: factory: ...` | `org.radarbase.output.compression.CompressionFactory` | Factory class to use for data compression. | CompressionFactory        |
+| Parameter                   | Base class                                            | Behaviour                                  | Default              |
+|-----------------------------|-------------------------------------------------------|--------------------------------------------|----------------------|
+| `paths: factory: ...`       | `org.radarbase.output.path.RecordPathFactory`         | Factory to create output path names with.  | FormattedPathFactory |
+| `format: factory: ...`      | `org.radarbase.output.format.FormatFactory`           | Factory for output formats.                | FormatFactory        |
+| `compression: factory: ...` | `org.radarbase.output.compression.CompressionFactory` | Factory class to use for data compression. | CompressionFactory   |
 
 The respective `<type>: properties: {}` configuration parameters can be used to provide custom configuration of the factory. This configuration will be passed to the `Plugin#init(Map<String, String>)` method.

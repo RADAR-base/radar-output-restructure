@@ -21,30 +21,54 @@ import org.radarbase.output.config.TopicConfig
 import org.slf4j.LoggerFactory
 import java.nio.file.Path
 import java.time.Instant
+import kotlin.reflect.jvm.jvmName
 
 open class FormattedPathFactory : RecordPathFactory() {
+    private lateinit var format: String
+    private lateinit var plugins: List<PathFormatterPlugin>
     private lateinit var formatter: PathFormatter
+    private lateinit var properties: Map<String, String>
     private var topicFormatters: Map<String, PathFormatter> = emptyMap()
 
     override fun init(properties: Map<String, String>) {
         super.init(properties)
 
-        val format = properties["format"]
+        format = properties["format"]
             ?: run {
                 logger.warn("Path format not provided, using {} instead", DEFAULT_FORMAT)
                 DEFAULT_FORMAT
             }
-        formatter = PathFormatter(format)
+        val pluginClassNames = properties["plugins"]
+            ?: run {
+                logger.warn("Path format plugins not provided, using {} instead", DEFAULT_FORMAT_PLUGINS)
+                DEFAULT_FORMAT_PLUGINS
+            }
+
+        plugins = instantiatePlugins(pluginClassNames, properties)
+        formatter = PathFormatter(format, plugins)
     }
 
+    private fun instantiatePlugins(
+        pluginClassNames: String,
+        properties: Map<String, String>,
+    ): List<PathFormatterPlugin> = pluginClassNames
+        .trim()
+        .split("\\s+".toRegex())
+        .mapNotNull { it.toPathFormatterPlugin() }
+        .onEach { it.init(properties) }
+
     override fun addTopicConfiguration(topicConfig: Map<String, TopicConfig>) {
-        topicFormatters = buildMap {
-            topicConfig.forEach { (topic, config) ->
-                config.pathFormat
-                    ?.let { PathFormatter(it) }
-                    ?.let { put(topic, it) }
+        topicFormatters = topicConfig
+            .filter { (_, config) -> config.pathFormat.isNotEmpty() }
+            .mapValues { (_, config) ->
+                val topicFormat = config.pathFormat.getOrDefault("format", format)
+                val pluginClassNames = config.pathFormat["plugins"]
+                val topicPlugins = if (pluginClassNames != null) {
+                    instantiatePlugins(pluginClassNames, properties + config.pathFormat)
+                } else plugins
+
+                PathFormatter(topicFormat, topicPlugins)
             }
-        }
     }
 
     override fun getRelativePath(
@@ -54,7 +78,7 @@ open class FormattedPathFactory : RecordPathFactory() {
         time: Instant?,
         attempt: Int,
     ): Path = (topicFormatters[topic] ?: formatter)
-        .format(topic, key, value, time, attempt, extension, ::getTimeBin)
+        .format(PathFormatParameters(topic, key, value, time, attempt, extension, this::getTimeBin))
 
     override fun getCategory(
         key: GenericRecord,
@@ -63,6 +87,30 @@ open class FormattedPathFactory : RecordPathFactory() {
 
     companion object {
         private const val DEFAULT_FORMAT = "\${projectId}/\${userId}/\${topic}/\${filename}"
+        private const val DEFAULT_FORMAT_PLUGINS = "fixed time key value"
         private val logger = LoggerFactory.getLogger(FormattedPathFactory::class.java)
+
+        private fun String.toPathFormatterPlugin(): PathFormatterPlugin? = when (this) {
+            "fixed" -> FixedPathFormatterPlugin()
+            "time" -> TimePathFormatterPlugin()
+            "key" -> KeyPathFormatterPlugin()
+            "value" -> ValuePathFormatterPlugin()
+            else -> {
+                try {
+                    Class.forName(this).getConstructor()
+                        .newInstance() as PathFormatterPlugin
+                } catch (ex: ReflectiveOperationException) {
+                    logger.error("Failed to instantiate plugin {}", this)
+                    null
+                } catch (ex: ClassCastException) {
+                    logger.error(
+                        "Failed to instantiate plugin {}, it does not extend {}",
+                        this,
+                        PathFormatterPlugin::class.jvmName
+                    )
+                    null
+                }
+            }
+        }
     }
 }

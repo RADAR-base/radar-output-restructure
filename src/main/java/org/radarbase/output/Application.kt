@@ -56,6 +56,7 @@ class Application(
     override val recordConverter: RecordConverterFactory = config.format.createConverter()
     override val compression: Compression = config.compression.createCompression()
     override val pathFactory: RecordPathFactory = config.paths.createFactory().apply {
+        fileStoreFactory = this@Application
         extension = recordConverter.extension + compression.extension
         root = config.paths.output
         addTopicConfiguration(config.topics)

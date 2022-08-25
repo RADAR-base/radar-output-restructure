@@ -19,6 +19,7 @@ package org.radarbase.output.path
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.generic.GenericRecordBuilder
+import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.Plugin
 import org.radarbase.output.config.TopicConfig
 import org.radarbase.output.util.TimeUtil
@@ -32,6 +33,7 @@ import java.util.regex.Pattern
 abstract class RecordPathFactory : Plugin {
     lateinit var root: Path
     lateinit var extension: String
+    lateinit var fileStoreFactory: FileStoreFactory
 
     protected open var timeBinFormat: DateTimeFormatter = HOURLY_TIME_BIN_FORMAT
 

@@ -32,7 +32,9 @@ class RestructureS3IntegrationTest {
         )
         val topicConfig = mapOf(
             "application_server_status" to TopicConfig(
-                pathFormat = "\${projectId}/\${userId}/\${topic}/\${value:serverStatus}/\${filename}"
+                pathFormat = mapOf(
+                    "format" to "\${projectId}/\${userId}/\${topic}/\${value:serverStatus}/\${filename}"
+                )
             )
         )
         val config = RestructureConfig(
