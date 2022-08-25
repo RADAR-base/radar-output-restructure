@@ -2,7 +2,7 @@ package org.radarbase.output.path
 
 import org.radarbase.output.path.ValuePathFormatterPlugin.Companion.lookup
 
-class KeyPathFormatterPlugin: PathFormatterPlugin() {
+class KeyPathFormatterPlugin : PathFormatterPlugin() {
     override val allowedFormats: String = "key:my.key.index"
 
     override fun createLookupTable(

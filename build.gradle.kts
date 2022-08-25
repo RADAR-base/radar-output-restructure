@@ -141,6 +141,7 @@ tasks.withType<KotlinCompile> {
         jvmTarget = "17"
         apiVersion = "1.6"
         languageVersion = "1.6"
+        freeCompilerArgs = listOf("-opt-in=kotlin.RequiresOptIn")
     }
 }
 
