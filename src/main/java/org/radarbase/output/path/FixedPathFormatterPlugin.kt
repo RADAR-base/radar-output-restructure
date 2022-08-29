@@ -3,21 +3,30 @@ package org.radarbase.output.path
 import org.radarbase.output.path.RecordPathFactory.Companion.sanitizeId
 
 class FixedPathFormatterPlugin : PathFormatterPlugin() {
-    override val allowedFormats: String = lookupTable.keys.joinToString(separator = ", ")
+    override val allowedFormats: String = allowedParamNames.joinToString(separator = ", ")
 
-    override fun createLookupTable(
-        parameterNames: Set<String>,
-    ): Map<String, PathFormatParameters.() -> String> = lookupTable.filterKeys { it in parameterNames }
+    override fun lookup(parameterContents: String): PathFormatParameters.() -> String = when (parameterContents) {
+        "projectId" -> ({ sanitizeId(key.get("projectId"), "unknown-project") })
+        "userId" -> ({ sanitizeId(key.get("userId"), "unknown-user") })
+        "sourceId" -> ({ sanitizeId(key.get("sourceId"), "unknown-source") })
+        "topic" -> ({ topic })
+        "filename" -> ({ timeBin + attempt.toAttemptSuffix() + extension })
+        "attempt" -> ({ attempt.toAttemptSuffix() })
+        "extension" -> ({ extension })
+        else -> throw IllegalArgumentException("Unknown path parameter $parameterContents")
+    }
+
+    override fun extractParamContents(paramName: String): String? = paramName.takeIf { it in allowedParamNames }
 
     companion object {
-        val lookupTable = mapOf<String, PathFormatParameters.() -> String>(
-            "projectId" to { sanitizeId(key.get("projectId"), "unknown-project") },
-            "userId" to { sanitizeId(key.get("userId"), "unknown-user") },
-            "sourceId" to { sanitizeId(key.get("sourceId"), "unknown-source") },
-            "topic" to { topic },
-            "filename" to { timeBin + attempt.toAttemptSuffix() + extension },
-            "attempt" to { attempt.toAttemptSuffix() },
-            "extension" to { extension },
+        val allowedParamNames = setOf(
+            "projectId",
+            "userId",
+            "sourceId",
+            "topic",
+            "filename",
+            "attempt",
+            "extension",
         )
 
         private fun Int.toAttemptSuffix() = if (this == 0) "" else "_$this"

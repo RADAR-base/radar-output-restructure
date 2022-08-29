@@ -16,6 +16,7 @@
 
 package org.radarbase.output.path
 
+import org.slf4j.LoggerFactory
 import java.nio.file.Path
 import java.nio.file.Paths
 
@@ -33,7 +34,14 @@ class PathFormatter(
 
         parameterLookups = buildMap {
             plugins.forEach { plugin ->
-                putAll(plugin.createLookupTable(foundParameters))
+                putAll(
+                    try {
+                        plugin.createLookupTable(foundParameters)
+                    } catch (ex: IllegalArgumentException) {
+                        logger.error("Cannot parse path format {}, illegal format parameter found by plugin {}", format, plugin.javaClass, ex)
+                        throw ex
+                    }
+                )
             }
         }
         val unsupportedParameters = foundParameters - parameterLookups.keys
@@ -60,5 +68,9 @@ class PathFormatter(
             }
 
         return Paths.get(path)
+    }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(PathFormatter::class.java)
     }
 }

@@ -35,12 +35,12 @@ open class FormattedPathFactory : RecordPathFactory() {
 
         format = properties["format"]
             ?: run {
-                logger.warn("Path format not provided, using {} instead", DEFAULT_FORMAT)
+                logger.warn("Path format not provided, using '{}' instead", DEFAULT_FORMAT)
                 DEFAULT_FORMAT
             }
         val pluginClassNames = properties["plugins"]
             ?: run {
-                logger.warn("Path format plugins not provided, using {} instead", DEFAULT_FORMAT_PLUGINS)
+                logger.warn("Path format plugins not provided, using '{}' instead", DEFAULT_FORMAT_PLUGINS)
                 DEFAULT_FORMAT_PLUGINS
             }
 
