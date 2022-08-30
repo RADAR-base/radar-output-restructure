@@ -1,12 +1,17 @@
 package org.radarbase.output.path
 
+import org.hamcrest.MatcherAssert.assertThat
+import org.hamcrest.Matchers.instanceOf
+import org.hamcrest.Matchers.nullValue
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.radarbase.output.path.FormattedPathFactory.Companion.toPathFormatterPlugin
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.PhoneLight
 import java.nio.file.Paths
 import java.time.Instant
+import kotlin.reflect.jvm.jvmName
 
 internal class FormattedPathFactoryTest {
     @Test
@@ -98,5 +103,26 @@ internal class FormattedPathFactoryTest {
             mapOf("format" to format),
         )
         extension = ".csv.gz"
+    }
+
+    @Test
+    fun testNamedPluginCreate() {
+        assertThat("fixed".toPathFormatterPlugin(), instanceOf(FixedPathFormatterPlugin::class.java))
+        assertThat("time".toPathFormatterPlugin(), instanceOf(TimePathFormatterPlugin::class.java))
+        assertThat("key".toPathFormatterPlugin(), instanceOf(KeyPathFormatterPlugin::class.java))
+        assertThat("value".toPathFormatterPlugin(), instanceOf(ValuePathFormatterPlugin::class.java))
+    }
+
+    @Test
+    fun testBadPluginCreate() {
+        assertThat("unknown".toPathFormatterPlugin(), nullValue())
+    }
+
+    @Test
+    fun testClassPathPluginCreate() {
+        assertThat(
+            FixedPathFormatterPlugin::class.jvmName.toPathFormatterPlugin(),
+            instanceOf(FixedPathFormatterPlugin::class.java),
+        )
     }
 }

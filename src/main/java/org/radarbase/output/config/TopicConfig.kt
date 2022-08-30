@@ -10,6 +10,11 @@ data class TopicConfig(
      * in the service.
      */
     val excludeFromDelete: Boolean = false,
+    /**
+     * Specify alternative path format, following
+     * [org.radarbase.output.path.FormattedPathFactory] format.
+     */
+    val pathProperties: Map<String, String> = emptyMap(),
 ) {
     fun deduplication(deduplicationDefault: DeduplicationConfig): DeduplicationConfig =
         deduplication

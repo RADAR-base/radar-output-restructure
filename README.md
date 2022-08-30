@@ -138,18 +138,64 @@ target:
 
 Secrets can be provided as environment variables as well:
 
-| Environment variable | Corresponding value |
-| --- | --- |
-| `SOURCE_S3_ACCESS_TOKEN` | `source.s3.accessToken` |
-| `SOURCE_S3_SECRET_KEY` | `source.s3.secretKey` |
-| `SOURCE_AZURE_USERNAME` | `source.azure.username` |
-| `SOURCE_AZURE_PASSWORD` | `source.azure.password` |
+| Environment variable        | Corresponding value        |
+|-----------------------------|----------------------------|
+| `SOURCE_S3_ACCESS_TOKEN`    | `source.s3.accessToken`    |
+| `SOURCE_S3_SECRET_KEY`      | `source.s3.secretKey`      |
+| `SOURCE_AZURE_USERNAME`     | `source.azure.username`    |
+| `SOURCE_AZURE_PASSWORD`     | `source.azure.password`    |
 | `SOURCE_AZURE_ACCOUNT_NAME` | `source.azure.accountName` |
-| `SOURCE_AZURE_ACCOUNT_KEY` | `source.azure.accountKey` |
-| `SOURCE_AZURE_SAS_TOKEN` | `source.azure.sasToken` |
-| `REDIS_URL` | `redis.url` |
+| `SOURCE_AZURE_ACCOUNT_KEY`  | `source.azure.accountKey`  |
+| `SOURCE_AZURE_SAS_TOKEN`    | `source.azure.sasToken`    |
+| `REDIS_URL`                 | `redis.url`                |
 
 Replace `SOURCE` with `TARGET` in the variables above to configure the target storage.
+
+### Path format
+
+The output path at the target storage is determined by the path format. The class that handles path
+output by default is the `org.radarbase.output.path.FormattedPathFactory`. The default format is
+```
+${projectId}/${userId}/${topic}/${filename}
+```
+Each format parameter is enclosed by a dollar sign with curly brackets.
+
+The full set of parameters is listed here:
+```yaml
+paths:
+  # Input directories in source storage
+  inputs:
+    - /testIn
+  # Temporary directory for local file processing.
+  temp: ./output/+tmp
+  # Output directory in target storage
+  output: /output
+  # Output path construction factory
+  factory: org.radarbase.output.path.FormattedPathFactory
+  # Additional properties
+  # properties:
+  #   format: ${projectId}/${userId}/${topic}/${time:mm}/${time:YYYYmmDD_HH'00'}${attempt}${extension}
+  #   plugins: fixed time key value org.example.plugin.MyPathPlugin
+```
+
+The FormattedPathFactory can use multiple plugins to format paths based on a given record.
+The `fixed` plugin has a number of fixed parameters that can be used:
+
+| Parameter | Description                                                             |
+|-----------|-------------------------------------------------------------------------|
+| projectId | record project ID                                                       |
+| userId    | record user ID                                                          |
+| sourceId  | record source ID                                                        |
+| topic     | Kafka topic                                                             | 
+| filename  | default time binning with attempt suffix and file extension             |
+| attempt   | attempt suffix for if a file with an incompatible format already exists |
+| extension | file extension                                                          |
+
+At least `filename` should be used, or a combination of `attempt` and `extension`.
+
+Then there are also plugins that take their own format. The `time` plugin formats a parameter according to the record time. It takes parameters with format `time:<date format>` where `<date format>` should be replaced by a [Java date format](https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/time/format/DateTimeFormatter.html), such as `YYYY-mm-dd`. The plugin tries to use the following time fields, in this order: a double `time` in the value struct, `timeStart` double or `start` long in the key struct, `dateTime` string in the value struct, `date` string in the value struct, `timeReceived` double in the value struct or `timeCompleted` double in the value struct. The first valid value used. If no valid time values are found, `unknown-date` is returned.
+
+The `key` and `value` plugins read values from the key or value structs of a given record. For example, parameter `value:color.red` will attempt to read the value struct, finding first the `color` field and then the enclosed `red` field. If no such value exists, `unknown-value` will be used in the format.
 
 ### Cleaner
 
@@ -192,10 +238,12 @@ Now the `radar-output-restructure` command should be available.
 To implement alternative storage paths, storage drivers or storage formats, put your custom JAR in
 `$APP_DIR/lib/radar-output-plugins`. To load them, use the following options:
 
-| Parameter                   | Base class                                          | Behaviour                                  | Default                   |
-| --------------------------- | --------------------------------------------------- | ------------------------------------------ | ------------------------- |
-| `paths: factory: ...`       | `org.radarbase.output.path.RecordPathFactory`         | Factory to create output path names with.  | ObservationKeyPathFactory |
-| `format: factory: ...`      | `org.radarbase.output.format.FormatFactory`           | Factory for output formats.                | FormatFactory             |
-| `compression: factory: ...` | `org.radarbase.output.compression.CompressionFactory` | Factory class to use for data compression. | CompressionFactory        |
+| Parameter                   | Base class                                            | Behaviour                                  | Default              |
+|-----------------------------|-------------------------------------------------------|--------------------------------------------|----------------------|
+| `paths: factory: ...`       | `org.radarbase.output.path.RecordPathFactory`         | Factory to create output path names with.  | FormattedPathFactory |
+| `format: factory: ...`      | `org.radarbase.output.format.FormatFactory`           | Factory for output formats.                | FormatFactory        |
+| `compression: factory: ...` | `org.radarbase.output.compression.CompressionFactory` | Factory class to use for data compression. | CompressionFactory   |
 
 The respective `<type>: properties: {}` configuration parameters can be used to provide custom configuration of the factory. This configuration will be passed to the `Plugin#init(Map<String, String>)` method.
+
+By adding additional path format plugins to the classpath, the path format of FormattedPathFactory may be expanded with different parameters or lookup engines.
