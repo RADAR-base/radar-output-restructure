@@ -29,8 +29,7 @@ class PathFormatter(
     init {
         val foundParameters = "\\$\\{([^}]*)}".toRegex()
             .findAll(format)
-            .map { it.groupValues[1] }
-            .toSet()
+            .mapTo(HashSet()) { it.groupValues[1] }
 
         parameterLookups = buildMap {
             plugins.forEach { plugin ->

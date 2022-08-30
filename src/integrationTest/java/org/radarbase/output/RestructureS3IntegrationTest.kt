@@ -100,7 +100,7 @@ class RestructureS3IntegrationTest {
                 assertEquals(csvContents, targetContent.toString(UTF_8))
             }
 
-            withContext(Dispatchers.IO) {
+            return@coroutineScope withContext(Dispatchers.IO) {
                 targetClient.listObjects(
                     ListObjectsArgs.Builder().bucketBuild(targetConfig.bucket) {
                         prefix("output")
@@ -108,8 +108,7 @@ class RestructureS3IntegrationTest {
                         useUrlEncodingType(false)
                     }
                 )
-                    .map { it.get().objectName() }
-                    .toHashSet()
+                    .mapTo(HashSet()) { it.get().objectName() }
             }
         }
 
