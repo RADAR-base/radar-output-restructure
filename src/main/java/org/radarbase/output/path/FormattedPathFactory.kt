@@ -90,7 +90,7 @@ open class FormattedPathFactory : RecordPathFactory() {
         internal const val DEFAULT_FORMAT_PLUGINS = "fixed time key value"
         private val logger = LoggerFactory.getLogger(FormattedPathFactory::class.java)
 
-        private fun String.toPathFormatterPlugin(): PathFormatterPlugin? = when (this) {
+        internal fun String.toPathFormatterPlugin(): PathFormatterPlugin? = when (this) {
             "fixed" -> FixedPathFormatterPlugin()
             "time" -> TimePathFormatterPlugin()
             "key" -> KeyPathFormatterPlugin()
