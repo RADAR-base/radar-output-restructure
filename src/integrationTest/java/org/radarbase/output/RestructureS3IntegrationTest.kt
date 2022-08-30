@@ -25,12 +25,7 @@ class RestructureS3IntegrationTest {
             secretKey = "minioadmin",
             bucket = "source",
         )
-        val targetConfig = S3Config(
-            endpoint = "http://localhost:9000",
-            accessToken = "minioadmin",
-            secretKey = "minioadmin",
-            bucket = "target",
-        )
+        val targetConfig = sourceConfig.copy(bucket = "target")
         val topicConfig = mapOf(
             "application_server_status" to TopicConfig(
                 pathProperties = mapOf(
