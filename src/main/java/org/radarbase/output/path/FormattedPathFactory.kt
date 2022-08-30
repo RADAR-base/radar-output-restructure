@@ -86,8 +86,8 @@ open class FormattedPathFactory : RecordPathFactory() {
     ): String = sanitizeId(key.get("sourceId"), "unknown-source")
 
     companion object {
-        private const val DEFAULT_FORMAT = "\${projectId}/\${userId}/\${topic}/\${filename}"
-        private const val DEFAULT_FORMAT_PLUGINS = "fixed time key value"
+        internal const val DEFAULT_FORMAT = "\${projectId}/\${userId}/\${topic}/\${filename}"
+        internal const val DEFAULT_FORMAT_PLUGINS = "fixed time key value"
         private val logger = LoggerFactory.getLogger(FormattedPathFactory::class.java)
 
         private fun String.toPathFormatterPlugin(): PathFormatterPlugin? = when (this) {
