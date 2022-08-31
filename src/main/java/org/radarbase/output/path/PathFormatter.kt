@@ -22,7 +22,7 @@ import java.nio.file.Paths
 
 class PathFormatter(
     private val format: String,
-    plugins: List<PathFormatterPlugin>
+    private val plugins: List<PathFormatterPlugin>
 ) {
     private val parameterLookups: Map<String, PathFormatParameters.() -> String>
 
@@ -37,7 +37,7 @@ class PathFormatter(
                     try {
                         plugin.createLookupTable(foundParameters)
                     } catch (ex: IllegalArgumentException) {
-                        logger.error("Cannot parse path format {}, illegal format parameter found by plugin {}", format, plugin.javaClass, ex)
+                        logger.error("Cannot parse path format {}, illegal format parameter found by plugin {}", format, plugin.name, ex)
                         throw ex
                     }
                 )
@@ -68,6 +68,10 @@ class PathFormatter(
 
         return Paths.get(path)
     }
+
+    override fun toString(): String = "PathFormatter{" +
+        "format=$format," +
+        "plugins=${plugins.map { it.name }}}"
 
     companion object {
         private val logger = LoggerFactory.getLogger(PathFormatter::class.java)

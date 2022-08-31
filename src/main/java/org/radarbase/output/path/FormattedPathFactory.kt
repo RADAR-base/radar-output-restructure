@@ -24,8 +24,6 @@ import java.time.Instant
 import kotlin.reflect.jvm.jvmName
 
 open class FormattedPathFactory : RecordPathFactory() {
-    private lateinit var format: String
-    private lateinit var plugins: List<PathFormatterPlugin>
     private lateinit var formatter: PathFormatter
     private lateinit var properties: Map<String, String>
     private var topicFormatters: Map<String, PathFormatter> = emptyMap()
@@ -33,13 +31,9 @@ open class FormattedPathFactory : RecordPathFactory() {
     override fun init(properties: Map<String, String>) {
         super.init(properties)
 
-        format = properties["format"] ?: DEFAULT_FORMAT
-
-        plugins = instantiatePlugins(properties["plugins"] ?: DEFAULT_FORMAT_PLUGINS, properties)
-
-        logger.info("Path formatter uses format '{}' with plugins '{}'", format, plugins.map { it.name })
-
-        formatter = PathFormatter(format, plugins)
+        this.properties = DEFAULTS + properties
+        formatter = createFormatter(this.properties)
+        logger.info("Formatting path with {}", formatter)
     }
 
     private fun instantiatePlugins(
@@ -54,23 +48,20 @@ open class FormattedPathFactory : RecordPathFactory() {
     override fun addTopicConfiguration(topicConfig: Map<String, TopicConfig>) {
         topicFormatters = topicConfig
             .filter { (_, config) -> config.pathProperties.isNotEmpty() }
-            .mapValues { (topic, config) ->
-                val topicFormat = config.pathProperties.getOrDefault("format", format)
-                val pluginClassNames = config.pathProperties["plugins"]
-
-                val topicPlugins = if (pluginClassNames != null) {
-                    instantiatePlugins(pluginClassNames, properties + config.pathProperties)
-                } else plugins
-
-                logger.info(
-                    "Path formatter of topic {} uses format {} with plugins {}",
-                    topic,
-                    topicFormat,
-                    topicPlugins.map { it.name }
-                )
-
-                PathFormatter(topicFormat, topicPlugins)
+            .mapValues { (_, config) ->
+                createFormatter(properties + config.pathProperties)
             }
+            .onEach { (topic, formatter) ->
+                logger.info("Formatting path of topic {} with {}", topic, formatter)
+            }
+    }
+
+    private fun createFormatter(properties: Map<String, String>): PathFormatter {
+        val format = checkNotNull(properties["format"])
+        val pluginClassNames = checkNotNull(properties["plugins"])
+        val plugins = instantiatePlugins(pluginClassNames, properties)
+
+        return PathFormatter(format, plugins)
     }
 
     override fun getRelativePath(
@@ -88,8 +79,10 @@ open class FormattedPathFactory : RecordPathFactory() {
     ): String = sanitizeId(key.get("sourceId"), "unknown-source")
 
     companion object {
-        internal const val DEFAULT_FORMAT = "\${projectId}/\${userId}/\${topic}/\${filename}"
-        internal const val DEFAULT_FORMAT_PLUGINS = "fixed time key value"
+        internal val DEFAULTS = mapOf(
+            "format" to "\${projectId}/\${userId}/\${topic}/\${filename}",
+            "plugins" to "fixed time key value",
+        )
         private val logger = LoggerFactory.getLogger(FormattedPathFactory::class.java)
 
         internal fun String.toPathFormatterPlugin(): PathFormatterPlugin? = when (this) {

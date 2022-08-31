@@ -43,7 +43,7 @@ internal class PathFormatterTest {
     @Test
     fun testDefaultPath() {
         val formatter = PathFormatter(
-            format = FormattedPathFactory.Companion.DEFAULT_FORMAT,
+            format = checkNotNull(FormattedPathFactory.Companion.DEFAULTS["format"]),
             plugins = listOf(
                 FixedPathFormatterPlugin(),
                 TimePathFormatterPlugin(),
@@ -57,7 +57,7 @@ internal class PathFormatterTest {
     @Test
     fun testDefaultPathFewerPlugins() {
         val formatter = PathFormatter(
-            format = FormattedPathFactory.Companion.DEFAULT_FORMAT,
+            format = checkNotNull(FormattedPathFactory.Companion.DEFAULTS["format"]),
             plugins = listOf(
                 FixedPathFormatterPlugin(),
             )
@@ -68,7 +68,7 @@ internal class PathFormatterTest {
     @Test
     fun testDefaultPathNoTime() {
         val formatter = PathFormatter(
-            format = FormattedPathFactory.Companion.DEFAULT_FORMAT,
+            format = checkNotNull(FormattedPathFactory.Companion.DEFAULTS["format"]),
             plugins = listOf(
                 FixedPathFormatterPlugin(),
             )
@@ -80,7 +80,7 @@ internal class PathFormatterTest {
     fun testDefaultPathWrongPlugins() {
         assertThrows(IllegalArgumentException::class.java) {
             PathFormatter(
-                format = FormattedPathFactory.Companion.DEFAULT_FORMAT,
+                format = checkNotNull(FormattedPathFactory.Companion.DEFAULTS["format"]),
                 plugins = listOf(
                     TimePathFormatterPlugin(),
                     KeyPathFormatterPlugin(),
