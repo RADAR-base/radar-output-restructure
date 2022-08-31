@@ -33,16 +33,10 @@ open class FormattedPathFactory : RecordPathFactory() {
     override fun init(properties: Map<String, String>) {
         super.init(properties)
 
-        format = properties["format"]
-            ?: run {
-                logger.warn("Path format not provided, using '{}' instead", DEFAULT_FORMAT)
-                DEFAULT_FORMAT
-            }
-        val pluginClassNames = properties["plugins"]
-            ?: run {
-                logger.warn("Path format plugins not provided, using '{}' instead", DEFAULT_FORMAT_PLUGINS)
-                DEFAULT_FORMAT_PLUGINS
-            }
+        format = properties["format"] ?:  DEFAULT_FORMAT
+        val pluginClassNames = properties["plugins"] ?: DEFAULT_FORMAT_PLUGINS
+
+        logger.info("Path formatter uses format '{}' with plugins '{}'", format, pluginClassNames)
 
         plugins = instantiatePlugins(pluginClassNames, properties)
         formatter = PathFormatter(format, plugins)
@@ -60,9 +54,17 @@ open class FormattedPathFactory : RecordPathFactory() {
     override fun addTopicConfiguration(topicConfig: Map<String, TopicConfig>) {
         topicFormatters = topicConfig
             .filter { (_, config) -> config.pathProperties.isNotEmpty() }
-            .mapValues { (_, config) ->
+            .mapValues { (topic, config) ->
                 val topicFormat = config.pathProperties.getOrDefault("format", format)
                 val pluginClassNames = config.pathProperties["plugins"]
+
+                logger.info(
+                    "Path formatter of topic {} uses format {} with plugins {}",
+                    topic,
+                    topicFormat,
+                    pluginClassNames
+                )
+
                 val topicPlugins = if (pluginClassNames != null) {
                     instantiatePlugins(pluginClassNames, properties + config.pathProperties)
                 } else plugins
