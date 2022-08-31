@@ -33,12 +33,12 @@ open class FormattedPathFactory : RecordPathFactory() {
     override fun init(properties: Map<String, String>) {
         super.init(properties)
 
-        format = properties["format"] ?:  DEFAULT_FORMAT
-        val pluginClassNames = properties["plugins"] ?: DEFAULT_FORMAT_PLUGINS
+        format = properties["format"] ?: DEFAULT_FORMAT
 
-        logger.info("Path formatter uses format '{}' with plugins '{}'", format, pluginClassNames)
+        plugins = instantiatePlugins(properties["plugins"] ?: DEFAULT_FORMAT_PLUGINS, properties)
 
-        plugins = instantiatePlugins(pluginClassNames, properties)
+        logger.info("Path formatter uses format '{}' with plugins '{}'", format, plugins.map { it.name })
+
         formatter = PathFormatter(format, plugins)
     }
 
@@ -58,16 +58,16 @@ open class FormattedPathFactory : RecordPathFactory() {
                 val topicFormat = config.pathProperties.getOrDefault("format", format)
                 val pluginClassNames = config.pathProperties["plugins"]
 
+                val topicPlugins = if (pluginClassNames != null) {
+                    instantiatePlugins(pluginClassNames, properties + config.pathProperties)
+                } else plugins
+
                 logger.info(
                     "Path formatter of topic {} uses format {} with plugins {}",
                     topic,
                     topicFormat,
-                    pluginClassNames
+                    topicPlugins.map { it.name }
                 )
-
-                val topicPlugins = if (pluginClassNames != null) {
-                    instantiatePlugins(pluginClassNames, properties + config.pathProperties)
-                } else plugins
 
                 PathFormatter(topicFormat, topicPlugins)
             }

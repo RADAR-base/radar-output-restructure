@@ -3,6 +3,8 @@ package org.radarbase.output.path
 import org.radarbase.output.path.RecordPathFactory.Companion.sanitizeId
 
 class FixedPathFormatterPlugin : PathFormatterPlugin() {
+    override val name: String = "fixed"
+
     override val allowedFormats: String = allowedParamNames.joinToString(separator = ", ")
 
     override fun lookup(parameterContents: String): PathFormatParameters.() -> String = when (parameterContents) {

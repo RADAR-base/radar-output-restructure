@@ -4,6 +4,12 @@ import org.radarbase.output.Plugin
 
 abstract class PathFormatterPlugin : Plugin {
     /**
+     * Short name to reference this plugin by.
+     */
+    open val name: String
+        get() = prefix ?: javaClass.canonicalName
+
+    /**
      * Prefix for parameter names covered by this plugin. If null, [extractParamContents] must be
      * overridden to cover only supported parameters.
      */
