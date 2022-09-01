@@ -61,7 +61,7 @@ class TimestampExtractionCheck(
         var suffix = 0
 
         do {
-            val (path) = pathFactory.getRecordOrganization(
+            val path = pathFactory.getRecordPath(
                 topicFile.topic,
                 record,
                 suffix

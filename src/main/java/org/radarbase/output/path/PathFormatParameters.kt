@@ -10,8 +10,4 @@ data class PathFormatParameters(
     val time: Instant?,
     val attempt: Int,
     val extension: String,
-    val computeTimeBin: (time: Instant?) -> String,
-) {
-    val timeBin: String
-        get() = computeTimeBin(time)
-}
+)

@@ -10,17 +10,12 @@ import org.radarcns.monitor.application.ApplicationServerStatus
 import org.radarcns.monitor.application.ServerStatus
 import java.nio.file.Paths
 import java.time.Instant
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 
 internal class PathFormatterTest {
     lateinit var params: PathFormatParameters
 
     @BeforeEach
     fun setupRecord() {
-        val defaultTimeFormat = DateTimeFormatter.ofPattern("YYYYMMdd_HH'00'")
-            .withZone(ZoneOffset.UTC)
-
         params = PathFormatParameters(
             topic = "my_topic",
             key = ObservationKey(
@@ -36,14 +31,13 @@ internal class PathFormatterTest {
             time = Instant.ofEpochMilli(1000),
             attempt = 0,
             extension = ".csv",
-            computeTimeBin = { t -> if (t != null) defaultTimeFormat.format(t) else "unknown-time" }
         )
     }
 
     @Test
     fun testDefaultPath() {
         val formatter = PathFormatter(
-            format = checkNotNull(FormattedPathFactory.Companion.DEFAULTS["format"]),
+            format = FormattedPathFactory.Companion.DEFAULTS.format,
             plugins = listOf(
                 FixedPathFormatterPlugin(),
                 TimePathFormatterPlugin(),
@@ -57,7 +51,7 @@ internal class PathFormatterTest {
     @Test
     fun testDefaultPathFewerPlugins() {
         val formatter = PathFormatter(
-            format = checkNotNull(FormattedPathFactory.Companion.DEFAULTS["format"]),
+            format = FormattedPathFactory.Companion.DEFAULTS.format,
             plugins = listOf(
                 FixedPathFormatterPlugin(),
             )
@@ -68,7 +62,7 @@ internal class PathFormatterTest {
     @Test
     fun testDefaultPathNoTime() {
         val formatter = PathFormatter(
-            format = checkNotNull(FormattedPathFactory.Companion.DEFAULTS["format"]),
+            format = FormattedPathFactory.Companion.DEFAULTS.format,
             plugins = listOf(
                 FixedPathFormatterPlugin(),
             )
@@ -80,7 +74,7 @@ internal class PathFormatterTest {
     fun testDefaultPathWrongPlugins() {
         assertThrows(IllegalArgumentException::class.java) {
             PathFormatter(
-                format = checkNotNull(FormattedPathFactory.Companion.DEFAULTS["format"]),
+                format = FormattedPathFactory.Companion.DEFAULTS.format,
                 plugins = listOf(
                     TimePathFormatterPlugin(),
                     KeyPathFormatterPlugin(),

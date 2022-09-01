@@ -25,43 +25,27 @@ import kotlin.reflect.jvm.jvmName
 
 open class FormattedPathFactory : RecordPathFactory() {
     private lateinit var formatter: PathFormatter
-    private lateinit var properties: Map<String, String>
+    private lateinit var config: PathFormatterConfig
     private var topicFormatters: Map<String, PathFormatter> = emptyMap()
 
     override fun init(properties: Map<String, String>) {
         super.init(properties)
 
-        this.properties = DEFAULTS + properties
-        formatter = createFormatter(this.properties)
+        this.config = DEFAULTS.withValues(properties)
+        formatter = config.toPathFormatter()
         logger.info("Formatting path with {}", formatter)
     }
-
-    private fun instantiatePlugins(
-        pluginClassNames: String,
-        properties: Map<String, String>,
-    ): List<PathFormatterPlugin> = pluginClassNames
-        .trim()
-        .split("\\s+".toRegex())
-        .mapNotNull { it.toPathFormatterPlugin() }
-        .onEach { it.init(properties) }
 
     override fun addTopicConfiguration(topicConfig: Map<String, TopicConfig>) {
         topicFormatters = topicConfig
             .filter { (_, config) -> config.pathProperties.isNotEmpty() }
             .mapValues { (_, config) ->
-                createFormatter(properties + config.pathProperties)
+                this.config.withValues(config.pathProperties)
+                    .toPathFormatter()
             }
             .onEach { (topic, formatter) ->
                 logger.info("Formatting path of topic {} with {}", topic, formatter)
             }
-    }
-
-    private fun createFormatter(properties: Map<String, String>): PathFormatter {
-        val format = checkNotNull(properties["format"])
-        val pluginClassNames = checkNotNull(properties["plugins"])
-        val plugins = instantiatePlugins(pluginClassNames, properties)
-
-        return PathFormatter(format, plugins)
     }
 
     override fun getRelativePath(
@@ -71,17 +55,16 @@ open class FormattedPathFactory : RecordPathFactory() {
         time: Instant?,
         attempt: Int,
     ): Path = (topicFormatters[topic] ?: formatter)
-        .format(PathFormatParameters(topic, key, value, time, attempt, extension, this::getTimeBin))
-
-    override fun getCategory(
-        key: GenericRecord,
-        value: GenericRecord,
-    ): String = sanitizeId(key.get("sourceId"), "unknown-source")
+        .format(PathFormatParameters(topic, key, value, time, attempt, extension))
 
     companion object {
-        internal val DEFAULTS = mapOf(
-            "format" to "\${projectId}/\${userId}/\${topic}/\${filename}",
-            "plugins" to "fixed time key value",
+        private fun PathFormatterConfig.toPathFormatter(): PathFormatter {
+            return PathFormatter(format, createPlugins())
+        }
+
+        internal val DEFAULTS = PathFormatterConfig(
+            format = "\${projectId}/\${userId}/\${topic}/\${filename}",
+            pluginNames = "fixed time key value",
         )
         private val logger = LoggerFactory.getLogger(FormattedPathFactory::class.java)
 
@@ -105,6 +88,28 @@ open class FormattedPathFactory : RecordPathFactory() {
                     )
                     null
                 }
+            }
+        }
+
+        data class PathFormatterConfig(
+            val format: String,
+            val pluginNames: String,
+            val properties: Map<String, String> = mapOf(),
+        ) {
+            fun createPlugins(): List<PathFormatterPlugin> = pluginNames
+                .trim()
+                .split("\\s+".toRegex())
+                .mapNotNull { it.toPathFormatterPlugin() }
+                .onEach { it.init(properties) }
+
+            fun withValues(values: Map<String, String>): PathFormatterConfig {
+                val newProperties = HashMap(properties).apply {
+                    putAll(values)
+                }
+                val format = newProperties.remove("format") ?: this.format
+                val pluginNames = newProperties.remove("plugins") ?: this.pluginNames
+
+                return PathFormatterConfig(format, pluginNames, newProperties)
             }
         }
     }

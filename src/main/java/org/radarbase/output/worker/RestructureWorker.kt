@@ -167,7 +167,7 @@ internal class RestructureWorker(
     ) {
         var currentSuffix = 0
         do {
-            val (path) = pathFactory.getRecordOrganization(
+            val path = pathFactory.getRecordPath(
                 transaction.topicPartition.topic,
                 record,
                 attempt = currentSuffix

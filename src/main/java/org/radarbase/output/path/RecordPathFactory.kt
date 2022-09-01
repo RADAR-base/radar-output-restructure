@@ -26,34 +26,12 @@ import org.radarbase.output.util.TimeUtil
 import org.slf4j.LoggerFactory
 import java.nio.file.Path
 import java.time.Instant
-import java.time.ZoneOffset.UTC
-import java.time.format.DateTimeFormatter
 import java.util.regex.Pattern
 
 abstract class RecordPathFactory : Plugin {
     lateinit var root: Path
     lateinit var extension: String
     lateinit var fileStoreFactory: FileStoreFactory
-
-    protected open var timeBinFormat: DateTimeFormatter = HOURLY_TIME_BIN_FORMAT
-
-    override fun init(properties: Map<String, String>) {
-        super.init(properties)
-        properties["timeBinFormat"]?.let {
-            try {
-                timeBinFormat = DateTimeFormatter
-                    .ofPattern(it)
-                    .withZone(UTC)
-            } catch (ex: IllegalArgumentException) {
-                logger.error(
-                    "Cannot use time bin format {}, using {} instead",
-                    it,
-                    timeBinFormat,
-                    ex,
-                )
-            }
-        }
-    }
 
     /**
      * Get the organization of given record in given topic.
@@ -63,11 +41,11 @@ abstract class RecordPathFactory : Plugin {
      * paths already existed and are incompatible.
      * @return organization of given record
      */
-    open fun getRecordOrganization(
+    open fun getRecordPath(
         topic: String,
         record: GenericRecord,
         attempt: Int,
-    ): RecordOrganization {
+    ): Path {
         val keyField = record.get("key")
         val valueField = record.get("value") as? GenericRecord
 
@@ -79,19 +57,17 @@ abstract class RecordPathFactory : Plugin {
         val keyRecord: GenericRecord = if (keyField is GenericRecord) {
             keyField
         } else {
-            GenericRecordBuilder(observationKeySchema)
-                .set("projectId", valueField.getOrNull("projectId"))
-                .set("userId", keyField.toString())
-                .set("sourceId", valueField.getOrNull("sourceId") ?: "unknown")
-                .build()
+            GenericRecordBuilder(observationKeySchema).apply {
+                set("projectId", valueField.getOrNull("projectId"))
+                set("userId", keyField.toString())
+                set("sourceId", valueField.getOrNull("sourceId") ?: "unknown")
+            }.build()
         }
 
         val time = TimeUtil.getDate(keyRecord, valueField)
 
         val relativePath = getRelativePath(topic, keyRecord, valueField, time, attempt)
-        val outputPath = root.resolve(relativePath)
-        val category = getCategory(keyRecord, valueField)
-        return RecordOrganization(outputPath, category, time)
+        return root.resolve(relativePath)
     }
 
     /**
@@ -112,37 +88,9 @@ abstract class RecordPathFactory : Plugin {
         attempt: Int,
     ): Path
 
-    /**
-     * Get the category of a record, representing a partitioning for a given topic and user.
-     * @param key record key
-     * @param value record value
-     * @return category name.
-     */
-    abstract fun getCategory(key: GenericRecord, value: GenericRecord): String
-
-    open fun getTimeBin(time: Instant?): String = time
-        ?.let { timeBinFormat.format(time) }
-        ?: "unknown_date"
-
-    /**
-     * Organization of a record.
-     */
-    data class RecordOrganization(
-        /** Path that the record should be stored in. */
-        val path: Path,
-        /** Category or partition that the record belongs to. */
-        val category: String,
-        /** Time contained in the record, if any. */
-        val time: Instant?,
-    )
-
     companion object {
         private val logger = LoggerFactory.getLogger(RecordPathFactory::class.java)
         private val ILLEGAL_CHARACTER_PATTERN = Pattern.compile("[^a-zA-Z0-9_-]+")
-
-        val HOURLY_TIME_BIN_FORMAT: DateTimeFormatter = DateTimeFormatter
-            .ofPattern("yyyyMMdd_HH'00'")
-            .withZone(UTC)
 
         fun sanitizeId(id: Any?, defaultValue: String): String = id
             ?.let { ILLEGAL_CHARACTER_PATTERN.matcher(it.toString()).replaceAll("") }
