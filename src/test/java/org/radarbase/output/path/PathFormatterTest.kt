@@ -39,7 +39,7 @@ internal class PathFormatterTest {
         val formatter = PathFormatter(
             format = FormattedPathFactory.Companion.DEFAULTS.format,
             plugins = listOf(
-                FixedPathFormatterPlugin(),
+                FixedPathFormatterPlugin().create(),
                 TimePathFormatterPlugin(),
                 KeyPathFormatterPlugin(),
                 ValuePathFormatterPlugin(),
@@ -53,7 +53,7 @@ internal class PathFormatterTest {
         val formatter = PathFormatter(
             format = FormattedPathFactory.Companion.DEFAULTS.format,
             plugins = listOf(
-                FixedPathFormatterPlugin(),
+                FixedPathFormatterPlugin().create(),
             )
         )
         assertThat(formatter.format(params), equalTo(Paths.get("p/u/my_topic/19700101_0000.csv")))
@@ -64,7 +64,7 @@ internal class PathFormatterTest {
         val formatter = PathFormatter(
             format = FormattedPathFactory.Companion.DEFAULTS.format,
             plugins = listOf(
-                FixedPathFormatterPlugin(),
+                FixedPathFormatterPlugin().create(),
             )
         )
         assertThat(formatter.format(params.copy(time = null)), equalTo(Paths.get("p/u/my_topic/unknown-time.csv")))
@@ -89,7 +89,7 @@ internal class PathFormatterTest {
         val formatter = PathFormatter(
             format = "\${topic}/\${time:YYYY-MM-dd_HH:mm:ss}\${attempt}\${extension}",
             plugins = listOf(
-                FixedPathFormatterPlugin(),
+                FixedPathFormatterPlugin().create(),
                 TimePathFormatterPlugin(),
             ),
         )
@@ -102,7 +102,7 @@ internal class PathFormatterTest {
             PathFormatter(
                 format = "\${topic}/\${time:VVV}\${attempt}\${extension}",
                 plugins = listOf(
-                    FixedPathFormatterPlugin(),
+                    FixedPathFormatterPlugin().create(),
                     TimePathFormatterPlugin(),
                 )
             )
@@ -114,7 +114,7 @@ internal class PathFormatterTest {
         val formatter = PathFormatter(
             format = "\${topic}/\${key:projectId}\${attempt}\${extension}",
             plugins = listOf(
-                FixedPathFormatterPlugin(),
+                FixedPathFormatterPlugin().create(),
                 KeyPathFormatterPlugin(),
             )
         )
@@ -127,7 +127,7 @@ internal class PathFormatterTest {
         val formatter = PathFormatter(
             format = "\${topic}/\${key:doesNotExist}\${attempt}\${extension}",
             plugins = listOf(
-                FixedPathFormatterPlugin(),
+                FixedPathFormatterPlugin().create(),
                 KeyPathFormatterPlugin(),
             )
         )
@@ -140,7 +140,7 @@ internal class PathFormatterTest {
         val formatter = PathFormatter(
             format = "\${topic}/\${value:serverStatus}\${attempt}\${extension}",
             plugins = listOf(
-                FixedPathFormatterPlugin(),
+                FixedPathFormatterPlugin().create(),
                 ValuePathFormatterPlugin(),
             )
         )

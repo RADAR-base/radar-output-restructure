@@ -1,8 +1,6 @@
 package org.radarbase.output.path
 
-import org.radarbase.output.Plugin
-
-abstract class PathFormatterPlugin : Plugin {
+abstract class PathFormatterPlugin {
     /**
      * Short name to reference this plugin by.
      */
@@ -52,4 +50,13 @@ abstract class PathFormatterPlugin : Plugin {
      * @throws IllegalArgumentException if the parameter contents are invalid.
      */
     protected abstract fun lookup(parameterContents: String): PathFormatParameters.() -> String
+
+    interface Factory {
+        /**
+         * Factory to create new plugin with.
+         */
+        fun create(
+            properties: Map<String, String> = emptyMap(),
+        ): PathFormatterPlugin
+    }
 }

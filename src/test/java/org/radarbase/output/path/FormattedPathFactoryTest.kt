@@ -107,22 +107,22 @@ internal class FormattedPathFactoryTest {
 
     @Test
     fun testNamedPluginCreate() {
-        assertThat("fixed".toPathFormatterPlugin(), instanceOf(FixedPathFormatterPlugin::class.java))
-        assertThat("time".toPathFormatterPlugin(), instanceOf(TimePathFormatterPlugin::class.java))
-        assertThat("key".toPathFormatterPlugin(), instanceOf(KeyPathFormatterPlugin::class.java))
-        assertThat("value".toPathFormatterPlugin(), instanceOf(ValuePathFormatterPlugin::class.java))
+        assertThat("fixed".toPathFormatterPlugin(emptyMap()), instanceOf(PathFormatterPlugin::class.java))
+        assertThat("time".toPathFormatterPlugin(emptyMap()), instanceOf(PathFormatterPlugin::class.java))
+        assertThat("key".toPathFormatterPlugin(emptyMap()), instanceOf(PathFormatterPlugin::class.java))
+        assertThat("value".toPathFormatterPlugin(emptyMap()), instanceOf(PathFormatterPlugin::class.java))
     }
 
     @Test
     fun testBadPluginCreate() {
-        assertThat("unknown".toPathFormatterPlugin(), nullValue())
+        assertThat("unknown".toPathFormatterPlugin(emptyMap()), nullValue())
     }
 
     @Test
     fun testClassPathPluginCreate() {
         assertThat(
-            FixedPathFormatterPlugin::class.jvmName.toPathFormatterPlugin(),
-            instanceOf(FixedPathFormatterPlugin::class.java),
+            FixedPathFormatterPlugin::class.jvmName.toPathFormatterPlugin(emptyMap()),
+            instanceOf(PathFormatterPlugin::class.java),
         )
     }
 }

@@ -68,24 +68,31 @@ open class FormattedPathFactory : RecordPathFactory() {
         )
         private val logger = LoggerFactory.getLogger(FormattedPathFactory::class.java)
 
-        internal fun String.toPathFormatterPlugin(): PathFormatterPlugin? = when (this) {
-            "fixed" -> FixedPathFormatterPlugin()
+        internal fun String.toPathFormatterPlugin(
+            properties: Map<String, String>,
+        ): PathFormatterPlugin? = when (this) {
+            "fixed" -> FixedPathFormatterPlugin().create(properties)
             "time" -> TimePathFormatterPlugin()
             "key" -> KeyPathFormatterPlugin()
             "value" -> ValuePathFormatterPlugin()
             else -> {
                 try {
-                    Class.forName(this).getConstructor()
-                        .newInstance() as PathFormatterPlugin
+                    val clazz = Class.forName(this)
+                    when (val plugin = clazz.getConstructor().newInstance()) {
+                        is PathFormatterPlugin -> plugin
+                        is PathFormatterPlugin.Factory -> plugin.create(properties)
+                        else -> {
+                            logger.error(
+                                "Failed to instantiate plugin {}, it does not extend {} or {}",
+                                this,
+                                PathFormatterPlugin::class.jvmName,
+                                PathFormatterPlugin.Factory::class.jvmName
+                            )
+                            null
+                        }
+                    }
                 } catch (ex: ReflectiveOperationException) {
                     logger.error("Failed to instantiate plugin {}", this)
-                    null
-                } catch (ex: ClassCastException) {
-                    logger.error(
-                        "Failed to instantiate plugin {}, it does not extend {}",
-                        this,
-                        PathFormatterPlugin::class.jvmName
-                    )
                     null
                 }
             }
@@ -99,8 +106,7 @@ open class FormattedPathFactory : RecordPathFactory() {
             fun createPlugins(): List<PathFormatterPlugin> = pluginNames
                 .trim()
                 .split("\\s+".toRegex())
-                .mapNotNull { it.toPathFormatterPlugin() }
-                .onEach { it.init(properties) }
+                .mapNotNull { it.toPathFormatterPlugin(properties) }
 
             fun withValues(values: Map<String, String>): PathFormatterConfig {
                 val newProperties = HashMap(properties).apply {
