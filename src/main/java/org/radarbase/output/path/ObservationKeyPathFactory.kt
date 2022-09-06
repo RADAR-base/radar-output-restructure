@@ -16,32 +16,4 @@
 
 package org.radarbase.output.path
 
-import org.apache.avro.generic.GenericRecord
-import java.nio.file.Path
-import java.nio.file.Paths
-import java.time.Instant
-
-open class ObservationKeyPathFactory : RecordPathFactory() {
-    override fun getRelativePath(
-        topic: String,
-        key: GenericRecord,
-        value: GenericRecord,
-        time: Instant?,
-        attempt: Int,
-    ): Path {
-        val projectId = sanitizeId(key.get("projectId"), "unknown-project")
-        val userId = sanitizeId(key.get("userId"), "unknown-user")
-
-        val attemptSuffix = if (attempt == 0) "" else "_$attempt"
-        val outputFileName = getTimeBin(time) + attemptSuffix + extension
-
-        return Paths.get(projectId, userId, topic, outputFileName)
-    }
-
-    override fun getCategory(
-        key: GenericRecord,
-        value: GenericRecord,
-    ): String {
-        return sanitizeId(key.get("sourceId"), "unknown-source")
-    }
-}
+open class ObservationKeyPathFactory : FormattedPathFactory()

@@ -14,6 +14,7 @@ import org.radarbase.output.util.objectBuild
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Paths
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class RestructureS3IntegrationTest {
     @Test
     fun integration() = runTest {
@@ -24,17 +25,20 @@ class RestructureS3IntegrationTest {
             secretKey = "minioadmin",
             bucket = "source",
         )
-        val targetConfig = S3Config(
-            endpoint = "http://localhost:9000",
-            accessToken = "minioadmin",
-            secretKey = "minioadmin",
-            bucket = "target",
+        val targetConfig = sourceConfig.copy(bucket = "target")
+        val topicConfig = mapOf(
+            "application_server_status" to TopicConfig(
+                pathProperties = mapOf(
+                    "format" to "\${projectId}/\${userId}/\${topic}/\${value:serverStatus}/\${filename}"
+                )
+            )
         )
         val config = RestructureConfig(
             source = ResourceConfig("s3", s3 = sourceConfig),
             target = ResourceConfig("s3", s3 = targetConfig),
             paths = PathConfig(inputs = listOf(Paths.get("in"))),
-            worker = WorkerConfig(minimumFileAge = 0L)
+            worker = WorkerConfig(minimumFileAge = 0L),
+            topics = topicConfig,
         )
         val application = Application(config)
         val sourceClient = sourceConfig.createS3Client()
@@ -72,7 +76,7 @@ class RestructureS3IntegrationTest {
         }
 
         val firstParticipantOutput =
-            "output/STAGING_PROJECT/1543bc93-3c17-4381-89a5-c5d6272b827c/application_server_status"
+            "output/STAGING_PROJECT/1543bc93-3c17-4381-89a5-c5d6272b827c/application_server_status/CONNECTED"
         val secondParticipantOutput =
             "output/radar-test-root/4ab9b985-6eec-4e51-9a29-f4c571c89f99/android_phone_acceleration"
 
@@ -96,7 +100,7 @@ class RestructureS3IntegrationTest {
                 assertEquals(csvContents, targetContent.toString(UTF_8))
             }
 
-            withContext(Dispatchers.IO) {
+            return@coroutineScope withContext(Dispatchers.IO) {
                 targetClient.listObjects(
                     ListObjectsArgs.Builder().bucketBuild(targetConfig.bucket) {
                         prefix("output")
@@ -104,8 +108,7 @@ class RestructureS3IntegrationTest {
                         useUrlEncodingType(false)
                     }
                 )
-                    .map { it.get().objectName() }
-                    .toHashSet()
+                    .mapTo(HashSet()) { it.get().objectName() }
             }
         }
 

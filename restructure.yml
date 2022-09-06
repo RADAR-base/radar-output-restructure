@@ -136,6 +136,7 @@ paths:
   # Additional properties
   # properties:
   #   format: ${projectId}/${userId}/${topic}/${time:mm}/${time:YYYYmmDD_HH'00'}${attempt}${extension}
+  #   plugins: fixed time key value org.example.plugin.MyPathPlugin
 
 # Individual topic configuration
 topics:
@@ -160,3 +161,8 @@ topics:
     # Disable deduplication
     deduplication:
       enable: false
+  questionnaire_response:
+    # Specify an alternative path format.
+    pathProperties:
+      format: ${projectId}/${userId}/${topic}/${value:name}/${filename}
+      plugins: fixed value

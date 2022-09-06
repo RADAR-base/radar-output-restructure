@@ -17,57 +17,35 @@
 package org.radarbase.output.path
 
 import org.apache.avro.generic.GenericRecord
+import org.radarbase.output.config.TopicConfig
 import org.slf4j.LoggerFactory
 import java.nio.file.Path
-import java.nio.file.Paths
 import java.time.Instant
-import java.time.ZoneOffset.UTC
-import java.time.format.DateTimeFormatter
+import kotlin.reflect.jvm.jvmName
 
 open class FormattedPathFactory : RecordPathFactory() {
-    lateinit var format: String
-    lateinit var timeParameters: Map<String, DateTimeFormatter>
+    private lateinit var formatter: PathFormatter
+    private lateinit var config: PathFormatterConfig
+    private var topicFormatters: Map<String, PathFormatter> = emptyMap()
 
     override fun init(properties: Map<String, String>) {
         super.init(properties)
 
-        format = properties["format"]
-            ?: run {
-                logger.warn("Path format not provided, using {} instead", DEFAULT_FORMAT)
-                DEFAULT_FORMAT
+        this.config = DEFAULTS.withValues(properties)
+        formatter = config.toPathFormatter()
+        logger.info("Formatting path with {}", formatter)
+    }
+
+    override fun addTopicConfiguration(topicConfig: Map<String, TopicConfig>) {
+        topicFormatters = topicConfig
+            .filter { (_, config) -> config.pathProperties.isNotEmpty() }
+            .mapValues { (_, config) ->
+                this.config.withValues(config.pathProperties)
+                    .toPathFormatter()
             }
-
-        val parameters = "\\$\\{([^}]*)}".toRegex()
-            .findAll(format)
-            .map { it.groupValues[1] }
-            .toSet()
-
-        timeParameters = parameters
-            .filter { it.startsWith("time:") }
-            .associateWith { p ->
-                DateTimeFormatter
-                    .ofPattern(p.removePrefix("time:"))
-                    .withZone(UTC)
+            .onEach { (topic, formatter) ->
+                logger.info("Formatting path of topic {} with {}", topic, formatter)
             }
-
-        val parameterNames = knownParameters + timeParameters.keys
-
-        val illegalParameters = parameters.filterNot { it in parameterNames }
-        if (illegalParameters.isNotEmpty()) {
-            throw IllegalArgumentException(
-                "Cannot use path format $format: unknown parameters $illegalParameters." +
-                    " Legal parameter names are time formats (e.g., \${time:YYYYmmDD}" +
-                    " or the following: $knownParameters",
-            )
-        }
-        if ("topic" !in parameters) {
-            throw IllegalArgumentException("Path must include topic parameter.")
-        }
-        if ("filename" !in parameters && ("extension" !in parameters || "attempt" !in parameters)) {
-            throw IllegalArgumentException(
-                "Path must include filename parameter or extension and attempt parameters."
-            )
-        }
     }
 
     override fun getRelativePath(
@@ -76,50 +54,69 @@ open class FormattedPathFactory : RecordPathFactory() {
         value: GenericRecord,
         time: Instant?,
         attempt: Int,
-    ): Path {
-        val attemptSuffix = if (attempt == 0) "" else "_$attempt"
-
-        val templatedParameters = mutableMapOf(
-            "projectId" to sanitizeId(key.get("projectId"), "unknown-project"),
-            "userId" to sanitizeId(key.get("userId"), "unknown-user"),
-            "sourceId" to sanitizeId(key.get("sourceId"), "unknown-source"),
-            "topic" to topic,
-            "filename" to getTimeBin(time) + attemptSuffix + extension,
-            "attempt" to attemptSuffix,
-            "extension" to extension,
-        )
-
-        templatedParameters += if (time != null) {
-            timeParameters.mapValues { (_, formatter) -> formatter.format(time) }
-        } else {
-            timeParameters.mapValues { "unknown-time" }
-        }
-
-        val path = templatedParameters.asSequence()
-            .fold(format) { p, (name, value) ->
-                p.replace("\${$name}", value)
-            }
-
-        return Paths.get(path)
-    }
-
-    override fun getCategory(key: GenericRecord, value: GenericRecord): String {
-        return sanitizeId(key.get("sourceId"), "unknown-source")
-    }
+    ): Path = (topicFormatters[topic] ?: formatter)
+        .format(PathFormatParameters(topic, key, value, time, attempt, extension))
 
     companion object {
-        private const val DEFAULT_FORMAT = "\${projectId}/\${userId}/\${topic}/\${filename}"
+        private fun PathFormatterConfig.toPathFormatter(): PathFormatter {
+            return PathFormatter(format, createPlugins())
+        }
 
-        private val knownParameters = setOf(
-            "filename",
-            "topic",
-            "projectId",
-            "userId",
-            "sourceId",
-            "attempt",
-            "extension",
+        internal val DEFAULTS = PathFormatterConfig(
+            format = "\${projectId}/\${userId}/\${topic}/\${filename}",
+            pluginNames = "fixed time key value",
         )
-
         private val logger = LoggerFactory.getLogger(FormattedPathFactory::class.java)
+
+        internal fun String.toPathFormatterPlugin(
+            properties: Map<String, String>,
+        ): PathFormatterPlugin? = when (this) {
+            "fixed" -> FixedPathFormatterPlugin().create(properties)
+            "time" -> TimePathFormatterPlugin()
+            "key" -> KeyPathFormatterPlugin()
+            "value" -> ValuePathFormatterPlugin()
+            else -> {
+                try {
+                    val clazz = Class.forName(this)
+                    when (val plugin = clazz.getConstructor().newInstance()) {
+                        is PathFormatterPlugin -> plugin
+                        is PathFormatterPlugin.Factory -> plugin.create(properties)
+                        else -> {
+                            logger.error(
+                                "Failed to instantiate plugin {}, it does not extend {} or {}",
+                                this,
+                                PathFormatterPlugin::class.jvmName,
+                                PathFormatterPlugin.Factory::class.jvmName
+                            )
+                            null
+                        }
+                    }
+                } catch (ex: ReflectiveOperationException) {
+                    logger.error("Failed to instantiate plugin {}", this)
+                    null
+                }
+            }
+        }
+
+        data class PathFormatterConfig(
+            val format: String,
+            val pluginNames: String,
+            val properties: Map<String, String> = mapOf(),
+        ) {
+            fun createPlugins(): List<PathFormatterPlugin> = pluginNames
+                .trim()
+                .split("\\s+".toRegex())
+                .mapNotNull { it.toPathFormatterPlugin(properties) }
+
+            fun withValues(values: Map<String, String>): PathFormatterConfig {
+                val newProperties = HashMap(properties).apply {
+                    putAll(values)
+                }
+                val format = newProperties.remove("format") ?: this.format
+                val pluginNames = newProperties.remove("plugins") ?: this.pluginNames
+
+                return PathFormatterConfig(format, pluginNames, newProperties)
+            }
+        }
     }
 }

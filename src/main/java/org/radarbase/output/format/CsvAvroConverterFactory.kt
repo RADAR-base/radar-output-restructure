@@ -38,10 +38,12 @@ class CsvAvroConverterFactory : RecordConverterFactory {
                 if (header == null) return false
                 val fields = fieldIndexes(header, distinctFields, ignoreFields)
                 var count = 0
-                val lineMap = lines
-                    .onEach { count += 1 }
-                    .mapIndexed { idx, line -> Pair(ArrayWrapper(line.byIndex(fields)), idx) }
-                    .toMap(HashMap())
+                val lineMap = buildMap {
+                    lines.forEachIndexed { idx, line ->
+                        count += 1
+                        put(ArrayWrapper(line.byIndex(fields)), idx)
+                    }
+                }
 
                 if (lineMap.size == count) {
                     logger.debug("File {} is already deduplicated. Skipping.", fileName)

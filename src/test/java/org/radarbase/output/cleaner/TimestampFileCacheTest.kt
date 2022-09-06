@@ -1,5 +1,6 @@
 package org.radarbase.output.cleaner
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
@@ -25,6 +26,7 @@ import java.io.FileNotFoundException
 import java.nio.file.Path
 import kotlin.io.path.bufferedWriter
 
+@OptIn(ExperimentalCoroutinesApi::class)
 internal class TimestampFileCacheTest {
     private lateinit var record: GenericData.Record
     private var now: Double = 0.0

@@ -1,5 +1,6 @@
 package org.radarbase.output.accounting
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.not
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.Test
 import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import redis.clients.jedis.JedisPool
 
+@OptIn(ExperimentalCoroutinesApi::class)
 internal class RedisRemoteLockManagerTest {
     private lateinit var redisHolder: RedisHolder
     private lateinit var lockManager1: RemoteLockManager

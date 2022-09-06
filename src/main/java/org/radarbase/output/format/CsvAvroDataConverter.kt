@@ -32,9 +32,7 @@ internal class CsvAvroDataConverter(
         for (field in schema.fields) {
             convertAvro(values, record.get(field.pos()), field.schema(), field.name())
         }
-        if (values.size < headers.size) {
-            throw IllegalArgumentException("Values and headers do not match")
-        }
+        require(values.size >= headers.size) { "Values and headers do not match" }
         return values
     }
 

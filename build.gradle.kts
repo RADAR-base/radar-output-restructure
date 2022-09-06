@@ -12,11 +12,11 @@ plugins {
     id("com.avast.gradle.docker-compose")
     id("com.github.ben-manes.versions")
     id("io.github.gradle-nexus.publish-plugin")
-    id("org.jlleitschuh.gradle.ktlint") version "10.3.0"
+    id("org.jlleitschuh.gradle.ktlint") version "11.0.0"
 }
 
 group = "org.radarbase"
-version = "2.2.1"
+version = "2.3.0"
 
 repositories {
     mavenCentral()
@@ -141,6 +141,7 @@ tasks.withType<KotlinCompile> {
         jvmTarget = "17"
         apiVersion = "1.6"
         languageVersion = "1.6"
+        freeCompilerArgs = listOf("-opt-in=kotlin.RequiresOptIn")
     }
 }
 
