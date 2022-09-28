@@ -35,8 +35,6 @@ class CsvAvroConverterFactory : RecordConverterFactory {
         distinctFields: Set<String>,
         ignoreFields: Set<String>,
     ): Boolean {
-
-
         val (header, lineIndexes) = source.inputStream().useSuspended { input ->
             processLines(input, compression) { header, lines ->
                 if (header == null) return false
