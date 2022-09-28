@@ -92,8 +92,8 @@ dependencies {
     implementation("org.slf4j:slf4j-api:$slf4jVersion")
 
     val log4jVersion: String by project
-    runtimeOnly("org.apache.logging.log4j:log4j-slf4j-impl:$log4jVersion")
-    runtimeOnly("org.apache.logging.log4j:log4j-api:$log4jVersion")
+    runtimeOnly("org.apache.logging.log4j:log4j-core:$log4jVersion")
+    runtimeOnly("org.apache.logging.log4j:log4j-slf4j2-impl:$log4jVersion")
     runtimeOnly("org.apache.logging.log4j:log4j-jul:$log4jVersion")
 
     val radarSchemasVersion: String by project
