@@ -117,7 +117,7 @@ class RadarKafkaRestructure(
                 }
             }
             if (statistics == null) {
-                logger.info("Failed to acquire lock for topic {}", topicPath)
+                logger.info("Skipping topic {}. It is locked by another process", topicPath)
             }
             statistics
         } catch (ex: IOException) {
