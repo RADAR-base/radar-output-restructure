@@ -34,13 +34,13 @@ interface Accountant : SuspendedCloseable {
         internal val offsets: OffsetRangeSet = OffsetRangeSet { DirectFunctionalValue(it) }
 
         fun add(transaction: Transaction) = time("accounting.add") {
-            offsets.add(transaction.topicPartition, transaction.offset, transaction.lastModified)
+            offsets.add(transaction)
         }
     }
 
-    class Transaction(
+    data class Transaction(
         val topicPartition: TopicPartition,
-        internal var offset: Long,
-        internal val lastModified: Instant,
+        val offset: Long,
+        val lastModified: Instant,
     )
 }
