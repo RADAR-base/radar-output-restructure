@@ -30,29 +30,18 @@ import java.util.concurrent.ConcurrentMap
  * when they overlap or are adjacent. When merging offsets, last processing time is taken as the
  * maximum of all the merged processing times.
  */
-class OffsetRangeSet {
-    private val factory: (OffsetIntervals) -> FunctionalValue<OffsetIntervals>
-    private val ranges: ConcurrentMap<TopicPartition, FunctionalValue<OffsetIntervals>>
+class OffsetRangeSet(
+    private val ranges: ConcurrentMap<TopicPartition, FunctionalValue<OffsetIntervals>>,
+    private val factory: (OffsetIntervals) -> FunctionalValue<OffsetIntervals>,
+) {
 
     /** Whether the stored offsets is empty.  */
     val isEmpty: Boolean
         get() = ranges.isEmpty()
 
-    @JvmOverloads
     constructor(
         factory: (OffsetIntervals) -> FunctionalValue<OffsetIntervals> = { LockedFunctionalValue(it) },
-    ) {
-        this.ranges = ConcurrentHashMap()
-        this.factory = factory
-    }
-
-    private constructor(
-        ranges: ConcurrentMap<TopicPartition, FunctionalValue<OffsetIntervals>>,
-        factory: (OffsetIntervals) -> FunctionalValue<OffsetIntervals>,
-    ) {
-        this.ranges = ranges
-        this.factory = factory
-    }
+    ) : this(ConcurrentHashMap(), factory)
 
     /** Add given offset range to seen offsets.  */
     fun add(range: TopicPartitionOffsetRange) {
@@ -60,8 +49,10 @@ class OffsetRangeSet {
     }
 
     /** Add given single offset to seen offsets.  */
-    fun add(topicPartition: TopicPartition, offset: Long, lastModified: Instant) {
-        topicPartition.modifyIntervals { it.add(offset, lastModified) }
+    fun add(transaction: Accountant.Transaction) {
+        transaction.run {
+            topicPartition.modifyIntervals { it.add(offset, lastModified) }
+        }
     }
 
     /** Add all offset stream of given set to the current set.  */
@@ -81,23 +72,18 @@ class OffsetRangeSet {
     }
 
     /** Whether this range value completely contains the given range.  */
-    operator fun contains(range: TopicPartitionOffsetRange): Boolean {
-        return range.topicPartition.readIntervals { it.contains(range.range) }
-    }
+    operator fun contains(range: TopicPartitionOffsetRange): Boolean =
+        range.topicPartition.readIntervals { it.contains(range.range) }
 
     /** Whether this range value completely contains the given range.  */
-    fun contains(partition: TopicPartition, offset: Long, lastModified: Instant): Boolean {
-        return partition.readIntervals { it.contains(offset, lastModified) }
-    }
+    fun contains(partition: TopicPartition, offset: Long, lastModified: Instant): Boolean =
+        partition.readIntervals { it.contains(offset, lastModified) }
 
     /** Number of distinct offsets in given topic/partition.  */
-    fun size(topicPartition: TopicPartition): Int {
-        return topicPartition.readIntervals { it.size() }
-    }
+    fun size(topicPartition: TopicPartition): Int = topicPartition.readIntervals { it.size() }
 
-    fun remove(range: TopicPartitionOffsetRange) {
-        return range.topicPartition.modifyIntervals { it.remove(range.range) }
-    }
+    fun remove(range: TopicPartitionOffsetRange) =
+        range.topicPartition.modifyIntervals { it.remove(range.range) }
 
     fun withFactory(
         factory: (OffsetIntervals) -> FunctionalValue<OffsetIntervals>,
@@ -168,7 +154,11 @@ class OffsetRangeSet {
         factory,
     )
 
-    data class Range(val from: Long, val to: Long?, val lastProcessed: Instant = Instant.now()) {
+    data class Range(
+        val from: Long,
+        val to: Long?,
+        val lastProcessed: Instant = Instant.now(),
+    ) {
         @JsonIgnore
         val size: Long? = to?.let { it - from + 1 }
         fun ensureToOffset(): Range = if (to == null) copy(to = from) else this

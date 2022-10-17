@@ -4,6 +4,7 @@ import com.opencsv.CSVReader
 import com.opencsv.CSVWriter
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.compression.Compression
+import org.radarbase.output.util.Md5Hasher
 import org.radarbase.output.util.ResourceContext.Companion.resourceContext
 import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.util.TimeUtil.parseDate
@@ -16,6 +17,7 @@ import java.io.InputStream
 import java.io.Reader
 import java.io.Writer
 import java.nio.file.Path
+import kotlin.collections.HashSet
 import kotlin.io.path.inputStream
 import kotlin.io.path.outputStream
 
@@ -38,10 +40,13 @@ class CsvAvroConverterFactory : RecordConverterFactory {
                 if (header == null) return false
                 val fields = fieldIndexes(header, distinctFields, ignoreFields)
                 var count = 0
+
+                val md5 = Md5Hasher()
+
                 val lineMap = buildMap {
                     lines.forEachIndexed { idx, line ->
                         count += 1
-                        put(ArrayWrapper(line.byIndex(fields)), idx)
+                        put(md5.hash(line.byIndex(fields)), idx)
                     }
                 }
 
@@ -206,21 +211,6 @@ class CsvAvroConverterFactory : RecordConverterFactory {
                 }
             }
             return null
-        }
-
-        private class ArrayWrapper<T>(val values: Array<T>) {
-            private val hashCode = values.contentHashCode()
-
-            override fun equals(other: Any?): Boolean {
-                if (this === other) return true
-                if (javaClass != other?.javaClass) return false
-
-                other as ArrayWrapper<*>
-
-                return values.contentEquals(other.values)
-            }
-
-            override fun hashCode(): Int = hashCode
         }
 
         @Throws(IndexOutOfBoundsException::class)

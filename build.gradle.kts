@@ -16,7 +16,7 @@ plugins {
 }
 
 group = "org.radarbase"
-version = "2.3.0"
+version = "2.3.1"
 
 repositories {
     mavenCentral()
@@ -57,7 +57,10 @@ dependencies {
     val jacksonVersion: String by project
     api(platform("com.fasterxml.jackson:jackson-bom:$jacksonVersion"))
     implementation("com.fasterxml.jackson.core:jackson-databind")
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml") {
+        val snakeYamlVersion: String by project
+        runtimeOnly("org.yaml:snakeyaml:$snakeYamlVersion")
+    }
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-csv")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
@@ -86,14 +89,17 @@ dependencies {
         implementation(platform("io.netty:netty-bom:$nettyVersion"))
     }
     val opencsvVersion: String by project
-    implementation("com.opencsv:opencsv:$opencsvVersion")
+    implementation("com.opencsv:opencsv:$opencsvVersion") {
+        val apacheCommonsTextVersion: String by project
+        runtimeOnly("org.apache.commons:commons-text:$apacheCommonsTextVersion")
+    }
 
     val slf4jVersion: String by project
     implementation("org.slf4j:slf4j-api:$slf4jVersion")
 
     val log4jVersion: String by project
-    runtimeOnly("org.apache.logging.log4j:log4j-slf4j-impl:$log4jVersion")
-    runtimeOnly("org.apache.logging.log4j:log4j-api:$log4jVersion")
+    runtimeOnly("org.apache.logging.log4j:log4j-core:$log4jVersion")
+    runtimeOnly("org.apache.logging.log4j:log4j-slf4j2-impl:$log4jVersion")
     runtimeOnly("org.apache.logging.log4j:log4j-jul:$log4jVersion")
 
     val radarSchemasVersion: String by project

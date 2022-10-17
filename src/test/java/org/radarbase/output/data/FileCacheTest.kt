@@ -219,10 +219,8 @@ class FileCacheTest {
             assertTrue(cache1 > cache3)
 
             // last used reversal
-            transaction.offset = 1
-            cache2.writeRecord(exampleRecord, transaction)
-            transaction.offset = 2
-            cache3.writeRecord(exampleRecord, transaction)
+            cache2.writeRecord(exampleRecord, transaction.copy(offset = 1))
+            cache3.writeRecord(exampleRecord, transaction.copy(offset = 2))
             assertTrue(cache1 < cache2)
             assertTrue(cache1 < cache3)
         }

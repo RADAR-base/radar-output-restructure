@@ -73,7 +73,7 @@ class FileCache(
     }
 
     suspend fun initialize(record: GenericRecord) {
-        val fileIsNew = targetStorage.status(path)?.takeIf { it.size > 0L } == null
+        var fileIsNew = targetStorage.status(path)?.takeIf { it.size > 0L } == null
 
         var outStream = compression.compress(fileName, tmpPath.outputStream().buffered())
 
@@ -82,13 +82,19 @@ class FileCache(
             inputStream = ByteArrayInputStream(ByteArray(0))
         } else {
             inputStream = time("write.copyOriginal") {
-                if (!copy(path, outStream, compression)) {
-                    // restart output buffer
-                    outStream.close()
-                    // clear output file
-                    outStream = compression.compress(fileName, tmpPath.outputStream().buffered())
+                try {
+                    if (!copy(path, outStream, compression)) {
+                        // restart output buffer
+                        outStream.close()
+                        // clear output file
+                        outStream =
+                            compression.compress(fileName, tmpPath.outputStream().buffered())
+                    }
+                    compression.decompress(targetStorage.newInputStream(path))
+                } catch (ex: FileNotFoundException) {
+                    fileIsNew = true
+                    ByteArrayInputStream(ByteArray(0))
                 }
-                compression.decompress(targetStorage.newInputStream(path))
             }
         }
 
@@ -191,6 +197,8 @@ class FileCache(
                     true
                 }
             }
+        } catch (ex: FileNotFoundException) {
+            throw ex
         } catch (ex: IOException) {
             var corruptPath: Path? = null
             var suffix = ""
@@ -205,17 +213,17 @@ class FileCache(
             }
             if (corruptPath != null) {
                 logger.error(
-                    "Original file {} could not be read: {}." + " Moved to {}.",
+                    "Original file {} could not be read: {}. Moved to {}.",
                     source,
-                    ex,
+                    ex.toString(),
                     corruptPath,
                 )
                 targetStorage.move(source, corruptPath)
             } else {
                 logger.error(
-                    "Original file {} could not be read: {}." + " Too many corrupt backups stored, removing file.",
+                    "Original file {} could not be read: {}. Too many corrupt backups stored, removing file.",
                     source,
-                    ex,
+                    ex.toString(),
                 )
             }
             false
