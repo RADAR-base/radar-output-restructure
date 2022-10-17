@@ -57,7 +57,10 @@ dependencies {
     val jacksonVersion: String by project
     api(platform("com.fasterxml.jackson:jackson-bom:$jacksonVersion"))
     implementation("com.fasterxml.jackson.core:jackson-databind")
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml") {
+        val snakeYamlVersion: String by project
+        runtimeOnly("org.yaml:snakeyaml:$snakeYamlVersion")
+    }
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-csv")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
@@ -86,7 +89,10 @@ dependencies {
         implementation(platform("io.netty:netty-bom:$nettyVersion"))
     }
     val opencsvVersion: String by project
-    implementation("com.opencsv:opencsv:$opencsvVersion")
+    implementation("com.opencsv:opencsv:$opencsvVersion") {
+        val apacheCommonsTextVersion: String by project
+        runtimeOnly("org.apache.commons:commons-text:$apacheCommonsTextVersion")
+    }
 
     val slf4jVersion: String by project
     implementation("org.slf4j:slf4j-api:$slf4jVersion")
