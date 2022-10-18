@@ -84,7 +84,7 @@ data class RestructureConfig(
                 modification = {
                     System.getenv(key)
                         ?.takeIf { it.isNotEmpty() }
-               },
+                },
                 doCopy = { doCopy(requireNotNull(it) { "Environment variable $key is empty" }) },
             )
 
