@@ -73,7 +73,7 @@ class OffsetIntervals {
 
     fun add(range: OffsetRangeSet.Range) {
         val (from, to, lastModified) = range
-        checkNotNull(to)
+        checkNotNull(to) { "Cannot add OffsetRange if the `to` value is missing." }
         var index = offsetsFrom.binarySearch(from)
         if (index < 0) {
             // index where this range would be entered
@@ -143,7 +143,7 @@ class OffsetIntervals {
 
     fun remove(range: OffsetRangeSet.Range) {
         val (from, to, _) = range
-        checkNotNull(to)
+        checkNotNull(to) { "Cannot add OffsetRange if the `to` value is missing." }
 
         var index = offsetsFrom.binarySearch(from)
 

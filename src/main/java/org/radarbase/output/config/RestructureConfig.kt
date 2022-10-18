@@ -81,7 +81,10 @@ data class RestructureConfig(
         inline fun <T> T.copyEnv(key: String, doCopy: T.(String) -> T): T =
             copyOnChange<T, String?>(
                 null,
-                modification = { System.getenv(key).takeIf { it.isNotEmpty() } },
+                modification = {
+                    System.getenv(key)
+                        ?.takeIf { it.isNotEmpty() }
+               },
                 doCopy = { doCopy(requireNotNull(it) { "Environment variable $key is empty" }) },
             )
 
