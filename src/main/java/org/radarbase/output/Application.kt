@@ -18,8 +18,7 @@ package org.radarbase.output
 
 import com.beust.jcommander.JCommander
 import com.beust.jcommander.ParameterException
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import org.radarbase.output.accounting.*
@@ -200,9 +199,17 @@ class Application(
             } catch (e: IllegalStateException) {
                 logger.error("Invalid configuration: {}", e.message)
                 exitProcess(1)
+            } catch (ex: Throwable) {
+                logger.error("Failed to initialize application: {}", ex.message)
+                exitProcess(1)
             }
 
-            application.start()
+            try {
+                application.start()
+            } catch (ex: Throwable) {
+                logger.error("Application failed: {}", ex.message)
+                exitProcess(1)
+            }
         }
     }
 }

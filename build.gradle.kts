@@ -16,7 +16,7 @@ plugins {
 }
 
 group = "org.radarbase"
-version = "2.3.1"
+version = "2.3.2"
 
 repositories {
     mavenCentral()
@@ -86,7 +86,9 @@ dependencies {
     val azureStorageVersion: String by project
     implementation("com.azure:azure-storage-blob:$azureStorageVersion") {
         val nettyVersion: String by project
-        implementation(platform("io.netty:netty-bom:$nettyVersion"))
+        runtimeOnly(platform("io.netty:netty-bom:$nettyVersion"))
+        val projectReactorNettyVersion: String by project
+        runtimeOnly("io.projectreactor.netty:reactor-netty-http:$projectReactorNettyVersion")
     }
     val opencsvVersion: String by project
     implementation("com.opencsv:opencsv:$opencsvVersion") {
@@ -321,5 +323,5 @@ ktlint {
 }
 
 tasks.wrapper {
-    gradleVersion = "7.5.1"
+    gradleVersion = "7.6"
 }
