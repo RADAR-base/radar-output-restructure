@@ -11,12 +11,9 @@ internal class CsvAvroDataConverter(
     private val headers: Array<String>,
     private val excludeFields: Set<String>,
 ) {
-    fun convertRecord(record: GenericRecord): Map<String, Any?> {
-        val recordValues = convertRecordValues(record)
-        return buildMap<String, Any> {
-            for (i in headers.indices) {
-                put(headers[i], recordValues[i])
-            }
+    fun convertRecord(record: GenericRecord): Map<String, Any?> = buildMap<String, Any> {
+        convertRecordValues(record).forEachIndexed { i, value ->
+            put(headers[i], value)
         }
     }
 
@@ -48,15 +45,14 @@ internal class CsvAvroDataConverter(
                     index,
                     subData,
                     field.schema(),
-                    prefix + '.'.toString() + field.name(),
+                    "$prefix.${field.name()}",
                 )
             }
         }
         Schema.Type.MAP -> {
             val valueType = schema.valueType
             (data as Map<*, *>).entries.fold(startIndex) { index, (key, value) ->
-                val name = "$prefix.$key"
-                convertAvro(values, index, value, valueType, name)
+                convertAvro(values, index, value, valueType, "$prefix.$key")
             }
         }
         Schema.Type.ARRAY -> {

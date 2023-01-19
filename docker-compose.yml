@@ -11,6 +11,7 @@ services:
 
   redis:
     image: bitnami/redis
+    platform: linux/x86_64
     ports:
       - "6379:6379"
     environment:
