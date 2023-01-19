@@ -14,6 +14,7 @@ data class FormatConfig(
         distinctFields = emptySet(),
         ignoreFields = emptySet(),
     ),
+    val excludeFields: Set<String> = emptySet(),
 ) : PluginConfig {
     fun createFactory(): FormatFactory = factory.toPluginInstance(properties)
     fun createConverter(): RecordConverterFactory = createFactory()[type]

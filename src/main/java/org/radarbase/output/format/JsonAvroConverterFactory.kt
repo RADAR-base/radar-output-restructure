@@ -15,7 +15,7 @@ class JsonAvroConverterFactory : RecordConverterFactory {
 
     override val formats: Collection<String> = setOf("json")
 
-    private val converter = JsonAvroDataConverter()
+    private val converter = JsonAvroDataConverter(setOf())
 
     @Throws(IOException::class)
     override fun converterFor(
@@ -23,7 +23,8 @@ class JsonAvroConverterFactory : RecordConverterFactory {
         record: GenericRecord,
         writeHeader: Boolean,
         reader: Reader,
-    ): RecordConverter = JsonAvroConverter(writer, converter)
+        excludeFields: Set<String>,
+    ): RecordConverter = JsonAvroConverter(writer, excludeFields)
 
     override suspend fun readTimeSeconds(
         source: InputStream,

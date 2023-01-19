@@ -150,8 +150,8 @@ class CsvAvroConverterFactory : RecordConverterFactory {
     ): Boolean = source.inputStream().use { input ->
         processLines(input, compression) { header, lines ->
             checkNotNull(header) { "Empty file found" }
-            val converter = CsvAvroDataConverter(header)
-            val recordValues = converter.convertRecordValues(record).toTypedArray()
+            val converter = CsvAvroDataConverter(header, emptySet())
+            val recordValues = converter.convertRecordValues(record)
             val indexes = fieldIndexes(header, usingFields, ignoreFields)
 
             if (indexes == null) {
@@ -168,7 +168,8 @@ class CsvAvroConverterFactory : RecordConverterFactory {
         record: GenericRecord,
         writeHeader: Boolean,
         reader: Reader,
-    ): CsvAvroConverter = CsvAvroConverter(writer, writeHeader, reader, headerFor(record))
+        excludeFields: Set<String>,
+    ): CsvAvroConverter = CsvAvroConverter(writer, writeHeader, reader, headerFor(record), excludeFields)
 
     override val hasHeader: Boolean = true
 

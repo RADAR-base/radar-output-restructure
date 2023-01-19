@@ -45,6 +45,7 @@ interface RecordConverterFactory : Format {
         record: GenericRecord,
         writeHeader: Boolean,
         reader: Reader,
+        excludeFields: Set<String> = emptySet(),
     ): RecordConverter
 
     val hasHeader: Boolean

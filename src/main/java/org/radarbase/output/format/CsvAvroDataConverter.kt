@@ -9,93 +9,88 @@ import java.util.*
 
 internal class CsvAvroDataConverter(
     private val headers: Array<String>,
+    private val excludeFields: Set<String>,
 ) {
-    private val values: MutableList<String> = ArrayList(this.headers.size)
-
     fun convertRecord(record: GenericRecord): Map<String, Any?> {
-        values.clear()
-        val schema = record.schema
-        for (field in schema.fields) {
-            convertAvro(values, record.get(field.pos()), field.schema(), field.name())
+        val recordValues = convertRecordValues(record)
+        return buildMap<String, Any> {
+            for (i in headers.indices) {
+                put(headers[i], recordValues[i])
+            }
         }
-        val map = LinkedHashMap<String, Any>()
-        for (i in headers.indices) {
-            map[headers[i]] = values[i]
-        }
-        values.clear()
-        return map
     }
 
-    fun convertRecordValues(record: GenericRecord): List<String> {
-        values.clear()
+    fun convertRecordValues(record: GenericRecord): Array<String> {
+        val values = arrayOfNulls<String>(headers.size)
         val schema = record.schema
-        for (field in schema.fields) {
-            convertAvro(values, record.get(field.pos()), field.schema(), field.name())
+        val endIndex = schema.fields.fold(0) { valueIndex, field ->
+            convertAvro(values, valueIndex, record.get(field.pos()), field.schema(), field.name())
         }
-        require(values.size >= headers.size) { "Values and headers do not match" }
-        return values
+        require(endIndex >= headers.size) { "Values and headers do not match" }
+        @Suppress("UNCHECKED_CAST")
+        return values as Array<String>
     }
 
     private fun convertAvro(
-        values: MutableList<String>,
+        values: Array<String?>,
+        startIndex: Int,
         data: Any?,
         schema: Schema,
         prefix: String,
-    ) {
-        when (schema.type) {
-            Schema.Type.RECORD -> {
-                val record = data as GenericRecord
-                val subSchema = record.schema
-                for (field in subSchema.fields) {
-                    val subData = record.get(field.pos())
-                    convertAvro(
-                        values,
-                        subData,
-                        field.schema(),
-                        prefix + '.'.toString() + field.name(),
-                    )
-                }
+    ): Int = when (schema.type) {
+        Schema.Type.RECORD -> {
+            val record = data as GenericRecord
+            val subSchema = record.schema
+            subSchema.fields.fold(startIndex) { index, field ->
+                val subData = record.get(field.pos())
+                convertAvro(
+                    values,
+                    index,
+                    subData,
+                    field.schema(),
+                    prefix + '.'.toString() + field.name(),
+                )
             }
-            Schema.Type.MAP -> {
-                val valueType = schema.valueType
-                for ((key, value) in data as Map<*, *>) {
-                    val name = "$prefix.$key"
-                    convertAvro(values, value, valueType, name)
-                }
-            }
-            Schema.Type.ARRAY -> {
-                val itemType = schema.elementType
-                for ((i, orig) in (data as List<*>).withIndex()) {
-                    convertAvro(values, orig, itemType, "$prefix.$i")
-                }
-            }
-            Schema.Type.UNION -> {
-                val type = GenericData().resolveUnion(schema, data)
-                convertAvro(values, data, schema.types[type], prefix)
-            }
-            Schema.Type.BYTES -> {
-                checkHeader(prefix, values.size)
-                values.add(BASE64_ENCODER.encodeToString((data as ByteBuffer).array()))
-            }
-            Schema.Type.FIXED -> {
-                checkHeader(prefix, values.size)
-                values.add(BASE64_ENCODER.encodeToString((data as GenericFixed).bytes()))
-            }
-            Schema.Type.STRING, Schema.Type.ENUM, Schema.Type.INT, Schema.Type.LONG,
-            Schema.Type.DOUBLE, Schema.Type.FLOAT, Schema.Type.BOOLEAN -> {
-                checkHeader(prefix, values.size)
-                values.add(data.toString())
-            }
-            Schema.Type.NULL -> {
-                checkHeader(prefix, values.size)
-                values.add("")
-            }
-            else -> throw IllegalArgumentException("Cannot parse field type " + schema.type)
         }
+        Schema.Type.MAP -> {
+            val valueType = schema.valueType
+            (data as Map<*, *>).entries.fold(startIndex) { index, (key, value) ->
+                val name = "$prefix.$key"
+                convertAvro(values, index, value, valueType, name)
+            }
+        }
+        Schema.Type.ARRAY -> {
+            val itemType = schema.elementType
+            (data as List<*>).foldIndexed(startIndex) { i, index, orig ->
+                convertAvro(values, index, orig, itemType, "$prefix.$i")
+            }
+        }
+        Schema.Type.UNION -> {
+            val type = GenericData().resolveUnion(schema, data)
+            convertAvro(values, startIndex, data, schema.types[type], prefix)
+        }
+        Schema.Type.BYTES -> {
+            addValue(prefix, values, startIndex, BASE64_ENCODER.encodeToString((data as ByteBuffer).array()))
+        }
+        Schema.Type.FIXED -> {
+            addValue(prefix, values, startIndex, BASE64_ENCODER.encodeToString((data as GenericFixed).bytes()))
+        }
+        Schema.Type.STRING, Schema.Type.ENUM, Schema.Type.INT, Schema.Type.LONG,
+        Schema.Type.DOUBLE, Schema.Type.FLOAT, Schema.Type.BOOLEAN -> {
+            addValue(prefix, values, startIndex, data.toString())
+        }
+        Schema.Type.NULL -> {
+            addValue(prefix, values, startIndex, "")
+        }
+        else -> throw IllegalArgumentException("Cannot parse field type " + schema.type)
     }
 
-    private fun checkHeader(prefix: String, size: Int) {
-        require(prefix == headers[size]) { "Header $prefix does not match ${headers[size]}" }
+    private fun addValue(prefix: String, values: Array<String?>, index: Int, value: String): Int {
+        if (prefix in excludeFields) return index
+        val header = headers[index]
+        require(prefix == header) { "Header $prefix does not match $header" }
+        values[index] = value
+        return index + 1
     }
 
     companion object {

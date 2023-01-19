@@ -9,23 +9,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.retryWhen
-import kotlinx.coroutines.withContext
-import org.apache.avro.file.SeekableFileInput
-import org.apache.avro.file.SeekableInput
 import org.radarbase.output.config.S3Config
-import org.radarbase.output.util.TemporaryDirectory
 import org.radarbase.output.util.bucketBuild
 import org.radarbase.output.util.objectBuild
 import org.slf4j.LoggerFactory
 import java.io.FileNotFoundException
-import java.io.IOException
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.nio.file.StandardOpenOption
-import kotlin.io.path.createTempFile
-import kotlin.io.path.deleteExisting
-import kotlin.io.path.deleteIfExists
-import kotlin.io.path.outputStream
 import kotlin.time.Duration.Companion.seconds
 
 class S3SourceStorage(
@@ -95,49 +85,7 @@ class S3SourceStorage(
         faultTolerant { s3Client.removeObject(removeRequest) }
     }
 
-    override fun createReader(): SourceStorage.SourceStorageReader = S3SourceStorageReader()
-
-    private inner class S3SourceStorageReader : SourceStorage.SourceStorageReader {
-        private val tempDir = TemporaryDirectory(tempPath, "worker-")
-
-        override suspend fun newInput(file: TopicFile): SeekableInput =
-            withContext(Dispatchers.IO) {
-                val tempFile = createTempFile(
-                    directory = tempDir.path,
-                    prefix = "${file.topic}-${file.path.fileName}",
-                    suffix = ".avro",
-                )
-                try {
-                    faultTolerant {
-                        tempFile.outputStream(StandardOpenOption.TRUNCATE_EXISTING).use { out ->
-                            s3Client.getObject(
-                                GetObjectArgs.Builder()
-                                    .objectBuild(bucket, file.path)
-                            ).use { input ->
-                                input.copyTo(out)
-                            }
-                        }
-                    }
-                } catch (ex: Exception) {
-                    try {
-                        tempFile.deleteExisting()
-                    } catch (ex: IOException) {
-                        logger.warn("Failed to delete temporary file {}", tempFile)
-                    }
-                    throw ex
-                }
-                object : SeekableFileInput(tempFile.toFile()) {
-                    override fun close() {
-                        super.close()
-                        tempFile.deleteIfExists()
-                    }
-                }
-            }
-
-        override suspend fun closeAndJoin() = withContext(Dispatchers.IO) {
-            tempDir.close()
-        }
-    }
+    override fun createReader(): SourceStorage.SourceStorageReader = S3SourceStorageReader(tempPath, s3Client, bucket)
 
     companion object {
         private val logger = LoggerFactory.getLogger(S3SourceStorage::class.java)

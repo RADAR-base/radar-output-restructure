@@ -63,11 +63,10 @@ class CsvAvroConverterTest {
 
         val writer = StringWriter()
         val factory = CsvAvroConverter.factory
-        val converter = factory.converterFor(writer, record, true, StringReader("test"))
+        val converter = factory.converterFor(writer, record, true, StringReader("test"), setOf("a", "i.other"))
 
         val map = converter.convertRecord(record)
         val keys = listOf(
-            "a",
             "b",
             "c",
             "d",
@@ -76,7 +75,6 @@ class CsvAvroConverterTest {
             "g",
             "h",
             "i.some",
-            "i.other",
             "j.0",
             "j.1",
             "k",
@@ -87,7 +85,6 @@ class CsvAvroConverterTest {
 
         val actualIterator = map.values.iterator()
         val expectedIterator = listOf<Any>(
-            "a",
             byteArrayOf(255.toByte()),
             byteArrayOf(255.toByte()),
             "1000000000000000000",
@@ -96,7 +93,6 @@ class CsvAvroConverterTest {
             "132101",
             "",
             "1",
-            "-1",
             "",
             "some",
             "Y",

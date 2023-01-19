@@ -33,22 +33,37 @@ class CsvAvroConverter(
     writeHeader: Boolean,
     reader: Reader,
     recordHeader: Array<String>,
+    excludeFields: Set<String>,
 ) : RecordConverter {
 
     private val csvWriter = CSVWriter(writer)
     private val converter: CsvAvroDataConverter
 
     init {
-        converter = if (writeHeader) {
-            csvWriter.writeNext(recordHeader, false)
-            CsvAvroDataConverter(recordHeader)
-        } else {
-            CsvAvroDataConverter(
-                CSVReader(reader).use {
+        val (header, excludedFromHeader) = when {
+            !writeHeader -> {
+                val readHeader = CSVReader(reader).use {
                     requireNotNull(it.readNext()) { "No header found" }
                 }
-            )
+                Pair(
+                    readHeader,
+                    excludeFields - readHeader.toHashSet(),
+                )
+            }
+            excludeFields.isEmpty() -> Pair(recordHeader, excludeFields)
+            else -> {
+                val excludedHeaderSet = recordHeader.toHashSet()
+                Pair(
+                    recordHeader.filter { it !in excludeFields }.toTypedArray(),
+                    excludeFields.filterTo(HashSet()) { it in excludedHeaderSet }
+                )
+            }
         }
+        if (writeHeader) {
+            csvWriter.writeNext(header, false)
+        }
+
+        converter = CsvAvroDataConverter(header, excludedFromHeader)
     }
 
     /**
@@ -60,8 +75,7 @@ class CsvAvroConverter(
     @Throws(IOException::class)
     override fun writeRecord(record: GenericRecord): Boolean {
         return try {
-            val retValues = converter.convertRecordValues(record)
-            csvWriter.writeNext(retValues.toTypedArray(), false)
+            csvWriter.writeNext(converter.convertRecordValues(record), false)
             true
         } catch (ex: IllegalArgumentException) {
             false

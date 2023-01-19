@@ -11,7 +11,7 @@ fun Path.toKey() = if (startsWith(rootPath)) {
     rootPath.relativize(this).toString()
 } else toString()
 
-inline fun <S : BucketArgs, reified T : BucketArgs.Builder<out T, out S>> T.bucketBuild(
+inline fun <S : BucketArgs, T : BucketArgs.Builder<out T, out S>> T.bucketBuild(
     bucket: String,
     configure: T.() -> T = { this },
 ): S {
@@ -20,13 +20,11 @@ inline fun <S : BucketArgs, reified T : BucketArgs.Builder<out T, out S>> T.buck
     return build()
 }
 
-inline fun <S : ObjectArgs, reified T : ObjectArgs.Builder<out T, out S>> T.objectBuild(
+inline fun <S : ObjectArgs, T : ObjectArgs.Builder<out T, out S>> T.objectBuild(
     bucket: String,
     path: Path,
     configure: T.() -> T = { this },
-): S {
-    return bucketBuild(bucket) {
-        `object`(path.toKey())
-        configure()
-    }
+): S = bucketBuild(bucket) {
+    `object`(path.toKey())
+    configure()
 }
