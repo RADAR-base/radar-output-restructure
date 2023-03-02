@@ -16,7 +16,13 @@ data class PathConfig(
     val temp: Path = createTempDirectory("radar-output-restructure"),
     /** Output path on the target resource. */
     val output: Path = Paths.get("output"),
+    /** Path formatting rules. */
     val path: PathFormatterConfig = PathFormatterConfig(),
+    /**
+     * Bucket formatting rules for the target storage. If no configuration is provided, this
+     * will not format any bucket for local or HDFS storage, and it will use the target bucket (s3)
+     * or container (azure) as the default target bucket.
+     */
     val bucket: BucketFormatterConfig? = null,
 ) : PluginConfig {
     fun createFactory(

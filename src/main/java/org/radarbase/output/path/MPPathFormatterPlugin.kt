@@ -16,12 +16,18 @@ import java.util.concurrent.ConcurrentMap
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
+/**
+ * Plugin to read values from ManagementPortal. It requires the plugin properties
+ * managementPortalUrl, managementPortalClientId and managementPortalClientSecret to be set,
+ * or managementPortalUrl in combination with the environment variables MANAGEMENT_PORTAL_CLIENT_ID
+ * and MANAGEMENT_PORTAL_CLIENT_SECRET.
+ */
 class MPPathFormatterPlugin : PathFormatterPlugin.Factory {
     private val supervisorJob = SupervisorJob()
     private val pluginScope = CoroutineScope(Dispatchers.Default + supervisorJob)
 
     override fun create(
-        properties: Map<String, String>
+        properties: Map<String, String>,
     ): PathFormatterPlugin = Plugin(properties, pluginScope)
 
     internal class Plugin(
@@ -62,7 +68,7 @@ class MPPathFormatterPlugin : PathFormatterPlugin.Factory {
                             tokenUrl = "$mpUrl/oauth/token",
                             clientId = properties["managementPortalClientId"],
                             clientSecret = properties["managementPortalClientSecret"],
-                        ).copyWithEnv()
+                        ).copyWithEnv(),
                     )
                 }
             }
@@ -88,37 +94,29 @@ class MPPathFormatterPlugin : PathFormatterPlugin.Factory {
 
         override fun lookup(parameterContents: String): suspend PathFormatParameters.() -> String =
             when (parameterContents) {
-                "organization" -> projectValue("unknown-organization") {
+                "organization" -> projectProperty("unknown-organization") {
                     organization?.id
                 }
-                "project" -> projectValue("unknown-project") {
-                    id
-                }
-                "group" -> subjectValue("default") {
-                    group
-                }
-                "externalId" -> subjectValue("unknown-user") {
-                    externalId ?: id
-                }
-                "userId", "login", "id" -> subjectValue("unknown-user") {
-                    id
-                }
+                "project" -> projectProperty("unknown-project") { id }
+                "group" -> subjectProperty("default") { group }
+                "externalId" -> subjectProperty("unknown-user") { externalId ?: id }
+                "userId", "login", "id" -> subjectProperty("unknown-user") { id }
                 else -> if (parameterContents.startsWith("project:")) {
-                    projectValue("unknown-$parameterContents") {
+                    projectProperty("unknown-$parameterContents") {
                         attributes[parameterContents.removePrefix("project:")]
                     }
                 } else {
-                    subjectValue("unknown-$parameterContents") {
+                    subjectProperty("unknown-$parameterContents") {
                         attributes[parameterContents]
                     }
                 }
             }
 
-        private inline fun subjectValue(
+        private inline fun subjectProperty(
             defaultValue: String,
-            crossinline chooseProperty: MPSubject.() -> String?,
+            crossinline compute: MPSubject.() -> String?,
         ): suspend PathFormatParameters.() -> String = {
-            sanitizeId(lookupSubject()?.chooseProperty(), defaultValue)
+            sanitizeId(lookupSubject()?.compute(), defaultValue)
         }
 
         private suspend fun PathFormatParameters.lookupSubject(): MPSubject? {
@@ -139,11 +137,11 @@ class MPPathFormatterPlugin : PathFormatterPlugin.Factory {
             return cache.get(userId.toString())
         }
 
-        private inline fun projectValue(
+        private inline fun projectProperty(
             defaultValue: String,
-            crossinline chooseProperty: MPProject.() -> String?,
+            crossinline compute: MPProject.() -> String?,
         ): suspend PathFormatParameters.() -> String = {
-            sanitizeId(lookupProject()?.chooseProperty(), defaultValue)
+            sanitizeId(lookupProject()?.compute(), defaultValue)
         }
 
         private suspend fun PathFormatParameters.lookupProject(): MPProject? {
