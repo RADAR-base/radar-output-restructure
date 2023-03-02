@@ -16,107 +16,79 @@
 
 package org.radarbase.output.path
 
-import org.apache.avro.generic.GenericRecord
+import org.radarbase.output.config.BucketFormatterConfig
+import org.radarbase.output.config.PathConfig
+import org.radarbase.output.config.PathFormatterConfig
 import org.radarbase.output.config.TopicConfig
 import org.slf4j.LoggerFactory
-import java.nio.file.Path
-import java.time.Instant
-import kotlin.reflect.jvm.jvmName
 
 open class FormattedPathFactory : RecordPathFactory() {
-    private lateinit var formatter: PathFormatter
-    private lateinit var config: PathFormatterConfig
+    private lateinit var pathFormatter: PathFormatter
     private var topicFormatters: Map<String, PathFormatter> = emptyMap()
+    private var bucketFormatter: PathFormatter? = null
+    private lateinit var disabledBucketRegexes: List<Regex>
+    private lateinit var defaultBucketName: String
 
-    override fun init(properties: Map<String, String>) {
-        super.init(properties)
+    override fun init(
+        extension: String,
+        config: PathConfig,
+        topics: Map<String, TopicConfig>,
+    ) {
+        super.init(extension, config, topics)
+        pathFormatter = pathConfig.path.toPathFormatter()
+        bucketFormatter = pathConfig.bucket?.toBucketFormatter()
+        disabledBucketRegexes = pathConfig.bucket
+            ?.disabledFormats
+            ?.map { it.toRegex(RegexOption.IGNORE_CASE) }
+            ?: emptyList()
+        defaultBucketName = pathConfig.bucket
+            ?.defaultName
+            ?: "radar-output-storage"
 
-        this.config = DEFAULTS.withValues(properties)
-        formatter = config.toPathFormatter()
-        logger.info("Formatting path with {}", formatter)
+        logger.info("Formatting path with {}", pathFormatter)
+    }
+
+    override suspend fun bucket(pathParameters: PathFormatParameters?): String? {
+        val formatter = bucketFormatter ?: return null
+        pathParameters ?: return pathConfig.bucket?.defaultName
+        val format = formatter.format(pathParameters)
+        return if (disabledBucketRegexes.any { it.matches(format) }) {
+            defaultBucketName
+        } else {
+            format
+        }
     }
 
     override fun addTopicConfiguration(topicConfig: Map<String, TopicConfig>) {
-        topicFormatters = topicConfig
-            .filter { (_, config) -> config.pathProperties.isNotEmpty() }
-            .mapValues { (_, config) ->
-                this.config.withValues(config.pathProperties)
-                    .toPathFormatter()
+        topicFormatters = buildMap {
+            topicConfig.forEach { (topic, config) ->
+                val topicFormatConfig = pathConfig.path.copy(config.pathProperties)
+                if (topicFormatConfig != pathConfig.path) {
+                    val formatter = topicFormatConfig.toPathFormatter()
+                    logger.info("Formatting path of topic {} with {}", topic, formatter)
+                    put(topic, formatter)
+                }
             }
-            .onEach { (topic, formatter) ->
-                logger.info("Formatting path of topic {} with {}", topic, formatter)
-            }
+        }
     }
 
-    override fun getRelativePath(
-        topic: String,
-        key: GenericRecord,
-        value: GenericRecord,
-        time: Instant?,
-        attempt: Int,
-    ): Path = (topicFormatters[topic] ?: formatter)
-        .format(PathFormatParameters(topic, key, value, time, attempt, extension))
+    override suspend fun relativePath(
+        pathParameters: PathFormatParameters
+    ): String = (topicFormatters[pathParameters.topic] ?: pathFormatter)
+        .format(pathParameters)
 
     companion object {
-        private fun PathFormatterConfig.toPathFormatter(): PathFormatter {
-            return PathFormatter(format, createPlugins())
-        }
-
-        internal val DEFAULTS = PathFormatterConfig(
-            format = "\${projectId}/\${userId}/\${topic}/\${filename}",
-            pluginNames = "fixed time key value",
+        private fun PathFormatterConfig.toPathFormatter(): PathFormatter = PathFormatter(
+            format,
+            plugins.toPathFormatterPlugins(properties),
         )
+
+        private fun BucketFormatterConfig.toBucketFormatter(): PathFormatter = PathFormatter(
+            format,
+            plugins.toPathFormatterPlugins(properties),
+            checkMinimalDistinction = false,
+        )
+
         private val logger = LoggerFactory.getLogger(FormattedPathFactory::class.java)
-
-        internal fun String.toPathFormatterPlugin(
-            properties: Map<String, String>,
-        ): PathFormatterPlugin? = when (this) {
-            "fixed" -> FixedPathFormatterPlugin().create(properties)
-            "time" -> TimePathFormatterPlugin()
-            "key" -> KeyPathFormatterPlugin()
-            "value" -> ValuePathFormatterPlugin()
-            else -> {
-                try {
-                    val clazz = Class.forName(this)
-                    when (val plugin = clazz.getConstructor().newInstance()) {
-                        is PathFormatterPlugin -> plugin
-                        is PathFormatterPlugin.Factory -> plugin.create(properties)
-                        else -> {
-                            logger.error(
-                                "Failed to instantiate plugin {}, it does not extend {} or {}",
-                                this,
-                                PathFormatterPlugin::class.jvmName,
-                                PathFormatterPlugin.Factory::class.jvmName
-                            )
-                            null
-                        }
-                    }
-                } catch (ex: ReflectiveOperationException) {
-                    logger.error("Failed to instantiate plugin {}", this)
-                    null
-                }
-            }
-        }
-
-        data class PathFormatterConfig(
-            val format: String,
-            val pluginNames: String,
-            val properties: Map<String, String> = mapOf(),
-        ) {
-            fun createPlugins(): List<PathFormatterPlugin> = pluginNames
-                .trim()
-                .split("\\s+".toRegex())
-                .mapNotNull { it.toPathFormatterPlugin(properties) }
-
-            fun withValues(values: Map<String, String>): PathFormatterConfig {
-                val newProperties = HashMap(properties).apply {
-                    putAll(values)
-                }
-                val format = newProperties.remove("format") ?: this.format
-                val pluginNames = newProperties.remove("plugins") ?: this.pluginNames
-
-                return PathFormatterConfig(format, pluginNames, newProperties)
-            }
-        }
     }
 }

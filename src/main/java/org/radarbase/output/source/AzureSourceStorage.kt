@@ -8,7 +8,7 @@ import org.apache.avro.file.SeekableFileInput
 import org.apache.avro.file.SeekableInput
 import org.radarbase.output.config.AzureConfig
 import org.radarbase.output.util.TemporaryDirectory
-import org.radarbase.output.util.toKey
+import org.radarbase.output.util.withoutFirstSegment
 import java.nio.file.Path
 import java.nio.file.Paths
 import kotlin.io.path.createTempFile
@@ -19,10 +19,11 @@ class AzureSourceStorage(
     config: AzureConfig,
     private val tempPath: Path,
 ) : SourceStorage {
+    private val container = config.container
     private val blobContainerClient = client.getBlobContainerClient(config.container)
     private val readOffsetFromMetadata = config.endOffsetFromMetadata
 
-    private fun blobClient(path: Path) = blobContainerClient.getBlobClient(path.toKey())
+    private fun blobClient(path: Path) = blobContainerClient.getBlobClient(path.withoutFirstSegment())
 
     override suspend fun list(path: Path, maxKeys: Int?): List<SimpleFileStatus> =
         withContext(Dispatchers.IO) {

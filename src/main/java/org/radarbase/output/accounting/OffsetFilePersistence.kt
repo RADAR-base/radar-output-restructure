@@ -52,7 +52,9 @@ class OffsetFilePersistence(
                         }
                     }
                 }
-            } else null
+            } else {
+                null
+            }
         } catch (ex: IOException) {
             logger.error("Error reading offsets file. Processing all offsets.", ex)
             null
@@ -76,7 +78,9 @@ class OffsetFilePersistence(
         }
         val lastModified = if (cols.size >= 5) {
             Instant.parse(cols[4])
-        } else Instant.now()
+        } else {
+            Instant.now()
+        }
 
         return TopicPartitionOffsetRange(
             topic,

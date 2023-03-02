@@ -76,7 +76,7 @@ internal class OffsetIntervalsTest {
 
             assertEquals(
                 listOf(OffsetRangeSet.Range(0, 0, lastModified)),
-                toList()
+                toList(),
             )
         }
     }

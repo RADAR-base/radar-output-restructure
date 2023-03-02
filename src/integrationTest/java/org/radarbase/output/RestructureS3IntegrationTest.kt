@@ -28,10 +28,10 @@ class RestructureS3IntegrationTest {
         val targetConfig = sourceConfig.copy(bucket = "target")
         val topicConfig = mapOf(
             "application_server_status" to TopicConfig(
-                pathProperties = mapOf(
-                    "format" to "\${projectId}/\${userId}/\${topic}/\${value:serverStatus}/\${filename}"
-                )
-            )
+                pathProperties = PathFormatterConfig(
+                    format = "\${projectId}/\${userId}/\${topic}/\${value:serverStatus}/\${filename}",
+                ),
+            ),
         )
         val config = RestructureConfig(
             source = ResourceConfig("s3", s3 = sourceConfig),
@@ -42,8 +42,9 @@ class RestructureS3IntegrationTest {
         )
         val application = Application(config)
         val sourceClient = sourceConfig.createS3Client()
-        if (!sourceClient.bucketExists(BucketExistsArgs.builder().bucketBuild(sourceConfig.bucket))) {
-            sourceClient.makeBucket(MakeBucketArgs.builder().bucketBuild(sourceConfig.bucket))
+        val sourceBucket = requireNotNull(sourceConfig.bucket)
+        if (!sourceClient.bucketExists(BucketExistsArgs.builder().bucketBuild(sourceBucket))) {
+            sourceClient.makeBucket(MakeBucketArgs.builder().bucketBuild(sourceBucket))
         }
 
         val resourceFiles = listOf(
@@ -58,9 +59,9 @@ class RestructureS3IntegrationTest {
                     .useSuspended { statusFile ->
                         sourceClient.putObject(
                             PutObjectArgs.Builder()
-                                .objectBuild(sourceConfig.bucket, targetFiles[i]) {
+                                .objectBuild(sourceBucket, targetFiles[i]) {
                                     stream(statusFile, -1, MAX_PART_SIZE)
-                                }
+                                },
                         )
                     }
             }
@@ -80,6 +81,8 @@ class RestructureS3IntegrationTest {
         val secondParticipantOutput =
             "output/radar-test-root/4ab9b985-6eec-4e51-9a29-f4c571c89f99/android_phone_acceleration"
 
+        val targetBucket = requireNotNull(targetConfig.bucket)
+
         val files = coroutineScope {
             launch(Dispatchers.IO) {
                 val csvContents = """
@@ -90,9 +93,9 @@ class RestructureS3IntegrationTest {
                 """.trimIndent()
 
                 val targetContent = targetClient.getObject(
-                    GetObjectArgs.Builder().bucketBuild(targetConfig.bucket) {
+                    GetObjectArgs.Builder().bucketBuild(targetBucket) {
                         `object`("$firstParticipantOutput/20200128_1300.csv")
-                    }
+                    },
                 ).use { response ->
                     response.readBytes()
                 }
@@ -102,11 +105,11 @@ class RestructureS3IntegrationTest {
 
             return@coroutineScope withContext(Dispatchers.IO) {
                 targetClient.listObjects(
-                    ListObjectsArgs.Builder().bucketBuild(targetConfig.bucket) {
+                    ListObjectsArgs.Builder().bucketBuild(targetBucket) {
                         prefix("output")
                         recursive(true)
                         useUrlEncodingType(false)
-                    }
+                    },
                 )
                     .mapTo(HashSet()) { it.get().objectName() }
             }
@@ -129,14 +132,14 @@ class RestructureS3IntegrationTest {
                 targetFiles.map {
                     launch(Dispatchers.IO) {
                         sourceClient.removeObject(
-                            RemoveObjectArgs.Builder().objectBuild(sourceConfig.bucket, it)
+                            RemoveObjectArgs.Builder().objectBuild(sourceBucket, it),
                         )
                     }
                 }.joinAll()
 
                 launch(Dispatchers.IO) {
                     sourceClient.removeBucket(
-                        RemoveBucketArgs.Builder().bucketBuild(sourceConfig.bucket)
+                        RemoveBucketArgs.Builder().bucketBuild(sourceBucket),
                     )
                 }
             }
@@ -146,15 +149,15 @@ class RestructureS3IntegrationTest {
                 files.map {
                     launch(Dispatchers.IO) {
                         targetClient.removeObject(
-                            RemoveObjectArgs.Builder().bucketBuild(targetConfig.bucket) {
+                            RemoveObjectArgs.Builder().bucketBuild(targetBucket) {
                                 `object`(it)
-                            }
+                            },
                         )
                     }
                 }.joinAll()
                 launch(Dispatchers.IO) {
                     targetClient.removeBucket(
-                        RemoveBucketArgs.Builder().bucketBuild(targetConfig.bucket)
+                        RemoveBucketArgs.Builder().bucketBuild(targetBucket),
                     )
                 }
             }

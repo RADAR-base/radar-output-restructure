@@ -11,34 +11,13 @@ class FixedPathFormatterPlugin : PathFormatterPlugin.Factory {
     ): PathFormatterPlugin = Plugin(properties)
 
     internal class Plugin(properties: Map<String, String>) : PathFormatterPlugin() {
-        private val timeBinFormat: DateTimeFormatter
+        private val extension: String = properties["extension"] ?: ""
+        private val timeBinFormat: DateTimeFormatter = createTimeBinFormatter(properties["timeBinFormat"])
         override val name: String = "fixed"
 
         override val allowedFormats: String = allowedParamNames.joinToString(separator = ", ")
 
-        init {
-            timeBinFormat = createTimeBinFormatter(properties["timeBinFormat"])
-        }
-
-        private fun createTimeBinFormatter(pattern: String?): DateTimeFormatter {
-            pattern ?: return HOURLY_TIME_BIN_FORMAT
-
-            return try {
-                DateTimeFormatter
-                    .ofPattern(pattern)
-                    .withZone(ZoneOffset.UTC)
-            } catch (ex: IllegalArgumentException) {
-                logger.error(
-                    "Cannot use time bin format {}, using {} instead",
-                    pattern,
-                    HOURLY_TIME_BIN_FORMAT,
-                    ex,
-                )
-                HOURLY_TIME_BIN_FORMAT
-            }
-        }
-
-        override fun lookup(parameterContents: String): PathFormatParameters.() -> String =
+        override fun lookup(parameterContents: String): suspend PathFormatParameters.() -> String =
             when (parameterContents) {
                 "projectId" -> ({ sanitizeId(key.get("projectId"), "unknown-project") })
                 "userId" -> ({ sanitizeId(key.get("userId"), "unknown-user") })
@@ -48,7 +27,9 @@ class FixedPathFormatterPlugin : PathFormatterPlugin.Factory {
                     {
                         val timeBin = if (time != null) {
                             timeBinFormat.format(time)
-                        } else "unknown-time"
+                        } else {
+                            "unknown-time"
+                        }
                         timeBin + attempt.toAttemptSuffix() + extension
                     }
                 }
@@ -71,9 +52,27 @@ class FixedPathFormatterPlugin : PathFormatterPlugin.Factory {
                 "extension",
             )
 
-            val HOURLY_TIME_BIN_FORMAT: DateTimeFormatter = DateTimeFormatter
+            private val HOURLY_TIME_BIN_FORMAT: DateTimeFormatter = DateTimeFormatter
                 .ofPattern("yyyyMMdd_HH'00'")
                 .withZone(ZoneOffset.UTC)
+
+            private fun createTimeBinFormatter(pattern: String?): DateTimeFormatter {
+                pattern ?: return HOURLY_TIME_BIN_FORMAT
+
+                return try {
+                    DateTimeFormatter
+                        .ofPattern(pattern)
+                        .withZone(ZoneOffset.UTC)
+                } catch (ex: IllegalArgumentException) {
+                    logger.error(
+                        "Cannot use time bin format {}, using {} instead",
+                        pattern,
+                        HOURLY_TIME_BIN_FORMAT,
+                        ex,
+                    )
+                    HOURLY_TIME_BIN_FORMAT
+                }
+            }
 
             private fun Int.toAttemptSuffix() = if (this == 0) "" else "_$this"
 

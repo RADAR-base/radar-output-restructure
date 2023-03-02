@@ -64,7 +64,7 @@ class TimestampExtractionCheck(
             val path = pathFactory.getRecordPath(
                 topicFile.topic,
                 record,
-                suffix
+                suffix,
             )
 
             try {

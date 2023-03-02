@@ -246,7 +246,7 @@ class CsvAvroConverterTest {
             source = path,
             target = toPath,
             compression = IdentityCompression(),
-            distinctFields = setOf("a")
+            distinctFields = setOf("a"),
         )
         assertEquals(listOf("a,b", "1,2", "a,a", "3,3"), toPath.readAllLines())
     }

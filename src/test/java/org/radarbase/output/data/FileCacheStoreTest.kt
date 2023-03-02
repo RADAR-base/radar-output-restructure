@@ -83,7 +83,7 @@ class FileCacheStoreTest {
             RestructureConfig(
                 paths = PathConfig(
                     output = root,
-                    temp = tmpDir
+                    temp = tmpDir,
                 ),
                 worker = WorkerConfig(cacheSize = 2),
                 source = ResourceConfig("hdfs", hdfs = HdfsConfig(listOf("test"))),
@@ -179,7 +179,7 @@ class FileCacheStoreTest {
         ).process(
             check {
                 offsets.addAll(it.offsets)
-            }
+            },
         )
 
         assertTrue(offsets.contains(offsetRange0))

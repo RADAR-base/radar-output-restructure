@@ -1,69 +1,76 @@
 package org.radarbase.output.path
 
+import kotlinx.coroutines.runBlocking
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.instanceOf
 import org.hamcrest.Matchers.nullValue
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import org.radarbase.output.path.FormattedPathFactory.Companion.toPathFormatterPlugin
+import org.radarbase.output.config.PathConfig
+import org.radarbase.output.config.PathFormatterConfig
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.PhoneLight
-import java.nio.file.Paths
 import java.time.Instant
 import kotlin.reflect.jvm.jvmName
 
 internal class FormattedPathFactoryTest {
     @Test
-    fun testFormat() {
+    fun testFormat() = runBlocking {
         val factory = createFactory(
-            format = "\${topic}/\${projectId}/\${userId}/\${sourceId}/\${time:yyyyMM}/\${time:dd}/\${filename}"
+            format = "\${topic}/\${projectId}/\${userId}/\${sourceId}/\${time:yyyyMM}/\${time:dd}/\${filename}",
         )
 
         val t = Instant.parse("2021-01-02T10:05:00Z")
 
-        val path = factory.getRelativePath(
-            "t",
-            ObservationKey(
-                "p",
-                "u",
-                "s",
+        val path = factory.relativePath(
+            PathFormatParameters(
+                topic = "t",
+                key = ObservationKey(
+                    "p",
+                    "u",
+                    "s",
+                ),
+                value = PhoneLight(
+                    t.epochSecond.toDouble(),
+                    t.epochSecond.toDouble(),
+                    1.0f,
+                ),
+                time = t,
+                attempt = 0,
             ),
-            PhoneLight(
-                t.epochSecond.toDouble(),
-                t.epochSecond.toDouble(),
-                1.0f,
-            ),
-            t,
-            0,
         )
 
-        assertEquals(Paths.get("t/p/u/s/202101/02/20210102_1000.csv.gz"), path)
+        assertEquals("t/p/u/s/202101/02/20210102_1000.csv.gz", path)
     }
 
     @Test
-    fun unparameterized() {
+    fun unparameterized() = runBlocking {
         val factory = FormattedPathFactory().apply {
-            init(emptyMap())
-            extension = ".csv.gz"
+            init(
+                extension = ".csv.gz",
+                config = PathConfig(),
+            )
         }
         val t = Instant.parse("2021-01-02T10:05:00Z")
-        val path = factory.getRelativePath(
-            "t",
-            ObservationKey(
-                "p",
-                "u",
-                "s",
+        val path = factory.relativePath(
+            PathFormatParameters(
+                topic = "t",
+                key = ObservationKey(
+                    "p",
+                    "u",
+                    "s",
+                ),
+                value = PhoneLight(
+                    t.epochSecond.toDouble(),
+                    t.epochSecond.toDouble(),
+                    1.0f,
+                ),
+                time = t,
+                attempt = 0,
             ),
-            PhoneLight(
-                t.epochSecond.toDouble(),
-                t.epochSecond.toDouble(),
-                1.0f,
-            ),
-            t,
-            0,
         )
-        assertEquals(Paths.get("p/u/t/20210102_1000.csv.gz"), path)
+        assertEquals("p/u/t/20210102_1000.csv.gz", path)
     }
 
     @Test
@@ -100,9 +107,13 @@ internal class FormattedPathFactoryTest {
 
     private fun createFactory(format: String): FormattedPathFactory = FormattedPathFactory().apply {
         init(
-            mapOf("format" to format),
+            extension = ".csv.gz",
+            config = PathConfig(
+                path = PathFormatterConfig(
+                    format = format,
+                ),
+            ),
         )
-        extension = ".csv.gz"
     }
 
     @Test

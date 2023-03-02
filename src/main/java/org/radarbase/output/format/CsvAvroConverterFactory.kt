@@ -75,7 +75,9 @@ class CsvAvroConverterFactory : RecordConverterFactory {
                         if (indexIndex < lineIndexes.size && lineIndexes[indexIndex] == i) {
                             indexIndex += 1
                             true
-                        } else false
+                        } else {
+                            false
+                        }
                     },
                 )
             }
@@ -127,7 +129,9 @@ class CsvAvroConverterFactory : RecordConverterFactory {
 
             Pair(
                 header,
-                if (parsers.isEmpty()) emptyList() else {
+                if (parsers.isEmpty()) {
+                    emptyList()
+                } else {
                     lines.mapNotNull { line ->
                         for ((index, parser) in parsers) {
                             parser(line[index])?.let {
@@ -190,7 +194,9 @@ class CsvAvroConverterFactory : RecordConverterFactory {
             val header = csvReader.readNext()
             val lines = if (header != null) {
                 generateSequence { csvReader.readNext() }
-            } else emptySequence()
+            } else {
+                emptySequence()
+            }
             process(header, lines)
         }
 
@@ -217,7 +223,9 @@ class CsvAvroConverterFactory : RecordConverterFactory {
         @Throws(IndexOutOfBoundsException::class)
         inline fun <reified T> Array<T>.byIndex(
             indexes: IntArray?,
-        ): Array<T> = if (indexes == null) this else {
+        ): Array<T> = if (indexes == null) {
+            this
+        } else {
             Array(indexes.size) { i -> this[indexes[i]] }
         }
     }

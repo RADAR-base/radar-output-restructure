@@ -14,7 +14,7 @@ data class S3Config(
     /** Secret key belonging to access token. */
     val secretKey: String?,
     /** Bucket name. */
-    val bucket: String,
+    val bucket: String? = null,
     /** If no endOffset is in the filename, read it from object tags. */
     val endOffsetFromTags: Boolean = false,
     /** HTTP connect timeout. */
@@ -36,7 +36,7 @@ data class S3Config(
                 connectTimeout.toMillisOrDefault(),
                 writeTimeout.toMillisOrDefault(),
                 readTimeout.toMillisOrDefault(),
-            )
+            ),
         )
     }.build()
 

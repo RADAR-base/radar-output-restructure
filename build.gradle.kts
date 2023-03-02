@@ -12,7 +12,7 @@ plugins {
     id("com.avast.gradle.docker-compose")
     id("com.github.ben-manes.versions")
     id("io.github.gradle-nexus.publish-plugin")
-    id("org.jlleitschuh.gradle.ktlint") version "11.0.0"
+    id("org.jlleitschuh.gradle.ktlint") version "11.2.0"
 }
 
 group = "org.radarbase"
@@ -20,6 +20,7 @@ version = "2.3.3-SNAPSHOT"
 
 repositories {
     mavenCentral()
+    mavenLocal()
 }
 
 description = "RADAR-base output restructuring"
@@ -37,11 +38,11 @@ sourceSets {
 
 configurations["integrationTestImplementation"].extendsFrom(
     configurations.implementation.get(),
-    configurations.testImplementation.get()
+    configurations.testImplementation.get(),
 )
 configurations["integrationTestRuntimeOnly"].extendsFrom(
     configurations.runtimeOnly.get(),
-    configurations.testRuntimeOnly.get()
+    configurations.testRuntimeOnly.get(),
 )
 
 dependencies {
@@ -95,6 +96,9 @@ dependencies {
         val apacheCommonsTextVersion: String by project
         runtimeOnly("org.apache.commons:commons-text:$apacheCommonsTextVersion")
     }
+    val managementPortalVersion: String by project
+    implementation("org.radarbase:managementportal-client:$managementPortalVersion")
+    implementation("org.radarbase:kotlin-util:$managementPortalVersion")
 
     val slf4jVersion: String by project
     implementation("org.slf4j:slf4j-api:$slf4jVersion")
@@ -147,10 +151,14 @@ distributions {
 tasks.withType<KotlinCompile> {
     kotlinOptions {
         jvmTarget = "17"
-        apiVersion = "1.6"
-        languageVersion = "1.6"
+        apiVersion = "1.8"
+        languageVersion = "1.8"
         freeCompilerArgs = listOf("-opt-in=kotlin.RequiresOptIn")
     }
+}
+
+tasks.withType<JavaCompile> {
+    options.release.set(17)
 }
 
 // custom tasks for creating source/javadoc jars
@@ -175,7 +183,7 @@ tasks.withType<Jar> {
     manifest {
         attributes(
             "Implementation-Title" to project.name,
-            "Implementation-Version" to project.version
+            "Implementation-Version" to project.version,
         )
     }
 }
@@ -304,24 +312,17 @@ tasks.register<Copy>("copyDependencies") {
     into("$buildDir/third-party/")
 }
 
-fun isNonStable(version: String): Boolean {
-    val stableKeyword = listOf("RELEASE", "FINAL", "GA", "JRE").any { version.toUpperCase().contains(it) }
-    val regex = "^[0-9,.v-]+(-r)?$".toRegex()
-    val isStable = stableKeyword || regex.matches(version)
-    return isStable.not()
-}
-
 tasks.named<DependencyUpdatesTask>("dependencyUpdates").configure {
+    val regex = "RELEASE|FINAL|GA|-jre|^[0-9,.v-]+(-r)?$".toRegex(RegexOption.IGNORE_CASE)
     rejectVersionIf {
-        isNonStable(candidate.version)
+        !regex.containsMatchIn(candidate.version)
     }
 }
 
 ktlint {
-    version.set("0.45.2")
-    disabledRules.set(setOf("no-wildcard-imports"))
+    version.set("0.48.2")
 }
 
 tasks.wrapper {
-    gradleVersion = "7.6"
+    gradleVersion = "8.0.1"
 }

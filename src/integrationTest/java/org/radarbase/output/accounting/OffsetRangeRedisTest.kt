@@ -83,7 +83,7 @@ class OffsetRangeRedisTest {
         redisHolder.execute { redis ->
             val range =
                 redisOffsetReader.readValue<OffsetRedisPersistence.Companion.RedisOffsetRangeSet>(
-                    redis.get(testFile.toString())
+                    redis.get(testFile.toString()),
                 )
             assertEquals(
                 OffsetRedisPersistence.Companion.RedisOffsetRangeSet(
@@ -98,7 +98,7 @@ class OffsetRangeRedisTest {
                         ),
                     ),
                 ),
-                range
+                range,
             )
         }
 

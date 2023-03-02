@@ -78,7 +78,7 @@ class FileCacheTest {
         config = RestructureConfig(
             paths = PathConfig(
                 output = path.parent,
-                temp = tmpPath
+                temp = tmpPath,
             ),
             source = ResourceConfig("hdfs", hdfs = HdfsConfig(listOf("test"))),
         )

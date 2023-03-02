@@ -54,12 +54,11 @@ class Application(
     override val config = config.apply { validate() }
     override val recordConverter: RecordConverterFactory = config.format.createConverter()
     override val compression: Compression = config.compression.createCompression()
-    override val pathFactory: RecordPathFactory = config.paths.createFactory().apply {
-        fileStoreFactory = this@Application
-        extension = recordConverter.extension + compression.extension
-        root = config.paths.output
-        addTopicConfiguration(config.topics)
-    }
+    override val pathFactory: RecordPathFactory = config.paths.createFactory(
+        config.target,
+        recordConverter.extension + compression.extension,
+        config.topics,
+    )
 
     private val sourceStorageFactory = SourceStorageFactory(config.source, config.paths.temp)
     override val sourceStorage: SourceStorage
@@ -188,7 +187,7 @@ class Application(
                         .apply {
                             addArgs(commandLineArgs)
                             validate()
-                        }
+                        },
                 )
             } catch (ex: IllegalArgumentException) {
                 logger.error("Illegal argument", ex)

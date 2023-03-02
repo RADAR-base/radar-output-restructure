@@ -23,7 +23,7 @@ class S3SourceStorage(
     config: S3Config,
     private val tempPath: Path,
 ) : SourceStorage {
-    private val bucket = config.bucket
+    private val bucket = requireNotNull(config.bucket) { "Source storage requires a bucket name" }
     private val readEndOffset = config.endOffsetFromTags
 
     override suspend fun list(
