@@ -52,7 +52,7 @@ class TreeLister<T, C>(
         levelLister.listLevel(
             context = context,
             descend = { descend(it, emit) },
-            emit = emit
+            emit = emit,
         )
     }
 
