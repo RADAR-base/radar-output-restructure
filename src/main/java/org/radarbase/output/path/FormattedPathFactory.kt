@@ -73,7 +73,7 @@ open class FormattedPathFactory : RecordPathFactory() {
     }
 
     override suspend fun relativePath(
-        pathParameters: PathFormatParameters
+        pathParameters: PathFormatParameters,
     ): String = (topicFormatters[pathParameters.topic] ?: pathFormatter)
         .format(pathParameters)
 

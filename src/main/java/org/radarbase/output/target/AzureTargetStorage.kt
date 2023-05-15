@@ -25,8 +25,8 @@ import kotlinx.coroutines.withContext
 import org.radarbase.kotlin.coroutines.CacheConfig
 import org.radarbase.kotlin.coroutines.CachedValue
 import org.radarbase.output.config.AzureConfig
-import org.radarbase.output.util.splitFirstSegment
 import org.radarbase.output.util.firstSegment
+import org.radarbase.output.util.splitFirstSegment
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.io.InputStream

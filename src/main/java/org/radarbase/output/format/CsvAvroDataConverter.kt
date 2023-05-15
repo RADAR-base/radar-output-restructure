@@ -72,7 +72,8 @@ internal class CsvAvroDataConverter(
             addValue(prefix, values, startIndex, BASE64_ENCODER.encodeToString((data as GenericFixed).bytes()))
         }
         Schema.Type.STRING, Schema.Type.ENUM, Schema.Type.INT, Schema.Type.LONG,
-        Schema.Type.DOUBLE, Schema.Type.FLOAT, Schema.Type.BOOLEAN -> {
+        Schema.Type.DOUBLE, Schema.Type.FLOAT, Schema.Type.BOOLEAN,
+        -> {
             addValue(prefix, values, startIndex, data.toString())
         }
         Schema.Type.NULL -> {

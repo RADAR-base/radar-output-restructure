@@ -55,7 +55,7 @@ class CsvAvroConverter(
                 val excludedHeaderSet = recordHeader.toHashSet()
                 Pair(
                     recordHeader.filter { it !in excludeFields }.toTypedArray(),
-                    excludeFields.filterTo(HashSet()) { it in excludedHeaderSet }
+                    excludeFields.filterTo(HashSet()) { it in excludedHeaderSet },
                 )
             }
         }

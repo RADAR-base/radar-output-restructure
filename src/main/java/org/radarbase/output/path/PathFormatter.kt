@@ -26,7 +26,7 @@ class PathFormatter(
     private val parameterLookups: Map<String, suspend PathFormatParameters.() -> String>
 
     init {
-        require(format.isNotBlank()) { "Path format may not be an empty string"}
+        require(format.isNotBlank()) { "Path format may not be an empty string" }
         val foundParameters = "\\$\\{([^}]*)}".toRegex()
             .findAll(format)
             .mapTo(HashSet()) { it.groupValues[1] }
@@ -39,7 +39,7 @@ class PathFormatter(
                     } catch (ex: IllegalArgumentException) {
                         logger.error("Cannot parse path format {}, illegal format parameter found by plugin {}", format, plugin.name, ex)
                         throw ex
-                    }
+                    },
                 )
             }
         }
@@ -53,7 +53,7 @@ class PathFormatter(
             require("topic" in parameterLookups) { "Path must include topic parameter." }
             require(
                 "filename" in parameterLookups ||
-                    ("extension" in parameterLookups && "attempt" in parameterLookups)
+                    ("extension" in parameterLookups && "attempt" in parameterLookups),
             ) {
                 "Path must include filename parameter or extension and attempt parameters."
             }

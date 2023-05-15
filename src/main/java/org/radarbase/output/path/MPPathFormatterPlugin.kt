@@ -3,8 +3,8 @@ package org.radarbase.output.path
 import kotlinx.coroutines.*
 import org.radarbase.kotlin.coroutines.CacheConfig
 import org.radarbase.kotlin.coroutines.CachedMap
-import org.radarbase.management.auth.ClientCredentialsConfig
-import org.radarbase.management.auth.clientCredentials
+import org.radarbase.ktor.auth.ClientCredentialsConfig
+import org.radarbase.ktor.auth.clientCredentials
 import org.radarbase.management.client.MPClient
 import org.radarbase.management.client.MPProject
 import org.radarbase.management.client.MPSubject

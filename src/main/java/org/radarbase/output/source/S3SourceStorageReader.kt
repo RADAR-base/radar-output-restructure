@@ -35,7 +35,7 @@ internal class S3SourceStorageReader(
                 tempFile.outputStream(StandardOpenOption.TRUNCATE_EXISTING).use { out ->
                     s3Client.getObject(
                         GetObjectArgs.Builder()
-                            .objectBuild(bucket, file.path)
+                            .objectBuild(bucket, file.path),
                     ).use { input ->
                         input.copyTo(out)
                     }

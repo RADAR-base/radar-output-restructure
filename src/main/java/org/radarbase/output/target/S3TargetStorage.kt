@@ -22,8 +22,8 @@ import org.radarbase.kotlin.coroutines.CachedValue
 import org.radarbase.output.config.S3Config
 import org.radarbase.output.source.S3SourceStorage.Companion.faultTolerant
 import org.radarbase.output.util.bucketBuild
-import org.radarbase.output.util.objectBuild
 import org.radarbase.output.util.firstSegment
+import org.radarbase.output.util.objectBuild
 import org.slf4j.LoggerFactory
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -95,7 +95,7 @@ class S3TargetStorage(
             logger.error(
                 "Failed to create bucket {}: {}",
                 bucket,
-                ex.message
+                ex.message,
             )
             throw ex
         }

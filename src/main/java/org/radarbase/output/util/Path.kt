@@ -13,7 +13,7 @@ fun Path.splitFirstSegment(): Pair<String, String> {
     val bucketPath = first()
     return Pair(
         bucketPath.toString(),
-        bucketPath.relativize(this).toString()
+        bucketPath.relativize(this).toString(),
     )
 }
 

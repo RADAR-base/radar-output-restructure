@@ -13,13 +13,17 @@ class SourceStorageFactory(
     private val s3SourceClient: MinioClient? = if (resourceConfig.sourceType == ResourceType.S3) {
         requireNotNull(resourceConfig.s3) { "Missing S3 configuration" }
             .createS3Client()
-    } else null
+    } else {
+        null
+    }
 
     private val azureSourceClient: BlobServiceClient? =
         if (resourceConfig.sourceType == ResourceType.AZURE) {
             requireNotNull(resourceConfig.azure) { "Missing Azure configuration" }
                 .createAzureClient()
-        } else null
+        } else {
+            null
+        }
 
     fun createSourceStorage() = when (resourceConfig.sourceType) {
         ResourceType.S3 -> {

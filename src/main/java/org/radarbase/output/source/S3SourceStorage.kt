@@ -48,7 +48,7 @@ class S3SourceStorage(
                 SimpleFileStatus(
                     Paths.get(item.objectName()),
                     item.isDir,
-                    if (item.isDir) null else item.lastModified().toInstant()
+                    if (item.isDir) null else item.lastModified().toInstant(),
                 )
             }
     }
@@ -64,7 +64,7 @@ class S3SourceStorage(
                     topicFile = topicFile.copy(
                         range = topicFile.range.mapRange {
                             it.copy(to = endOffset)
-                        }
+                        },
                     )
                 }
             } catch (ex: Exception) {

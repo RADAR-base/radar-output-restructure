@@ -47,8 +47,8 @@ abstract class RecordPathFactory {
                 properties = buildMap(config.path.properties.size + 1) {
                     putAll(config.path.properties)
                     putIfAbsent("extension", extension)
-                }
-            )
+                },
+            ),
         )
         this.addTopicConfiguration(topics)
     }
@@ -134,7 +134,7 @@ abstract class RecordPathFactory {
                 {"name": "sourceId", "type": "string", "doc": "Unique identifier associated with the source."}
               ]
             }
-            """.trimIndent()
+            """.trimIndent(),
         )
 
         fun GenericRecord.getFieldOrNull(fieldName: String): Schema.Field? {

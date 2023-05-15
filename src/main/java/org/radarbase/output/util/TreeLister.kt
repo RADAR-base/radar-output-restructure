@@ -25,11 +25,15 @@ class TreeLister<T, C>(
             coroutineScope {
                 descend(
                     context,
-                    if (predicate == null) channel::send else (
-                        { value ->
-                            if (predicate(value)) channel.send(value)
-                        }
-                        ),
+                    if (predicate == null) {
+                        channel::send
+                    } else {
+                        (
+                            { value ->
+                                if (predicate(value)) channel.send(value)
+                            }
+                            )
+                    },
                 )
             }
             channel.close()

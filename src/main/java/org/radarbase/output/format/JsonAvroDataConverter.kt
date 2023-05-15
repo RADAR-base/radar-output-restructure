@@ -8,7 +8,7 @@ import java.nio.ByteBuffer
 import java.util.EnumSet
 
 class JsonAvroDataConverter(
-    private val excludeFields: Set<String>
+    private val excludeFields: Set<String>,
 ) {
     fun convertRecord(record: GenericRecord, prefix: String? = null): Map<String, Any?> {
         val schema = record.schema

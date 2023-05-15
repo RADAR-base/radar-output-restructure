@@ -7,7 +7,7 @@ import java.time.format.DateTimeFormatter
 
 class FixedPathFormatterPlugin : PathFormatterPlugin.Factory {
     override fun create(
-        properties: Map<String, String>
+        properties: Map<String, String>,
     ): PathFormatterPlugin = Plugin(properties)
 
     internal class Plugin(properties: Map<String, String>) : PathFormatterPlugin() {

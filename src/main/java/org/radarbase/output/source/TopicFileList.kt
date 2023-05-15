@@ -21,7 +21,7 @@ data class TopicFile(
         topic,
         path,
         lastModified,
-        range = TopicPartitionOffsetRange.parseFilename(path.fileName.toString(), lastModified)
+        range = TopicPartitionOffsetRange.parseFilename(path.fileName.toString(), lastModified),
     )
 
     val size: Long? = range.range.size

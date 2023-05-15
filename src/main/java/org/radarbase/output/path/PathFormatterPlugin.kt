@@ -6,7 +6,7 @@ import kotlin.reflect.jvm.jvmName
 private val logger = LoggerFactory.getLogger(PathFormatterPlugin::class.java)
 
 internal fun String.toPathFormatterPlugins(
-    properties: Map<String, String>
+    properties: Map<String, String>,
 ): List<PathFormatterPlugin> =
     splitToSequence("\\s+".toRegex())
         .filter { it.isNotEmpty() }
@@ -32,7 +32,7 @@ internal fun String.toPathFormatterPlugin(
                         "Failed to instantiate plugin {}, it does not extend {} or {}",
                         this,
                         PathFormatterPlugin::class.jvmName,
-                        PathFormatterPlugin.Factory::class.jvmName
+                        PathFormatterPlugin.Factory::class.jvmName,
                     )
                     null
                 }
@@ -66,7 +66,7 @@ abstract class PathFormatterPlugin {
      * @throws IllegalArgumentException if any of the parameter contents are invalid.
      */
     fun createLookupTable(
-        parameterNames: Collection<String>
+        parameterNames: Collection<String>,
     ): Map<String, suspend PathFormatParameters.() -> String> = buildMap {
         parameterNames.forEach { paramName ->
             val paramContents = extractParamContents(paramName)
