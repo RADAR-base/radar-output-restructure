@@ -14,7 +14,6 @@ import org.radarbase.output.util.objectBuild
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Paths
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class RestructureS3IntegrationTest {
     @Test
     fun integration() = runTest {

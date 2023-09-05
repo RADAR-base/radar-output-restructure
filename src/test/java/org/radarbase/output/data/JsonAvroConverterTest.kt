@@ -18,7 +18,6 @@ package org.radarbase.output.data
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.apache.avro.Schema.Parser
 import org.apache.avro.generic.GenericDatumReader
@@ -38,7 +37,6 @@ import java.io.StringWriter
 import java.nio.file.Path
 import kotlin.io.path.bufferedWriter
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class JsonAvroConverterTest {
     @Test
     @Throws(IOException::class)

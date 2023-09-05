@@ -21,7 +21,6 @@ interface Format {
 
     val extension: String
 
-    open fun matchesFilename(name: String): Boolean {
-        return name.lowercase().endsWith(extension.lowercase())
-    }
+    fun matchesFilename(name: String): Boolean =
+        name.endsWith(extension, ignoreCase = true)
 }

@@ -19,7 +19,6 @@ class AzureSourceStorage(
     config: AzureConfig,
     private val tempPath: Path,
 ) : SourceStorage {
-    private val container = config.container
     private val blobContainerClient = client.getBlobContainerClient(config.container)
     private val readOffsetFromMetadata = config.endOffsetFromMetadata
 
