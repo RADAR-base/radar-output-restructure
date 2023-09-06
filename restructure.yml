@@ -93,6 +93,8 @@ format:
   # factory: org.radarbase.hdfs.format.FormatFactory
   # Additional format properties
   # properties: {}
+  # Do not write certain fields to file
+  # excludeFields: []
 
 # Worker settings. Each worker thread has its own cache and topic, so the
 # settings only apply to a single thread.
@@ -147,6 +149,11 @@ topics:
       enable: true
       # deduplicate this topic only using given fields.
       distinctFields: [key.sourceId, value.time]
+    # Do not write certain fields to file
+    # In this case, exclude user and project ID since they are always the same
+    excludeFields:
+      - key.userId
+      - key.projectId
   # topic name
   connect_fitbit_source2:
     # deduplicate this topic, regardless of the format settings

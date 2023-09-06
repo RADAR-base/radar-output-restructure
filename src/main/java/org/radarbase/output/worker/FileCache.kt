@@ -63,11 +63,15 @@ class FileCache(
     private var lastUse: Long = 0
     private val hasError: AtomicBoolean = AtomicBoolean(false)
     private val deduplicate: DeduplicationConfig
+    private val excludeFields: Set<String>
 
     init {
         val topicConfig = factory.config.topics[topic]
         val defaultDeduplicate = factory.config.format.deduplication
         deduplicate = topicConfig?.deduplication(defaultDeduplicate) ?: defaultDeduplicate
+
+        val defaultExclude = factory.config.format.excludeFields
+        excludeFields = topicConfig?.excludeFields ?: defaultExclude
 
         this.tmpPath = createTempFile(tmpDir, fileName, ".tmp" + compression.extension)
     }
@@ -102,7 +106,7 @@ class FileCache(
 
         this.recordConverter = try {
             inputStream.reader().useSuspended { reader ->
-                converterFactory.converterFor(writer, record, fileIsNew, reader)
+                converterFactory.converterFor(writer, record, fileIsNew, reader, excludeFields)
             }
         } catch (ex: IOException) {
             coroutineScope {
