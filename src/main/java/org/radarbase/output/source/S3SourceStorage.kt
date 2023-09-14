@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory
 import java.io.FileNotFoundException
 import java.nio.file.Path
 import java.nio.file.Paths
+import kotlin.io.path.pathString
 import kotlin.time.Duration.Companion.seconds
 
 class S3SourceStorage(
@@ -28,14 +29,18 @@ class S3SourceStorage(
 
     override suspend fun list(
         path: Path,
+        startAfter: Path?,
         maxKeys: Int?,
-    ): List<SimpleFileStatus> {
+    ): List<StorageNode> {
         val listRequest = ListObjectsArgs.Builder().bucketBuild(bucket) {
             if (maxKeys != null) {
                 maxKeys(maxKeys.coerceAtMost(1000))
             }
             prefix("$path/")
             recursive(false)
+            if (startAfter != null) {
+                startAfter(startAfter.pathString)
+            }
             useUrlEncodingType(false)
         }
         var iterable = faultTolerant { s3Client.listObjects(listRequest) }
@@ -45,15 +50,16 @@ class S3SourceStorage(
         return iterable
             .map {
                 val item = it.get()
-                SimpleFileStatus(
-                    Paths.get(item.objectName()),
-                    item.isDir,
-                    if (item.isDir) null else item.lastModified().toInstant(),
-                )
+                val itemPath = Paths.get(item.objectName())
+                if (item.isDir) {
+                    StorageNode.StorageDirectory(itemPath)
+                } else {
+                    StorageNode.StorageFile(itemPath, item.lastModified().toInstant())
+                }
             }
     }
 
-    override suspend fun createTopicFile(topic: String, status: SimpleFileStatus): TopicFile {
+    override suspend fun createTopicFile(topic: String, status: StorageNode): TopicFile {
         var topicFile = super.createTopicFile(topic, status)
 
         if (readEndOffset && topicFile.range.range.to == null) {

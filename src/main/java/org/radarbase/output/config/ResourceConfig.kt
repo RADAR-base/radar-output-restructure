@@ -11,6 +11,7 @@ data class ResourceConfig(
     val hdfs: HdfsConfig? = null,
     val local: LocalConfig? = null,
     val azure: AzureConfig? = null,
+    val index: StorageIndexConfig? = null,
 ) {
     @get:JsonIgnore
     val sourceType: ResourceType by lazy {
@@ -33,3 +34,4 @@ data class ResourceConfig(
         ResourceType.AZURE -> copyOnChange(azure, { it?.withEnv(prefix) }) { copy(azure = it) }
     }
 }
+

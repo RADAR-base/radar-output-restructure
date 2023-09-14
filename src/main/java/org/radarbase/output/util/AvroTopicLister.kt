@@ -1,20 +1,23 @@
 package org.radarbase.output.util
 
-import org.radarbase.output.source.SourceStorage
+import kotlinx.coroutines.flow.toList
+import org.radarbase.output.source.StorageIndex
+import org.radarbase.output.source.StorageNode
 import java.nio.file.Path
 
 class AvroTopicLister(
-    private val storage: SourceStorage,
+    private val storage: StorageIndex,
 ) : TreeLister.LevelLister<Path, Path> {
     override suspend fun listLevel(
         context: Path,
         descend: suspend (Path) -> Unit,
         emit: suspend (Path) -> Unit,
     ) {
-        val fileStatuses = storage.list(context, maxKeys = 256)
+        val fileStatuses = storage.list(StorageNode.StorageDirectory(context), maxKeys = 256)
+            .toList()
 
         val avroFile = fileStatuses.find { file ->
-            !file.isDirectory &&
+            file is StorageNode.StorageFile &&
                 file.path.fileName.toString().endsWith(".avro", true)
         }
 
@@ -22,12 +25,12 @@ class AvroTopicLister(
             emit(avroFile.path.parent.parent)
         } else {
             fileStatuses
-                .filter { file -> file.isDirectory && file.path.fileName.toString() != "+tmp" }
+                .filter { file -> file is StorageNode.StorageDirectory && file.path.fileName.toString() != "+tmp" }
                 .forEach { file -> descend(file.path) }
         }
     }
 
     companion object {
-        fun SourceStorage.avroTopicTreeLister() = TreeLister(AvroTopicLister(this))
+        fun StorageIndex.avroTopicTreeLister() = TreeLister(AvroTopicLister(this))
     }
 }

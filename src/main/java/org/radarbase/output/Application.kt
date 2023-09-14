@@ -28,8 +28,7 @@ import org.radarbase.output.config.CommandLineArgs
 import org.radarbase.output.config.RestructureConfig
 import org.radarbase.output.format.RecordConverterFactory
 import org.radarbase.output.path.RecordPathFactory
-import org.radarbase.output.source.SourceStorage
-import org.radarbase.output.source.SourceStorageFactory
+import org.radarbase.output.source.*
 import org.radarbase.output.target.TargetStorage
 import org.radarbase.output.target.TargetStorageFactory
 import org.radarbase.output.util.Timer
@@ -39,7 +38,9 @@ import org.radarbase.output.worker.RadarKafkaRestructure
 import org.slf4j.LoggerFactory
 import redis.clients.jedis.JedisPool
 import java.io.IOException
+import java.nio.file.Path
 import java.text.NumberFormat
+import java.time.Duration
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.atomic.LongAdder
@@ -78,9 +79,27 @@ class Application(
 
     override val workerSemaphore = Semaphore(config.worker.numThreads * 2)
 
+    override val storageIndexManagers: Map<Path, StorageIndexManager>
+
     private val jobs: List<Job>
 
     init {
+        val indexConfig = config.source.index
+        val (fullScan, emptyScan) = if (indexConfig == null) {
+            listOf(3600L, 900L)
+        } else {
+            listOf(indexConfig.fullSyncInterval, indexConfig.emptyDirectorySyncInterval)
+        }.map { Duration.ofSeconds(it) }
+
+        storageIndexManagers = config.paths.inputs.associateWith { input ->
+            MutableStorageIndexManager(
+                InMemoryStorageIndex(),
+                sourceStorage,
+                fullScan,
+                emptyScan,
+                input,
+            )
+        }
         val serviceMutex = Mutex()
         jobs = listOfNotNull(
             RadarKafkaRestructure.job(config, serviceMutex),

@@ -23,11 +23,9 @@ class TreeLister<T, C>(
         val channel = Channel<T>(capacity = limit)
 
         val producer = launch {
-            coroutineScope {
-                descend(context) { value ->
-                    if (predicate == null || predicate(value)) {
-                        channel.send(value)
-                    }
+            descend(context) { value ->
+                if (predicate == null || predicate(value)) {
+                    channel.send(value)
                 }
             }
             channel.close()

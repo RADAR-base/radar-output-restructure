@@ -17,8 +17,6 @@
 package org.radarbase.output.worker
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.FileStoreFactory
@@ -109,13 +107,11 @@ class FileCache(
                 converterFactory.converterFor(writer, record, fileIsNew, reader, excludeFields)
             }
         } catch (ex: IOException) {
-            coroutineScope {
-                launch(Dispatchers.IO) {
-                    try {
-                        writer.close()
-                    } catch (exClose: IOException) {
-                        logger.error("Failed to close writer for {}", path, ex)
-                    }
+            withContext(Dispatchers.IO) {
+                try {
+                    writer.close()
+                } catch (exClose: IOException) {
+                    logger.error("Failed to close writer for {}", path, ex)
                 }
             }
 

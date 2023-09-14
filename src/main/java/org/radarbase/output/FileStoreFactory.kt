@@ -26,9 +26,11 @@ import org.radarbase.output.config.RestructureConfig
 import org.radarbase.output.format.RecordConverterFactory
 import org.radarbase.output.path.RecordPathFactory
 import org.radarbase.output.source.SourceStorage
+import org.radarbase.output.source.StorageIndexManager
 import org.radarbase.output.target.TargetStorage
 import org.radarbase.output.worker.FileCacheStore
 import java.io.IOException
+import java.nio.file.Path
 
 /** Factory for all factory classes and settings.  */
 interface FileStoreFactory {
@@ -42,6 +44,7 @@ interface FileStoreFactory {
     val redisHolder: RedisHolder
     val offsetPersistenceFactory: OffsetPersistenceFactory
     val workerSemaphore: Semaphore
+    val storageIndexManagers: Map<Path, StorageIndexManager>
 
     @Throws(IOException::class)
     fun newFileCacheStore(accountant: Accountant): FileCacheStore
