@@ -5,7 +5,7 @@ object Versions {
     const val kotlin = "1.9.10"
     const val dockerCompose = "0.17.4"
 
-    const val radarCommons = "1.0.1-SNAPSHOT"
+    const val radarCommons = "1.1.0"
     const val radarSchemas = "0.8.4"
     const val jackson = "2.15.2"
     const val slf4j = "2.0.9"
