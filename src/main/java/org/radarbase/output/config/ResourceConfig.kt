@@ -34,4 +34,3 @@ data class ResourceConfig(
         ResourceType.AZURE -> copyOnChange(azure, { it?.withEnv(prefix) }) { copy(azure = it) }
     }
 }
-
