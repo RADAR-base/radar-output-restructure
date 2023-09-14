@@ -53,6 +53,11 @@ class InMemoryStorageIndex : MutableStorageIndex {
 
     override suspend fun addAll(parent: StorageNode.StorageDirectory, nodes: List<StorageNode>): Collection<StorageNode> {
         add(parent)
+
+        if (nodes.isEmpty()) {
+            return fileIndex[parent]?.values ?: listOf()
+        }
+
         nodes.asSequence()
             .filterIsInstance<StorageNode.StorageDirectory>()
             .forEach { node ->
@@ -78,17 +83,11 @@ class InMemoryStorageIndex : MutableStorageIndex {
 
     override suspend fun sync(parent: StorageNode.StorageDirectory, nodes: List<StorageNode>): Collection<StorageNode> {
         add(parent)
-        val newMap = fileIndex.compute(parent) { _, map ->
-            if (map == null) {
-                buildMap(nodes.size) {
-                    nodes.forEach { put(it.path, it) }
-                }
-            } else {
-                buildMap(nodes.size) {
-                    nodes.forEach { put(it.path, it) }
-                }
-            }
-        } ?: mapOf()
+        val newMap = buildMap(nodes.size) {
+            nodes.forEach { put(it.path, it) }
+        }
+
+        fileIndex[parent] = newMap
 
         nodes.asSequence()
             .filterIsInstance<StorageNode.StorageDirectory>()
