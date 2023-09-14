@@ -47,7 +47,9 @@ open class AccountantImpl(
         return if (offsetsPath.exists()) {
             OffsetFilePersistence(targetStorage).read(offsetsPath)
                 .also { offsetsPath.deleteExisting() }
-        } else null
+        } else {
+            null
+        }
     }
 
     override suspend fun remove(range: TopicPartitionOffsetRange) =

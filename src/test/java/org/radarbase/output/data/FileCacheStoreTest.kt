@@ -17,7 +17,6 @@
 package org.radarbase.output.data
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.apache.avro.SchemaBuilder
@@ -45,7 +44,6 @@ import java.nio.file.Path
 import java.time.Instant
 import kotlin.io.path.createDirectories
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class FileCacheStoreTest {
     private val lastModified = Instant.now()
 
@@ -83,7 +81,7 @@ class FileCacheStoreTest {
             RestructureConfig(
                 paths = PathConfig(
                     output = root,
-                    temp = tmpDir
+                    temp = tmpDir,
                 ),
                 worker = WorkerConfig(cacheSize = 2),
                 source = ResourceConfig("hdfs", hdfs = HdfsConfig(listOf("test"))),
@@ -179,7 +177,7 @@ class FileCacheStoreTest {
         ).process(
             check {
                 offsets.addAll(it.offsets)
-            }
+            },
         )
 
         assertTrue(offsets.contains(offsetRange0))

@@ -205,7 +205,8 @@ class FileCacheStore(
         NO_CACHE_AND_WRITE(true),
 
         /** Cache miss and write was unsuccessful because of a mismatch in number of columns.  */
-        NO_CACHE_AND_NO_WRITE(false);
+        NO_CACHE_AND_NO_WRITE(false),
+        ;
 
         companion object {
             fun valueOf(isCacheHit: Boolean, isSuccessful: Boolean) = when {

@@ -24,10 +24,7 @@ data class RestructureConfig(
     val compression: CompressionConfig = CompressionConfig(),
     /** File format to use for output files. */
     val format: FormatConfig = FormatConfig(),
-    /** Snapshot */
-    val snapshot: SnapshotConfig = SnapshotConfig(),
 ) {
-
     fun validate() {
         source.validate()
         target.validate()
@@ -50,7 +47,7 @@ data class RestructureConfig(
             copy(
                 source = source.copy(
                     hdfs = source.hdfs?.copy(nameNodes = listOf(it))
-                        ?: HdfsConfig(nameNodes = listOf(it))
+                        ?: HdfsConfig(nameNodes = listOf(it)),
                 ),
             )
         }
@@ -96,7 +93,9 @@ data class RestructureConfig(
             val newValue = modification(original)
             return if (newValue != original) {
                 doCopy(newValue)
-            } else this
+            } else {
+                this
+            }
         }
     }
 }

@@ -3,13 +3,21 @@ package org.radarbase.output.util
 import io.minio.BucketArgs
 import io.minio.ObjectArgs
 import java.nio.file.Path
-import java.nio.file.Paths
 
-private val rootPath = Paths.get("/")
+fun Path.withoutFirstSegment(): String {
+    // remove bucket prefix
+    return first().relativize(this).toString()
+}
 
-fun Path.toKey() = if (startsWith(rootPath)) {
-    rootPath.relativize(this).toString()
-} else toString()
+fun Path.splitFirstSegment(): Pair<String, String> {
+    val bucketPath = first()
+    return Pair(
+        bucketPath.toString(),
+        bucketPath.relativize(this).toString(),
+    )
+}
+
+fun Path.firstSegment(): String = first().toString()
 
 inline fun <S : BucketArgs, T : BucketArgs.Builder<out T, out S>> T.bucketBuild(
     bucket: String,
@@ -21,10 +29,23 @@ inline fun <S : BucketArgs, T : BucketArgs.Builder<out T, out S>> T.bucketBuild(
 }
 
 inline fun <S : ObjectArgs, T : ObjectArgs.Builder<out T, out S>> T.objectBuild(
-    bucket: String,
     path: Path,
     configure: T.() -> T = { this },
-): S = bucketBuild(bucket) {
-    `object`(path.toKey())
-    configure()
+): S {
+    val (bucket, key) = path.splitFirstSegment()
+    return bucketBuild(bucket) {
+        `object`(key)
+        configure()
+    }
+}
+
+inline fun <S : ObjectArgs, T : ObjectArgs.Builder<out T, out S>> T.objectBuild(
+    bucket: String,
+    key: Path,
+    configure: T.() -> T = { this },
+): S {
+    return bucketBuild(bucket) {
+        `object`(key.toString())
+        configure()
+    }
 }

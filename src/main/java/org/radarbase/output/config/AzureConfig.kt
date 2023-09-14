@@ -13,7 +13,7 @@ data class AzureConfig(
     /** URL to reach object store at. */
     val endpoint: String,
     /** Name of the Azure Blob Storage container. */
-    val container: String,
+    val container: String? = null,
     /** If no endOffset is in the filename, read it from object metadata. */
     val endOffsetFromMetadata: Boolean = false,
     /** Azure username. */

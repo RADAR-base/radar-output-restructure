@@ -59,8 +59,11 @@ class ProgressBar(
 
         if (progress == total) {
             // go through only once
-            if (isDone) return
-            else isDone = true
+            if (isDone) {
+                return
+            } else {
+                isDone = true
+            }
         }
 
         val builder = StringBuilder(numStripes + 30 + label.length)
@@ -97,8 +100,9 @@ class ProgressBar(
     private fun percentage(builder: StringBuilder, progressPercent: Float) {
         val percent = progressPercent.toInt()
 
-        if (percent < 10) builder.append("  ")
-        else if (percent < 100) builder.append(' ')
+        if (percent < 10) {
+            builder.append("  ")
+        } else if (percent < 100) builder.append(' ')
 
         builder.append(percent).append('%')
     }

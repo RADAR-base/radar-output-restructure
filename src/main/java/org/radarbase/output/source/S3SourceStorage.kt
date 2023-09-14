@@ -23,7 +23,7 @@ class S3SourceStorage(
     config: S3Config,
     private val tempPath: Path,
 ) : SourceStorage {
-    private val bucket = config.bucket
+    private val bucket = requireNotNull(config.bucket) { "Source storage requires a bucket name" }
     private val readEndOffset = config.endOffsetFromTags
 
     override suspend fun list(
@@ -48,7 +48,7 @@ class S3SourceStorage(
                 SimpleFileStatus(
                     Paths.get(item.objectName()),
                     item.isDir,
-                    if (item.isDir) null else item.lastModified().toInstant()
+                    if (item.isDir) null else item.lastModified().toInstant(),
                 )
             }
     }
@@ -64,7 +64,7 @@ class S3SourceStorage(
                     topicFile = topicFile.copy(
                         range = topicFile.range.mapRange {
                             it.copy(to = endOffset)
-                        }
+                        },
                     )
                 }
             } catch (ex: Exception) {

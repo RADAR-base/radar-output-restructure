@@ -24,7 +24,7 @@ class NonEmptyValidator : IParameterValidator {
         if (value.isNullOrEmpty()) {
             throw ParameterException(
                 "Parameter $name should be supplied. It cannot be empty or null. (found $value)." +
-                    " Please run with --help or -h for more information."
+                    " Please run with --help or -h for more information.",
             )
         }
     }

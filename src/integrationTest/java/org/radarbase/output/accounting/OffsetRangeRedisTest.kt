@@ -1,6 +1,5 @@
 package org.radarbase.output.accounting
 
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.*
@@ -14,7 +13,6 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Instant
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class OffsetRangeRedisTest {
     private lateinit var testFile: Path
     private lateinit var redisHolder: RedisHolder
@@ -83,7 +81,7 @@ class OffsetRangeRedisTest {
         redisHolder.execute { redis ->
             val range =
                 redisOffsetReader.readValue<OffsetRedisPersistence.Companion.RedisOffsetRangeSet>(
-                    redis.get(testFile.toString())
+                    redis.get(testFile.toString()),
                 )
             assertEquals(
                 OffsetRedisPersistence.Companion.RedisOffsetRangeSet(
@@ -98,7 +96,7 @@ class OffsetRangeRedisTest {
                         ),
                     ),
                 ),
-                range
+                range,
             )
         }
 

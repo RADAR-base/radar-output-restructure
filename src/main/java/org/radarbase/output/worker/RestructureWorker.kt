@@ -50,14 +50,14 @@ internal class RestructureWorker(
             logger.info(
                 "Processing topic {}: converting {} files",
                 topic,
-                numberFormat.format(numFiles)
+                numberFormat.format(numFiles),
             )
         } else {
             logger.info(
                 "Processing topic {}: converting {} files with {} records",
                 topic,
                 numberFormat.format(numFiles),
-                numberFormat.format(numOffsets)
+                numberFormat.format(numOffsets),
             )
         }
 
@@ -170,7 +170,7 @@ internal class RestructureWorker(
             val path = pathFactory.getRecordPath(
                 transaction.topicPartition.topic,
                 record,
-                attempt = currentSuffix
+                attempt = currentSuffix,
             )
 
             // Write data

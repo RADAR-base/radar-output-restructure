@@ -16,22 +16,42 @@
 
 package org.radarbase.output.path
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.generic.GenericRecordBuilder
-import org.radarbase.output.FileStoreFactory
-import org.radarbase.output.Plugin
+import org.radarbase.output.config.PathConfig
 import org.radarbase.output.config.TopicConfig
 import org.radarbase.output.util.TimeUtil
-import org.slf4j.LoggerFactory
 import java.nio.file.Path
-import java.time.Instant
+import java.nio.file.Paths
 import java.util.regex.Pattern
 
-abstract class RecordPathFactory : Plugin {
-    lateinit var root: Path
-    lateinit var extension: String
-    lateinit var fileStoreFactory: FileStoreFactory
+abstract class RecordPathFactory {
+    lateinit var pathConfig: PathConfig
+        private set
+
+    open fun init(
+        extension: String,
+        config: PathConfig,
+        topics: Map<String, TopicConfig> = emptyMap(),
+    ) {
+        this.pathConfig = config.copy(
+            output = if (config.output.isAbsolute) {
+                rootPath.relativize(config.output)
+            } else {
+                config.output
+            },
+            path = config.path.copy(
+                properties = buildMap(config.path.properties.size + 1) {
+                    putAll(config.path.properties)
+                    putIfAbsent("extension", extension)
+                },
+            ),
+        )
+        this.addTopicConfiguration(topics)
+    }
 
     /**
      * Get the organization of given record in given topic.
@@ -41,18 +61,13 @@ abstract class RecordPathFactory : Plugin {
      * paths already existed and are incompatible.
      * @return organization of given record
      */
-    open fun getRecordPath(
+    open suspend fun getRecordPath(
         topic: String,
         record: GenericRecord,
         attempt: Int,
     ): Path {
-        val keyField = record.get("key")
-        val valueField = record.get("value") as? GenericRecord
-
-        if (keyField == null || valueField == null) {
-            logger.error("Failed to process {}", record)
-            throw IllegalArgumentException("Failed to process $record; no key or value")
-        }
+        val keyField = requireNotNull(record.get("key")) { "Failed to process $record; no key present" }
+        val valueField = requireNotNull(record.get("value") as? GenericRecord) { "Failed to process $record; no value present" }
 
         val keyRecord: GenericRecord = if (keyField is GenericRecord) {
             keyField
@@ -64,33 +79,42 @@ abstract class RecordPathFactory : Plugin {
             }.build()
         }
 
-        val time = TimeUtil.getDate(keyRecord, valueField)
+        val params = PathFormatParameters(
+            topic = topic,
+            key = keyRecord,
+            value = valueField,
+            time = TimeUtil.getDate(keyRecord, valueField),
+            attempt = attempt,
+        )
 
-        val relativePath = getRelativePath(topic, keyRecord, valueField, time, attempt)
-        return root.resolve(relativePath)
+        return coroutineScope {
+            val bucketJob = async { bucket(params) }
+            val pathJob = async { relativePath(params) }
+
+            val path = pathConfig.output.resolve(pathJob.await())
+            val bucket = bucketJob.await()
+            if (bucket != null) {
+                Paths.get(bucket).resolve(path)
+            } else {
+                path
+            }
+        }
     }
+
+    abstract suspend fun bucket(pathParameters: PathFormatParameters?): String?
 
     /**
      * Get the relative path corresponding to given record on given topic.
-     * @param topic Kafka topic name
-     * @param key record key
-     * @param value record value
-     * @param time time contained in the record
-     * @param attempt number of previous attempts to write given record. This increases if previous
-     * paths already existed and are incompatible.
+     * @param pathParameters Parameters needed to determine the path
      * @return relative path corresponding to given parameters.
      */
-    abstract fun getRelativePath(
-        topic: String,
-        key: GenericRecord,
-        value: GenericRecord,
-        time: Instant?,
-        attempt: Int,
-    ): Path
+    abstract suspend fun relativePath(
+        pathParameters: PathFormatParameters,
+    ): String
 
     companion object {
-        private val logger = LoggerFactory.getLogger(RecordPathFactory::class.java)
         private val ILLEGAL_CHARACTER_PATTERN = Pattern.compile("[^a-zA-Z0-9_-]+")
+        private val rootPath = Paths.get("/")
 
         fun sanitizeId(id: Any?, defaultValue: String): String = id
             ?.let { ILLEGAL_CHARACTER_PATTERN.matcher(it.toString()).replaceAll("") }
@@ -110,7 +134,7 @@ abstract class RecordPathFactory : Plugin {
                 {"name": "sourceId", "type": "string", "doc": "Unique identifier associated with the source."}
               ]
             }
-            """.trimIndent()
+            """.trimIndent(),
         )
 
         fun GenericRecord.getFieldOrNull(fieldName: String): Schema.Field? {
@@ -122,5 +146,5 @@ abstract class RecordPathFactory : Plugin {
             ?.let { get(it.pos()) }
     }
 
-    open fun addTopicConfiguration(topicConfig: Map<String, TopicConfig>) = Unit
+    protected open fun addTopicConfiguration(topicConfig: Map<String, TopicConfig>) = Unit
 }

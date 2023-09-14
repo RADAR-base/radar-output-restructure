@@ -17,7 +17,6 @@
 package org.radarbase.output.data
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.apache.avro.Schema.Parser
@@ -49,7 +48,6 @@ import kotlin.io.path.bufferedWriter
 import kotlin.io.path.inputStream
 import kotlin.io.path.outputStream
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class CsvAvroConverterTest {
     @Test
     @Throws(IOException::class)
@@ -246,7 +244,7 @@ class CsvAvroConverterTest {
             source = path,
             target = toPath,
             compression = IdentityCompression(),
-            distinctFields = setOf("a")
+            distinctFields = setOf("a"),
         )
         assertEquals(listOf("a,b", "1,2", "a,a", "3,3"), toPath.readAllLines())
     }

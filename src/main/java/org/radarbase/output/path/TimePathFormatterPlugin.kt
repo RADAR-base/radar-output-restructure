@@ -9,7 +9,7 @@ class TimePathFormatterPlugin : PathFormatterPlugin() {
 
     override val allowedFormats: String = "time:YYYY-mm-dd"
 
-    override fun lookup(parameterContents: String): PathFormatParameters.() -> String {
+    override fun lookup(parameterContents: String): suspend PathFormatParameters.() -> String {
         val dateFormatter = DateTimeFormatter
             .ofPattern(parameterContents)
             .withZone(ZoneOffset.UTC)

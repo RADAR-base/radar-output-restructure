@@ -79,7 +79,7 @@ class OffsetRedisPersistence(
                             topicPartition.partition,
                             offsetIntervals.toList(),
                         )
-                    }
+                    },
                 )
 
                 redisHolder.execute { redis ->

@@ -141,7 +141,9 @@ class SourceDataCleaner(
 
         fun job(config: RestructureConfig, serviceMutex: Mutex): Job? = if (config.cleaner.enable) {
             Job("cleaner", config.cleaner.interval, ::runCleaner, serviceMutex)
-        } else null
+        } else {
+            null
+        }
 
         private suspend fun runCleaner(factory: FileStoreFactory) {
             SourceDataCleaner(factory).useSuspended { cleaner ->

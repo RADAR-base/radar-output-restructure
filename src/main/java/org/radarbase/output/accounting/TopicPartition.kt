@@ -28,6 +28,6 @@ data class TopicPartition(val topic: String, val partition: Int) : Comparable<To
         this,
         other,
         TopicPartition::topic,
-        TopicPartition::partition
+        TopicPartition::partition,
     )
 }

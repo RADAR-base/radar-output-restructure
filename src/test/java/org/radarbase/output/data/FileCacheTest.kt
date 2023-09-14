@@ -17,7 +17,6 @@
 package org.radarbase.output.data
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
@@ -51,7 +50,6 @@ import kotlin.io.path.inputStream
 /**
  * Created by joris on 03/07/2017.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 class FileCacheTest {
     private lateinit var path: Path
     private lateinit var exampleRecord: Record
@@ -78,7 +76,7 @@ class FileCacheTest {
         config = RestructureConfig(
             paths = PathConfig(
                 output = path.parent,
-                temp = tmpPath
+                temp = tmpPath,
             ),
             source = ResourceConfig("hdfs", hdfs = HdfsConfig(listOf("test"))),
         )

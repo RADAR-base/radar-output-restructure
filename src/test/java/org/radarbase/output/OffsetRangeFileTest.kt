@@ -16,7 +16,6 @@
 
 package org.radarbase.output
 
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
@@ -35,7 +34,6 @@ import java.nio.file.Path
 import java.time.Instant
 import kotlin.io.path.createFile
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class OffsetRangeFileTest {
     private lateinit var testFile: Path
     private lateinit var targetStorage: TargetStorage

@@ -16,6 +16,7 @@ class S3SourceStorageTest {
             }
         }
     }
+
     @Test
     fun testFaultTolerant() {
         assertThrows<IOException> {

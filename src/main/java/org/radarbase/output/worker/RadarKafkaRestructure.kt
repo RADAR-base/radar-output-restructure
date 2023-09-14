@@ -135,7 +135,7 @@ class RadarKafkaRestructure(
         return RestructureWorker(
             sourceStorage,
             accountant,
-            fileStoreFactory
+            fileStoreFactory,
         ).useSuspended { worker ->
             try {
                 val topicPaths = TopicFileList(
@@ -176,13 +176,20 @@ class RadarKafkaRestructure(
 
         fun job(config: RestructureConfig, serviceMutex: Mutex): Job? = if (config.worker.enable) {
             Job("restructure", config.service.interval, ::runRestructure, serviceMutex)
-        } else null
+        } else {
+            null
+        }
 
         private suspend fun runRestructure(factory: FileStoreFactory) {
             RadarKafkaRestructure(factory).useSuspended { restructure ->
                 for (input in factory.config.paths.inputs) {
                     logger.info("In:  {}", input)
-                    logger.info("Out: {}", factory.pathFactory.root)
+                    logger.info(
+                        "Out: bucket {} (default {}) - path {}",
+                        factory.pathFactory.pathConfig.bucket?.format,
+                        factory.pathFactory.pathConfig.bucket?.defaultName,
+                        factory.pathFactory.pathConfig.path.format,
+                    )
                     restructure.process(input.toString())
                 }
 

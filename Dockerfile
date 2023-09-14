@@ -10,20 +10,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=$BUILDPLATFORM gradle:7.5-jdk17 AS builder
+FROM --platform=$BUILDPLATFORM gradle:8.3-jdk17 AS builder
 
 RUN mkdir /code
 WORKDIR /code
 ENV GRADLE_USER_HOME=/code/.gradlecache \
-   GRADLE_OPTS=-Djdk.lang.Process.launchMechanism=vfork
+   GRADLE_OPTS="-Djdk.lang.Process.launchMechanism=vfork -Dorg.gradle.vfs.watch=false"
 
 COPY ./build.gradle.kts ./gradle.properties ./settings.gradle.kts /code/
+COPY ./buildSrc /code/buildSrc
 
-RUN gradle downloadDependencies copyDependencies startScripts --no-watch-fs
+RUN gradle downloadDependencies copyDependencies startScripts
 
 COPY ./src /code/src
 
-RUN gradle jar --no-watch-fs
+RUN gradle jar
 
 FROM eclipse-temurin:17-jre
 

@@ -75,7 +75,7 @@ class LocalTargetStorage(private val config: LocalConfig) : TargetStorage {
         doMove(localPath, newPath)
     }
 
-    override fun createDirectories(directory: Path) {
+    override suspend fun createDirectories(directory: Path) = withContext(Dispatchers.IO) {
         directory.createDirectories(
             PosixFilePermissions.asFileAttribute(
                 PosixFilePermissions.fromString("rwxr-xr-x"),
@@ -94,7 +94,9 @@ class LocalTargetStorage(private val config: LocalConfig) : TargetStorage {
     }
 
     @Throws(IOException::class)
-    override suspend fun delete(path: Path) = path.deleteExisting()
+    override suspend fun delete(path: Path) = withContext(Dispatchers.IO) {
+        path.deleteExisting()
+    }
 
     companion object {
         private val logger = LoggerFactory.getLogger(LocalTargetStorage::class.java)

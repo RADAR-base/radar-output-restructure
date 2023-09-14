@@ -95,6 +95,6 @@ class TimestampFileCacheStore(private val factory: FileStoreFactory) {
         FILE_NOT_FOUND,
         BAD_SCHEMA,
         NOT_FOUND,
-        FOUND
+        FOUND,
     }
 }
