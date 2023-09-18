@@ -21,7 +21,11 @@ import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.compression.Compression
 import org.radarbase.output.util.ResourceContext.Companion.resourceContext
-import java.io.*
+import java.io.BufferedReader
+import java.io.IOException
+import java.io.InputStream
+import java.io.Reader
+import java.io.Writer
 import java.nio.file.Path
 import java.util.regex.Pattern
 import kotlin.collections.component1

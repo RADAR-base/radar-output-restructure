@@ -1,5 +1,9 @@
 package org.radarbase.output.source
 
+/**
+ * Delegate all calls directly to the underlying storage. This effectively means that no caching
+ * takes place.
+ */
 class DelegatingStorageIndex(
     private val sourceStorage: SourceStorage,
 ) : StorageIndex {

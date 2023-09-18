@@ -4,7 +4,11 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.radarbase.output.compression.*
+import org.radarbase.output.compression.Compression
+import org.radarbase.output.compression.CompressionFactory
+import org.radarbase.output.compression.GzipCompression
+import org.radarbase.output.compression.IdentityCompression
+import org.radarbase.output.compression.ZipCompression
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException

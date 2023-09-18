@@ -5,7 +5,11 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.path.RecordPathFactory.Companion.getFieldOrNull
 import java.math.RoundingMode
-import java.time.*
+import java.time.Duration
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneOffset.UTC
 import java.time.format.DateTimeParseException
 import java.time.temporal.Temporal
 
@@ -131,7 +135,7 @@ object TimeUtil {
 
     fun String.parseDate(): Instant? = try {
         LocalDate.parse(this)
-            .atStartOfDay(ZoneOffset.UTC)
+            .atStartOfDay(UTC)
             .toInstant()
     } catch (ex: DateTimeParseException) {
         null
@@ -141,7 +145,7 @@ object TimeUtil {
         if (this[lastIndex] == 'Z') {
             Instant.parse(this)
         } else {
-            LocalDateTime.parse(this).toInstant(ZoneOffset.UTC)
+            LocalDateTime.parse(this).toInstant(UTC)
         }
     } catch (ex: DateTimeParseException) {
         null

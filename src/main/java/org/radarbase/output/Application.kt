@@ -18,17 +18,26 @@ package org.radarbase.output
 
 import com.beust.jcommander.JCommander
 import com.beust.jcommander.ParameterException
-import kotlinx.coroutines.*
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
-import org.radarbase.output.accounting.*
+import org.radarbase.output.accounting.Accountant
+import org.radarbase.output.accounting.OffsetPersistenceFactory
+import org.radarbase.output.accounting.OffsetRedisPersistence
+import org.radarbase.output.accounting.RedisHolder
+import org.radarbase.output.accounting.RedisRemoteLockManager
+import org.radarbase.output.accounting.RemoteLockManager
 import org.radarbase.output.cleaner.SourceDataCleaner
 import org.radarbase.output.compression.Compression
 import org.radarbase.output.config.CommandLineArgs
 import org.radarbase.output.config.RestructureConfig
 import org.radarbase.output.format.RecordConverterFactory
 import org.radarbase.output.path.RecordPathFactory
-import org.radarbase.output.source.*
+import org.radarbase.output.source.InMemoryStorageIndex
+import org.radarbase.output.source.SourceStorage
+import org.radarbase.output.source.SourceStorageFactory
+import org.radarbase.output.source.StorageIndexManager
 import org.radarbase.output.target.TargetStorage
 import org.radarbase.output.target.TargetStorageFactory
 import org.radarbase.output.util.Timer
@@ -92,12 +101,12 @@ class Application(
         }.map { Duration.ofSeconds(it) }
 
         storageIndexManagers = config.paths.inputs.associateWith { input ->
-            MutableStorageIndexManager(
+            StorageIndexManager(
                 InMemoryStorageIndex(),
                 sourceStorage,
+                input,
                 fullScan,
                 emptyScan,
-                input,
             )
         }
         val serviceMutex = Mutex()

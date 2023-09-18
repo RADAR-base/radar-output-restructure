@@ -1,6 +1,9 @@
 package org.radarbase.output.source
 
-import io.minio.*
+import io.minio.GetObjectTagsArgs
+import io.minio.ListObjectsArgs
+import io.minio.MinioClient
+import io.minio.RemoveObjectArgs
 import io.minio.errors.ErrorResponseException
 import io.minio.messages.Tags
 import kotlinx.coroutines.Dispatchers

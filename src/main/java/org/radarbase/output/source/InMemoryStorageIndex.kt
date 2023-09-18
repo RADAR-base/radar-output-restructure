@@ -5,6 +5,11 @@ import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 
+/**
+ * Storage index that keeps the given file tree in memory.
+ * For very large file systems, this may
+ * cause a memory issue.
+ */
 class InMemoryStorageIndex : MutableStorageIndex {
     private val fileIndex: ConcurrentMap<StorageNode.StorageDirectory, Map<Path, StorageNode>> = ConcurrentHashMap()
     private val rootSet = ConcurrentHashMap<Path, StorageNode>()
@@ -27,35 +32,33 @@ class InMemoryStorageIndex : MutableStorageIndex {
         }
     }
 
-    private fun add(node: StorageNode) {
-        var currentNode = node
-        var parent = currentNode.parent()
-        if (currentNode is StorageNode.StorageDirectory) {
-            fileIndex.computeIfAbsent(currentNode) {
-                mapOf()
-            }
-        }
-        while (parent != null) {
-            fileIndex.compute(parent) { _, map ->
+    /** Adds a node and all its parents to the file hierarchy. */
+    private fun add(dir: StorageNode.StorageDirectory) {
+        var currentDir = dir
+        var parentDir = currentDir.parent()
+        while (parentDir != null) {
+            fileIndex.compute(parentDir) { _, map ->
                 if (map == null) {
-                    mapOf(currentNode.path to currentNode)
+                    mapOf(currentDir.path to currentDir)
                 } else {
-                    val newMap = map.toMutableMap()
-                    newMap[currentNode.path] = currentNode
-                    newMap
+                    buildMap(map.size + 1) {
+                        putAll(map)
+                        put(currentDir.path, currentDir)
+                    }
                 }
             }
-            currentNode = parent
-            parent = currentNode.parent()
+            currentDir = parentDir
+            parentDir = currentDir.parent()
         }
-        rootSet[currentNode.path] = currentNode
+        rootSet[currentDir.path] = currentDir
     }
 
     override suspend fun addAll(parent: StorageNode.StorageDirectory, nodes: List<StorageNode>): Collection<StorageNode> {
         add(parent)
 
         if (nodes.isEmpty()) {
-            return fileIndex[parent]?.values ?: listOf()
+            return fileIndex[parent]?.values
+                ?: listOf()
         }
 
         nodes.asSequence()
@@ -81,7 +84,7 @@ class InMemoryStorageIndex : MutableStorageIndex {
         return newMap.values
     }
 
-    override suspend fun sync(parent: StorageNode.StorageDirectory, nodes: List<StorageNode>): Collection<StorageNode> {
+    override suspend fun sync(parent: StorageNode.StorageDirectory, nodes: List<StorageNode>) {
         add(parent)
         val newMap = buildMap(nodes.size) {
             nodes.forEach { put(it.path, it) }
@@ -93,8 +96,6 @@ class InMemoryStorageIndex : MutableStorageIndex {
             .filterIsInstance<StorageNode.StorageDirectory>()
             .filter { it.path !in newMap }
             .forEach { removeRecursive(it) }
-
-        return newMap.values
     }
 
     override suspend fun remove(file: StorageNode.StorageFile) {
