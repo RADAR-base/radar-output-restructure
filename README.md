@@ -118,7 +118,15 @@ source:
   # only actually needed if source type is hdfs
   azure:
     # azure options
+  index:
+    # Interval to fully synchronize the index with the source storage
+    fullSyncInterval: 3600
+    # Interval to sync empty directories with.
+    # They are also synced during a full sync.
+    emptyDirectorySyncInterval: 900
 ```
+
+The index makes a scan of the source before any operations. Further list operations are done on the index only. This is especially relevant for S3 storage where list operations are priced.
 
 The target is similar, and in addition supports the local file system (`local`).
 

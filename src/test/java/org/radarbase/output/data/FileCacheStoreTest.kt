@@ -35,7 +35,11 @@ import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.OffsetRangeSet
 import org.radarbase.output.accounting.TopicPartition
 import org.radarbase.output.accounting.TopicPartitionOffsetRange
-import org.radarbase.output.config.*
+import org.radarbase.output.config.HdfsConfig
+import org.radarbase.output.config.PathConfig
+import org.radarbase.output.config.ResourceConfig
+import org.radarbase.output.config.RestructureConfig
+import org.radarbase.output.config.WorkerConfig
 import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.worker.FileCacheStore
 import java.io.IOException

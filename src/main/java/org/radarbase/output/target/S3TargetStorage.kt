@@ -16,7 +16,16 @@
 
 package org.radarbase.output.target
 
-import io.minio.*
+import io.minio.BucketArgs
+import io.minio.BucketExistsArgs
+import io.minio.CopyObjectArgs
+import io.minio.CopySource
+import io.minio.GetObjectArgs
+import io.minio.MakeBucketArgs
+import io.minio.MinioClient
+import io.minio.RemoveObjectArgs
+import io.minio.StatObjectArgs
+import io.minio.UploadObjectArgs
 import org.radarbase.kotlin.coroutines.CacheConfig
 import org.radarbase.kotlin.coroutines.CachedValue
 import org.radarbase.output.config.S3Config

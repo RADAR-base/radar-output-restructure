@@ -16,15 +16,16 @@ interface SourceStorage {
     /** List all files in the given directory. */
     suspend fun list(
         path: Path,
+        startAfter: Path? = null,
         maxKeys: Int? = null,
-    ): List<SimpleFileStatus>
+    ): List<StorageNode>
 
     /** Delete given file. Will not delete any directories. */
     suspend fun delete(path: Path)
-    suspend fun createTopicFile(topic: String, status: SimpleFileStatus): TopicFile = TopicFile(
+    suspend fun createTopicFile(topic: String, status: StorageNode): TopicFile = TopicFile(
         topic = topic,
         path = status.path,
-        lastModified = status.lastModified ?: Instant.now(),
+        lastModified = if (status is StorageNode.StorageFile) status.lastModified else Instant.now(),
     )
 
     /**
@@ -32,11 +33,12 @@ interface SourceStorage {
      * The path must only contain records of a single topic, this is not verified.
      */
     suspend fun listTopicFiles(
+        storageIndex: StorageIndex,
         topic: String,
         topicPath: Path,
         limit: Int,
         predicate: (TopicFile) -> Boolean,
-    ): List<TopicFile> = avroFileTreeLister()
+    ): List<TopicFile> = storageIndex.avroFileTreeLister(this)
         .list(TopicPath(topic, topicPath), limit, predicate)
 
     /**
@@ -44,9 +46,10 @@ interface SourceStorage {
      * Exclude paths belonging to the set of given excluded topics.
      */
     suspend fun listTopics(
+        storageIndex: StorageIndex,
         root: Path,
         exclude: Set<String>,
-    ): List<Path> = avroTopicTreeLister()
+    ): List<Path> = storageIndex.avroTopicTreeLister()
         .listTo(LinkedHashSet(), root)
         .filter { it.fileName.toString() !in exclude }
 

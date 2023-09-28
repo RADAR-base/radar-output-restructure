@@ -11,6 +11,8 @@ import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.AccountantImpl
 import org.radarbase.output.config.RestructureConfig
+import org.radarbase.output.source.StorageIndex
+import org.radarbase.output.source.StorageNode
 import org.radarbase.output.util.ResourceContext.Companion.resourceContext
 import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.util.Timer
@@ -43,11 +45,11 @@ class SourceDataCleaner(
     private val supervisor = SupervisorJob()
 
     @Throws(IOException::class, InterruptedException::class)
-    suspend fun process(directoryName: String) {
+    suspend fun process(storageIndex: StorageIndex, directoryName: String) {
         // Get files and directories
         val absolutePath = Paths.get(directoryName)
 
-        val paths = topicPaths(absolutePath)
+        val paths = topicPaths(storageIndex, absolutePath)
 
         logger.info("{} topics found", paths.size)
 
@@ -56,7 +58,7 @@ class SourceDataCleaner(
                 launch {
                     try {
                         val deleteCount = fileStoreFactory.workerSemaphore.withPermit {
-                            mapTopic(p)
+                            mapTopic(storageIndex, p)
                         }
                         if (deleteCount > 0) {
                             logger.info("Removed {} files in topic {}", deleteCount, p.fileName)
@@ -70,7 +72,7 @@ class SourceDataCleaner(
         }
     }
 
-    private suspend fun mapTopic(topicPath: Path): Long {
+    private suspend fun mapTopic(storageIndex: StorageIndex, topicPath: Path): Long {
         val topic = topicPath.fileName.toString()
         return try {
             lockManager.tryWithLock(topic) {
@@ -84,7 +86,7 @@ class SourceDataCleaner(
                                 fileStoreFactory,
                             )
                         }
-                        deleteOldFiles(accountant, extractionCheck, topic, topicPath).toLong()
+                        deleteOldFiles(storageIndex, accountant, extractionCheck, topic, topicPath).toLong()
                     }
                 }
             }
@@ -95,6 +97,7 @@ class SourceDataCleaner(
     }
 
     private suspend fun deleteOldFiles(
+        storageIndex: StorageIndex,
         accountant: Accountant,
         extractionCheck: ExtractionCheck,
         topic: String,
@@ -102,7 +105,7 @@ class SourceDataCleaner(
     ): Int {
         val offsets = accountant.offsets.copyForTopic(topic)
 
-        val paths = sourceStorage.listTopicFiles(topic, topicPath, maxFilesPerTopic) { f ->
+        val paths = sourceStorage.listTopicFiles(storageIndex, topic, topicPath, maxFilesPerTopic) { f ->
             f.lastModified.isBefore(deleteThreshold) &&
                 // ensure that there is a file with a larger offset also
                 // processed, so the largest offset is never removed.
@@ -115,6 +118,7 @@ class SourceDataCleaner(
                     logger.info("Removing {}", file.path)
                     Timer.time("cleaner.delete") {
                         sourceStorage.delete(file.path)
+                        storageIndex.remove(StorageNode.StorageFile(file.path, Instant.MIN))
                     }
                     true
                 } else {
@@ -127,8 +131,8 @@ class SourceDataCleaner(
             }
     }
 
-    private suspend fun topicPaths(path: Path): List<Path> =
-        sourceStorage.listTopics(path, excludeTopics)
+    private suspend fun topicPaths(storageIndex: StorageIndex, path: Path): List<Path> =
+        sourceStorage.listTopics(storageIndex, path, excludeTopics)
             // different services start on different topics to decrease lock contention
             .shuffled()
 
@@ -147,9 +151,10 @@ class SourceDataCleaner(
 
         private suspend fun runCleaner(factory: FileStoreFactory) {
             SourceDataCleaner(factory).useSuspended { cleaner ->
-                for (input in factory.config.paths.inputs) {
+                for ((input, indexManager) in factory.storageIndexManagers) {
+                    indexManager.update()
                     logger.info("Cleaning {}", input)
-                    cleaner.process(input.toString())
+                    cleaner.process(indexManager.storageIndex, input.toString())
                 }
                 logger.info("Cleaned up {} files", cleaner.deletedFileCount.format())
             }

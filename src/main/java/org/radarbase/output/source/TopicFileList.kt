@@ -26,5 +26,3 @@ data class TopicFile(
 
     val size: Long? = range.range.size
 }
-
-data class SimpleFileStatus(val path: Path, val isDirectory: Boolean, val lastModified: Instant?)

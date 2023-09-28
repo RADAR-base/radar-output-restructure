@@ -34,6 +34,12 @@ source:
   # only actually needed if source type is hdfs
   hdfs:
     nameNodes: [hdfs-namenode-1, hdfs-namenode-2]
+  index:
+    # Interval to fully synchronize the index with the storage
+    fullSyncInterval: 3600
+    # Interval to sync empty directories with.
+    # They are also synced during a full sync.
+    emptyDirectorySyncInterval: 900
 
 # Target data resource
 # @since: 0.7.0
