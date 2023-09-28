@@ -1,5 +1,5 @@
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.radarbase.gradle.plugin.radarKotlin
+import org.radarbase.gradle.plugin.radarPublishing
 import java.time.Duration
 
 plugins {
@@ -7,6 +7,7 @@ plugins {
     id("org.radarbase.radar-root-project") version Versions.radarCommons
     id("org.radarbase.radar-dependency-management") version Versions.radarCommons
     id("org.radarbase.radar-kotlin") version Versions.radarCommons
+    id("org.radarbase.radar-publishing") version Versions.radarCommons
     id("com.avast.gradle.docker-compose") version Versions.dockerCompose
 }
 
@@ -22,6 +23,19 @@ radarKotlin {
     javaVersion.set(Versions.java)
     log4j2Version.set(Versions.log4j2)
     slf4jVersion.set(Versions.slf4j)
+}
+
+radarPublishing {
+    val githubRepoName = "RADAR-base/radar-output-restructure"
+    githubUrl.set("https://github.com/$githubRepoName.git")
+    developers {
+        developer {
+            id.set("blootsvoets")
+            name.set("Joris Borgdorff")
+            email.set("joris@thehyve.nl")
+            organization.set("The Hyve")
+        }
+    }
 }
 
 sourceSets {
@@ -86,9 +100,6 @@ dependencies {
 
 application {
     mainClass.set("org.radarbase.output.Application")
-    applicationDefaultJvmArgs = listOf(
-        "-Djava.security.egd=file:/dev/./urandom",
-    )
 }
 
 distributions {
@@ -98,12 +109,6 @@ distributions {
                 from("README.md", "LICENSE")
             }
         }
-    }
-}
-
-tasks.withType<KotlinCompile> {
-    kotlinOptions {
-        freeCompilerArgs = listOf("-opt-in=kotlin.RequiresOptIn")
     }
 }
 
