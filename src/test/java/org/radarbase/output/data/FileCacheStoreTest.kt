@@ -35,10 +35,10 @@ import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.OffsetRangeSet
 import org.radarbase.output.accounting.TopicPartition
 import org.radarbase.output.accounting.TopicPartitionOffsetRange
-import org.radarbase.output.config.HdfsConfig
 import org.radarbase.output.config.PathConfig
 import org.radarbase.output.config.ResourceConfig
 import org.radarbase.output.config.RestructureConfig
+import org.radarbase.output.config.S3Config
 import org.radarbase.output.config.WorkerConfig
 import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.worker.FileCacheStore
@@ -88,7 +88,7 @@ class FileCacheStoreTest {
                     temp = tmpDir,
                 ),
                 worker = WorkerConfig(cacheSize = 2),
-                source = ResourceConfig("hdfs", hdfs = HdfsConfig(listOf("test"))),
+                source = ResourceConfig(type = "s3", s3 = S3Config("endpoint", null, null)),
             ),
         )
 

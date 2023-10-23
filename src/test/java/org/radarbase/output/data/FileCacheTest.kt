@@ -32,10 +32,10 @@ import org.mockito.kotlin.mock
 import org.radarbase.output.Application
 import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.TopicPartition
-import org.radarbase.output.config.HdfsConfig
 import org.radarbase.output.config.PathConfig
 import org.radarbase.output.config.ResourceConfig
 import org.radarbase.output.config.RestructureConfig
+import org.radarbase.output.config.S3Config
 import org.radarbase.output.util.ResourceContext.Companion.resourceContext
 import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.worker.FileCache
@@ -78,7 +78,7 @@ class FileCacheTest {
                 output = path.parent,
                 temp = tmpPath,
             ),
-            source = ResourceConfig("hdfs", hdfs = HdfsConfig(listOf("test"))),
+            source = ResourceConfig("s3", S3Config("endpoint", null, null)),
         )
 
         setUp(config)

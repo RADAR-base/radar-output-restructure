@@ -125,7 +125,7 @@ internal class RestructureWorker(
 
         return reader.newInput(file).use { input ->
             // processing zero-length files may trigger a stall. See:
-            // https://github.com/RADAR-base/Restructure-HDFS-topic/issues/3
+            // https://github.com/RADAR-base/radar-output-restructure/issues/3
             if (input.length() == 0L) {
                 logger.warn("File {} has zero length, skipping.", file.path)
                 return 0L
