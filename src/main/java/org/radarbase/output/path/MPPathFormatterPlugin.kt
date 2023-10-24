@@ -83,10 +83,13 @@ class MPPathFormatterPlugin : PathFormatterPlugin.Factory {
             }
 
             pluginScope.launch {
+                val staleDuration = 20.minutes
+                val delayDuration = staleDuration * 3 / 2
+
                 while (isActive) {
-                    delay(30.minutes)
+                    delay(delayDuration)
                     subjectCache
-                        .filter { it.value.isStale(20.minutes) }
+                        .filter { it.value.isStale(staleDuration) }
                         .forEach { (key, value) ->
                             subjectCache.remove(key, value)
                         }
@@ -106,13 +109,15 @@ class MPPathFormatterPlugin : PathFormatterPlugin.Factory {
                 "group" -> subjectProperty("default") { group }
                 "externalId" -> subjectProperty("unknown-user") { externalId ?: id }
                 "userId", "login", "id" -> subjectProperty("unknown-user") { id }
-                else -> if (parameterContents.startsWith("project:")) {
-                    projectProperty("unknown-$parameterContents") {
-                        attributes[parameterContents.removePrefix("project:")]
-                    }
-                } else {
-                    subjectProperty("unknown-$parameterContents") {
-                        attributes[parameterContents]
+                else -> {
+                    if (parameterContents.startsWith("project:")) {
+                        projectProperty("unknown-$parameterContents") {
+                            attributes[parameterContents.removePrefix("project:")]
+                        }
+                    } else {
+                        subjectProperty("unknown-$parameterContents") {
+                            attributes[parameterContents]
+                        }
                     }
                 }
             }
@@ -128,18 +133,18 @@ class MPPathFormatterPlugin : PathFormatterPlugin.Factory {
             val projectId = key.getOrNull("projectId") ?: return null
             val userId = key.getOrNull("userId") ?: return null
 
-            val cache = subjectCache.computeIfAbsent(projectId.toString()) { projectIdString ->
-                CachedMap(cacheConfig) {
-                    val subjects = mpClient.requestSubjects(projectIdString)
-                    buildMap(subjects.size) {
-                        subjects.forEach { subject ->
-                            val subjectId = subject.id ?: return@forEach
-                            put(subjectId, subject)
-                        }
-                    }
+            val cache = subjectCache.computeIfAbsent(projectId.toString(), ::createCache)
+            return cache.get(userId.toString())
+        }
+
+        private fun createCache(projectId: String) = CachedMap(cacheConfig) {
+            val subjects = mpClient.requestSubjects(projectId)
+            buildMap(subjects.size) {
+                subjects.forEach { subject ->
+                    val subjectId = subject.id ?: return@forEach
+                    put(subjectId, subject)
                 }
             }
-            return cache.get(userId.toString())
         }
 
         private inline fun projectProperty(

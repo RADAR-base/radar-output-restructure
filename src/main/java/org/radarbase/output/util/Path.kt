@@ -9,11 +9,11 @@ fun Path.withoutFirstSegment(): String {
     return first().relativize(this).toString()
 }
 
-fun Path.splitFirstSegment(): Pair<String, String> {
+fun Path.splitFirstSegment(): Pair<String, Path> {
     val bucketPath = first()
     return Pair(
         bucketPath.toString(),
-        bucketPath.relativize(this).toString(),
+        bucketPath.relativize(this),
     )
 }
 
@@ -26,17 +26,6 @@ inline fun <S : BucketArgs, T : BucketArgs.Builder<out T, out S>> T.bucketBuild(
     bucket(bucket)
     configure()
     return build()
-}
-
-inline fun <S : ObjectArgs, T : ObjectArgs.Builder<out T, out S>> T.objectBuild(
-    path: Path,
-    configure: T.() -> T = { this },
-): S {
-    val (bucket, key) = path.splitFirstSegment()
-    return bucketBuild(bucket) {
-        `object`(key)
-        configure()
-    }
 }
 
 inline fun <S : ObjectArgs, T : ObjectArgs.Builder<out T, out S>> T.objectBuild(

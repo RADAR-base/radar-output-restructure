@@ -6,13 +6,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import org.radarbase.kotlin.coroutines.launchJoin
 import org.radarbase.output.Application.Companion.format
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.AccountantImpl
 import org.radarbase.output.config.RestructureConfig
-import org.radarbase.output.source.StorageIndex
-import org.radarbase.output.source.StorageNode
+import org.radarbase.output.source.SourceStorageManager
 import org.radarbase.output.util.ResourceContext.Companion.resourceContext
 import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.util.Timer
@@ -21,7 +21,6 @@ import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.IOException
 import java.nio.file.Path
-import java.nio.file.Paths
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.atomic.LongAdder
@@ -29,9 +28,10 @@ import kotlin.coroutines.coroutineContext
 
 class SourceDataCleaner(
     private val fileStoreFactory: FileStoreFactory,
+    private val sourceStorageManager: SourceStorageManager,
 ) : Closeable {
+    private val sourceStorage = sourceStorageManager.sourceStorage
     private val lockManager = fileStoreFactory.remoteLockManager
-    private val sourceStorage = fileStoreFactory.sourceStorage
     private val excludeTopics: Set<String> = fileStoreFactory.config.topics
         .mapNotNullTo(HashSet()) { (topic, conf) ->
             topic.takeIf { conf.excludeFromDelete }
@@ -45,11 +45,9 @@ class SourceDataCleaner(
     private val supervisor = SupervisorJob()
 
     @Throws(IOException::class, InterruptedException::class)
-    suspend fun process(storageIndex: StorageIndex, directoryName: String) {
+    suspend fun process() {
         // Get files and directories
-        val absolutePath = Paths.get(directoryName)
-
-        val paths = topicPaths(storageIndex, absolutePath)
+        val paths = topicPaths(sourceStorage.root)
 
         logger.info("{} topics found", paths.size)
 
@@ -58,7 +56,7 @@ class SourceDataCleaner(
                 launch {
                     try {
                         val deleteCount = fileStoreFactory.workerSemaphore.withPermit {
-                            mapTopic(storageIndex, p)
+                            mapTopic(p)
                         }
                         if (deleteCount > 0) {
                             logger.info("Removed {} files in topic {}", deleteCount, p.fileName)
@@ -72,7 +70,7 @@ class SourceDataCleaner(
         }
     }
 
-    private suspend fun mapTopic(storageIndex: StorageIndex, topicPath: Path): Long {
+    private suspend fun mapTopic(topicPath: Path): Long {
         val topic = topicPath.fileName.toString()
         return try {
             lockManager.tryWithLock(topic) {
@@ -86,7 +84,7 @@ class SourceDataCleaner(
                                 fileStoreFactory,
                             )
                         }
-                        deleteOldFiles(storageIndex, accountant, extractionCheck, topic, topicPath).toLong()
+                        deleteOldFiles(accountant, extractionCheck, topic, topicPath).toLong()
                     }
                 }
             }
@@ -97,7 +95,6 @@ class SourceDataCleaner(
     }
 
     private suspend fun deleteOldFiles(
-        storageIndex: StorageIndex,
         accountant: Accountant,
         extractionCheck: ExtractionCheck,
         topic: String,
@@ -105,7 +102,7 @@ class SourceDataCleaner(
     ): Int {
         val offsets = accountant.offsets.copyForTopic(topic)
 
-        val paths = sourceStorage.listTopicFiles(storageIndex, topic, topicPath, maxFilesPerTopic) { f ->
+        val paths = sourceStorageManager.listTopicFiles(topic, topicPath, maxFilesPerTopic) { f ->
             f.lastModified.isBefore(deleteThreshold) &&
                 // ensure that there is a file with a larger offset also
                 // processed, so the largest offset is never removed.
@@ -117,8 +114,7 @@ class SourceDataCleaner(
                 if (extractionCheck.isExtracted(file)) {
                     logger.info("Removing {}", file.path)
                     Timer.time("cleaner.delete") {
-                        sourceStorage.delete(file.path)
-                        storageIndex.remove(StorageNode.StorageFile(file.path, Instant.MIN))
+                        sourceStorageManager.delete(file.path)
                     }
                     true
                 } else {
@@ -131,8 +127,8 @@ class SourceDataCleaner(
             }
     }
 
-    private suspend fun topicPaths(storageIndex: StorageIndex, path: Path): List<Path> =
-        sourceStorage.listTopics(storageIndex, path, excludeTopics)
+    private suspend fun topicPaths(path: Path): List<Path> =
+        sourceStorageManager.listTopics(path, excludeTopics)
             // different services start on different topics to decrease lock contention
             .shuffled()
 
@@ -149,14 +145,14 @@ class SourceDataCleaner(
             null
         }
 
-        private suspend fun runCleaner(factory: FileStoreFactory) {
-            SourceDataCleaner(factory).useSuspended { cleaner ->
-                for ((input, indexManager) in factory.storageIndexManagers) {
-                    indexManager.update()
-                    logger.info("Cleaning {}", input)
-                    cleaner.process(indexManager.storageIndex, input.toString())
+        private suspend fun runCleaner(factory: FileStoreFactory) = coroutineScope {
+            factory.sourceStorage.launchJoin { sourceStorage ->
+                SourceDataCleaner(factory, sourceStorage).useSuspended { cleaner ->
+                    sourceStorage.storageIndexManager.update()
+                    logger.info("Cleaning {}", sourceStorage.sourceStorage.root)
+                    cleaner.process()
+                    logger.info("Cleaned up {} files", cleaner.deletedFileCount.format())
                 }
-                logger.info("Cleaned up {} files", cleaner.deletedFileCount.format())
             }
         }
     }

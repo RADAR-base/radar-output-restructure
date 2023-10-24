@@ -1,10 +1,10 @@
 package org.radarbase.output.source
 
 import org.radarbase.kotlin.coroutines.forkJoin
+import org.radarbase.output.config.StorageIndexConfig
 import org.slf4j.LoggerFactory
 import java.nio.file.Path
-import java.time.Duration
-import java.time.Instant
+import kotlin.time.TimeSource.Monotonic.markNow
 
 /** Manager to manage a storage index. */
 class StorageIndexManager(
@@ -14,43 +14,41 @@ class StorageIndexManager(
     private val sourceStorage: SourceStorage,
     /** Root directory in source storage to start scanning. */
     root: Path,
-    /** How often to rescan the full directory structure. */
-    private val rescanDirectoryDuration: Duration,
-    /** How often to rescan empty directories. */
-    private val rescanEmptyDuration: Duration,
+    config: StorageIndexConfig,
 ) {
     private val root = StorageNode.StorageDirectory(root)
+    private val rescanEmptyDuration = config.emptyDirectorySyncDuration
+    private val rescanDirectoryDuration = config.fullSyncDuration
 
-    private var nextSync = Instant.MIN
+    private var nextSync = markNow()
 
-    private var nextEmptySync = Instant.MIN
+    private var nextEmptySync = markNow()
 
     /** Update the storage index, taking into account caching times. */
     suspend fun update() {
         if (storageIndex !is MutableStorageIndex) return
-        if (nextSync < Instant.now()) {
-            sync()
-        } else {
-            val rescanEmpty = nextEmptySync < Instant.now()
-            if (rescanEmpty) {
-                logger.info("Updating source {} index (including empty directories)...", root)
-                nextEmptySync = Instant.now() + rescanEmptyDuration
-            } else {
-                logger.info("Updating source {} index (excluding empty directories)...", root)
+        when {
+            nextSync.hasPassedNow() -> {
+                sync()
             }
-            val listOperations = storageIndex.updateLevel(root, rescanEmpty)
-            logger.debug("Updated source {} with {} list operations...", root, listOperations)
+            nextEmptySync.hasPassedNow() -> {
+                logger.info("Updating source {} index (including empty directories)...", root)
+                nextEmptySync = markNow() + rescanEmptyDuration
+                val listOperations = storageIndex.updateLevel(root, true)
+                logger.debug("Updated source {} with {} list operations...", root, listOperations)
+            }
+            else -> {
+                logger.info("Updating source {} index (excluding empty directories)...", root)
+                val listOperations = storageIndex.updateLevel(root, false)
+                logger.debug("Updated source {} with {} list operations...", root, listOperations)
+            }
         }
     }
 
     private suspend fun MutableStorageIndex.updateLevel(node: StorageNode.StorageDirectory, rescanEmpty: Boolean): Long {
         val list = list(node)
         if (list.isEmpty()) {
-            return if (rescanEmpty) {
-                syncLevel(node)
-            } else {
-                0L
-            }
+            return if (rescanEmpty) syncLevel(node) else 0L
         }
         val lastFile = list.asSequence()
             .filterIsInstance<StorageNode.StorageFile>()
@@ -78,8 +76,9 @@ class StorageIndexManager(
         logger.info("Syncing source {} index...", root)
         val listOperations = storageIndex.syncLevel(root)
         logger.debug("Synced source {} index with {} list operations...", root, listOperations)
-        nextSync = Instant.now() + rescanDirectoryDuration
-        nextEmptySync = Instant.now() + rescanEmptyDuration
+        val now = markNow()
+        nextSync = now + rescanDirectoryDuration
+        nextEmptySync = now + rescanEmptyDuration
     }
 
     private suspend fun MutableStorageIndex.syncLevel(node: StorageNode.StorageDirectory): Long {

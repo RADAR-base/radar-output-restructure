@@ -104,6 +104,7 @@ object Timer {
         fun add(nanoTime: Long) {
             invocations.increment()
             totalTime.add(nanoTime)
+            @Suppress("DEPRECATION", "KotlinRedundantDiagnosticSuppress")
             val threadId = Thread.currentThread().id
             threads[threadId] = threadId
         }

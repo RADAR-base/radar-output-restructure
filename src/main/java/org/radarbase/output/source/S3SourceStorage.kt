@@ -23,6 +23,7 @@ import kotlin.io.path.pathString
 import kotlin.time.Duration.Companion.seconds
 
 class S3SourceStorage(
+    override val root: Path,
     private val s3Client: MinioClient,
     config: S3Config,
     private val tempPath: Path,

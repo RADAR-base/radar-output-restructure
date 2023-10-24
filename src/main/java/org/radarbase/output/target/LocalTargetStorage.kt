@@ -36,7 +36,10 @@ import kotlin.io.path.moveTo
 import kotlin.io.path.setAttribute
 import kotlin.io.path.setPosixFilePermissions
 
-class LocalTargetStorage(private val config: LocalConfig) : TargetStorage {
+class LocalTargetStorage(
+    private val root: Path,
+    private val config: LocalConfig,
+) : TargetStorage {
     init {
         logger.info(
             "Local storage configured with user id {}:{} (-1 if not configured)",
@@ -48,23 +51,25 @@ class LocalTargetStorage(private val config: LocalConfig) : TargetStorage {
     override suspend fun initialize() = Unit
 
     @Throws(IOException::class)
-    override suspend fun status(path: Path): TargetStorage.PathStatus? =
-        withContext(Dispatchers.IO) {
-            if (path.exists()) {
-                TargetStorage.PathStatus(path.fileSize())
+    override suspend fun status(path: Path): TargetStorage.PathStatus? {
+        val rootedPath = path.withRoot()
+        return withContext(Dispatchers.IO) {
+            if (rootedPath.exists()) {
+                TargetStorage.PathStatus(rootedPath.fileSize())
             } else {
                 null
             }
         }
+    }
 
     @Throws(IOException::class)
     override suspend fun newInputStream(path: Path): InputStream = withContext(Dispatchers.IO) {
-        path.inputStream()
+        path.withRoot().inputStream()
     }
 
     @Throws(IOException::class)
     override suspend fun move(oldPath: Path, newPath: Path) = withContext(Dispatchers.IO) {
-        doMove(oldPath, newPath)
+        doMove(oldPath.withRoot(), newPath.withRoot())
     }
 
     private fun doMove(oldPath: Path, newPath: Path) {
@@ -79,16 +84,17 @@ class LocalTargetStorage(private val config: LocalConfig) : TargetStorage {
     override suspend fun store(localPath: Path, newPath: Path) = withContext(Dispatchers.IO) {
         localPath.updateUser()
         localPath.setPosixFilePermissions(PosixFilePermissions.fromString("rw-r--r--"))
-        doMove(localPath, newPath)
+        doMove(localPath, newPath.withRoot())
     }
 
-    override suspend fun createDirectories(directory: Path) = withContext(Dispatchers.IO) {
-        directory.createDirectories(
+    override suspend fun createDirectories(directory: Path?) = withContext(Dispatchers.IO) {
+        val dir = directory?.withRoot() ?: root
+        dir.createDirectories(
             PosixFilePermissions.asFileAttribute(
                 PosixFilePermissions.fromString("rwxr-xr-x"),
             ),
         )
-        directory.updateUser()
+        dir.updateUser()
     }
 
     private fun Path.updateUser() {
@@ -102,8 +108,10 @@ class LocalTargetStorage(private val config: LocalConfig) : TargetStorage {
 
     @Throws(IOException::class)
     override suspend fun delete(path: Path) = withContext(Dispatchers.IO) {
-        path.deleteExisting()
+        path.withRoot().deleteExisting()
     }
+
+    private fun Path.withRoot() = this@LocalTargetStorage.root.resolve(this)
 
     companion object {
         private val logger = LoggerFactory.getLogger(LocalTargetStorage::class.java)

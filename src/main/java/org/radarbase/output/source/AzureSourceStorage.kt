@@ -16,6 +16,7 @@ import kotlin.io.path.createTempFile
 import kotlin.io.path.deleteIfExists
 
 class AzureSourceStorage(
+    override val root: Path,
     client: BlobServiceClient,
     config: AzureConfig,
     private val tempPath: Path,

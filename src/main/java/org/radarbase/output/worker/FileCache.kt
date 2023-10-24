@@ -111,7 +111,8 @@ class FileCache(
             inputStream.reader().useSuspended { reader ->
                 converterFactory.converterFor(writer, record, fileIsNew, reader, excludeFields)
             }
-        } catch (ex: IOException) {
+        } catch (ex: Exception) {
+            logger.error("Failed to initialize record converter for {}: {}", path, ex.toString())
             withContext(Dispatchers.IO) {
                 try {
                     writer.close()

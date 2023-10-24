@@ -1,7 +1,7 @@
 package org.radarbase.output.config
 
-/** Configuration on how to format the target bucket name. */
-data class BucketFormatterConfig(
+/** Configuration on how to format the target storage name to be used. */
+data class TargetFormatterConfig(
     /** Format string. May include any variables computed by the configured plugins. */
     val format: String = "radar-output-storage",
     /**

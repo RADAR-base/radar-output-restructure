@@ -59,10 +59,14 @@ interface TargetStorage {
 
     /** Create given directory, by recursively creating all parent directories. */
     @Throws(IOException::class)
-    suspend fun createDirectories(directory: Path)
+    suspend fun createDirectories(directory: Path?)
 
     data class PathStatus(
         /** Size in bytes */
         val size: Long,
     )
+
+    fun allowsPrefix(prefix: String): Boolean {
+        return true
+    }
 }

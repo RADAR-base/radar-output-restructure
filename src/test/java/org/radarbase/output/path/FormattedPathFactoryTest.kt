@@ -5,16 +5,35 @@ import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.instanceOf
 import org.hamcrest.Matchers.nullValue
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.radarbase.output.config.LocalConfig
 import org.radarbase.output.config.PathConfig
 import org.radarbase.output.config.PathFormatterConfig
+import org.radarbase.output.target.CombinedTargetStorage
+import org.radarbase.output.target.LocalTargetStorage
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.PhoneLight
+import java.nio.file.Paths
 import java.time.Instant
 import kotlin.reflect.jvm.jvmName
 
 internal class FormattedPathFactoryTest {
+    private lateinit var targetStorage: CombinedTargetStorage
+
+    @BeforeEach
+    fun setUp() {
+        targetStorage = CombinedTargetStorage(
+            mapOf(
+                Pair(
+                    "radar-output-storage",
+                    LocalTargetStorage(Paths.get("/test"), LocalConfig()),
+                ),
+            ),
+        )
+    }
+
     @Test
     fun testFormat() = runBlocking {
         val factory = createFactory(
@@ -48,6 +67,7 @@ internal class FormattedPathFactoryTest {
     fun unparameterized() = runBlocking {
         val factory = FormattedPathFactory().apply {
             init(
+                targetStorage = targetStorage,
                 extension = ".csv.gz",
                 config = PathConfig(),
             )
@@ -107,6 +127,7 @@ internal class FormattedPathFactoryTest {
 
     private fun createFactory(format: String): FormattedPathFactory = FormattedPathFactory().apply {
         init(
+            targetStorage = targetStorage,
             extension = ".csv.gz",
             config = PathConfig(
                 path = PathFormatterConfig(

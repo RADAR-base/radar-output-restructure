@@ -23,6 +23,7 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.avro.generic.GenericRecordBuilder
 import org.radarbase.output.config.PathConfig
 import org.radarbase.output.config.TopicConfig
+import org.radarbase.output.target.TargetStorage
 import org.radarbase.output.util.TimeUtil
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -33,16 +34,12 @@ abstract class RecordPathFactory {
         private set
 
     open fun init(
+        targetStorage: TargetStorage,
         extension: String,
         config: PathConfig,
         topics: Map<String, TopicConfig> = emptyMap(),
     ) {
         this.pathConfig = config.copy(
-            output = if (config.output.isAbsolute) {
-                rootPath.relativize(config.output)
-            } else {
-                config.output
-            },
             path = config.path.copy(
                 properties = buildMap(config.path.properties.size + 1) {
                     putAll(config.path.properties)
@@ -88,20 +85,15 @@ abstract class RecordPathFactory {
         )
 
         return coroutineScope {
-            val bucketJob = async { bucket(params) }
+            val targetJob = async { target(params) }
             val pathJob = async { relativePath(params) }
 
-            val path = pathConfig.output.resolve(pathJob.await())
-            val bucket = bucketJob.await()
-            if (bucket != null) {
-                Paths.get(bucket).resolve(path)
-            } else {
-                path
-            }
+            Paths.get(targetJob.await())
+                .resolve(pathJob.await())
         }
     }
 
-    abstract suspend fun bucket(pathParameters: PathFormatParameters?): String?
+    abstract suspend fun target(pathParameters: PathFormatParameters): String
 
     /**
      * Get the relative path corresponding to given record on given topic.
@@ -114,7 +106,6 @@ abstract class RecordPathFactory {
 
     companion object {
         private val ILLEGAL_CHARACTER_PATTERN = Pattern.compile("[^a-zA-Z0-9_-]+")
-        private val rootPath = Paths.get("/")
 
         fun sanitizeId(id: Any?, defaultValue: String): String = id
             ?.let { ILLEGAL_CHARACTER_PATTERN.matcher(it.toString()).replaceAll("") }

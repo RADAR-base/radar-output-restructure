@@ -16,7 +16,6 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
-import org.radarbase.output.config.PathConfig
 import org.radarbase.output.config.PathFormatterConfig
 import org.radarbase.output.config.ResourceConfig
 import org.radarbase.output.config.RestructureConfig
@@ -49,9 +48,8 @@ class RestructureS3IntegrationTest {
             ),
         )
         val config = RestructureConfig(
-            source = ResourceConfig("s3", s3 = sourceConfig),
-            target = ResourceConfig("s3", s3 = targetConfig),
-            paths = PathConfig(inputs = listOf(Paths.get("in"))),
+            sources = listOf(ResourceConfig("s3", path = Paths.get("in"), s3 = sourceConfig)),
+            targets = mapOf("radar-output-storage" to ResourceConfig("s3", path = Paths.get("output"), s3 = targetConfig)),
             worker = WorkerConfig(minimumFileAge = 0L),
             topics = topicConfig,
         )

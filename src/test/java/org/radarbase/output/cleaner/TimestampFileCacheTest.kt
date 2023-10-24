@@ -33,11 +33,11 @@ internal class TimestampFileCacheTest {
     private lateinit var csvConverter: CsvAvroConverterFactory
 
     @BeforeEach
-    fun setUp() {
+    fun setUp(@TempDir dir: Path) {
         csvConverter = CsvAvroConverterFactory()
         factory = mock {
             on { recordConverter } doReturn csvConverter
-            on { targetStorage } doReturn LocalTargetStorage(LocalConfig())
+            on { targetStorage } doReturn LocalTargetStorage(dir, LocalConfig())
             on { compression } doReturn IdentityCompression()
         }
         schema = Schema.Parser().parse(javaClass.resourceStream("android_phone_light.avsc"))

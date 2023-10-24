@@ -21,9 +21,6 @@ import com.beust.jcommander.validators.PositiveInteger
 import org.radarbase.output.config.RestructureConfig.Companion.RESTRUCTURE_CONFIG_FILE_NAME
 
 class CommandLineArgs {
-    @Parameter(description = "<input_path_1> [<input_path_2> ...]", variableArity = true)
-    var inputPaths: List<String>? = null
-
     @Parameter(
         names = ["-F", "--config-file"],
         description = "Config file. By default, $RESTRUCTURE_CONFIG_FILE_NAME is tried.",
@@ -57,13 +54,6 @@ class CommandLineArgs {
         description = "Boolean to define if to use deduplication or not.",
     )
     var deduplicate: Boolean? = null
-
-    @Parameter(
-        names = ["-o", "--output-directory"],
-        description = "The output folder where the files are to be extracted.",
-        validateWith = [NonEmptyValidator::class],
-    )
-    var outputDirectory: String? = null
 
     @Parameter(
         names = ["-h", "--help"],
