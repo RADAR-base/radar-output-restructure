@@ -25,6 +25,7 @@ import io.minio.MinioClient
 import io.minio.RemoveObjectArgs
 import io.minio.StatObjectArgs
 import io.minio.UploadObjectArgs
+import io.minio.errors.ErrorResponseException
 import org.radarbase.output.config.S3Config
 import org.radarbase.output.source.S3SourceStorage.Companion.faultTolerant
 import org.radarbase.output.util.bucketBuild
@@ -80,7 +81,17 @@ class S3TargetStorage(
                 logger.info("Bucket $bucket already exists.")
             } else {
                 val makeBucketRequest = MakeBucketArgs.builder().bucketBuild(bucket)
-                faultTolerant { s3Client.makeBucket(makeBucketRequest) }
+                faultTolerant {
+                    try {
+                        s3Client.makeBucket(makeBucketRequest)
+                    } catch (ex: ErrorResponseException) {
+                        if (ex.errorResponse().code() == "BucketAlreadyOwnedByYou") {
+                            logger.warn("Bucket {} was already created while the request was busy", bucket)
+                        } else {
+                            throw ex
+                        }
+                    }
+                }
                 logger.info("Bucket $bucket was created.")
             }
         } catch (ex: Exception) {
