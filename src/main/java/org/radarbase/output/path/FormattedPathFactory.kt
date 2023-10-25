@@ -26,7 +26,7 @@ import org.slf4j.LoggerFactory
 open class FormattedPathFactory : RecordPathFactory() {
     private lateinit var pathFormatter: PathFormatter
     private var topicFormatters: Map<String, PathFormatter> = emptyMap()
-    private lateinit var targetFormatter: PathFormatter
+    private var targetFormatter: PathFormatter? = null
     private lateinit var disabledBucketRegexes: List<Regex>
     private lateinit var defaultBucketName: String
 
@@ -48,11 +48,11 @@ open class FormattedPathFactory : RecordPathFactory() {
     }
 
     override suspend fun target(pathParameters: PathFormatParameters): String {
-        val format = targetFormatter.format(pathParameters)
-        return if (disabledBucketRegexes.any { it.matches(format) }) {
-            defaultBucketName
-        } else {
+        val format = targetFormatter?.format(pathParameters)
+        return if (format != null && disabledBucketRegexes.none { it.matches(format) }) {
             format
+        } else {
+            defaultBucketName
         }
     }
 
@@ -82,11 +82,14 @@ open class FormattedPathFactory : RecordPathFactory() {
             plugins.toPathFormatterPlugins(properties),
         )
 
-        private fun TargetFormatterConfig.toTargetFormatter(): PathFormatter = PathFormatter(
-            format,
-            plugins.toPathFormatterPlugins(properties),
-            checkMinimalDistinction = false,
-        )
+        private fun TargetFormatterConfig.toTargetFormatter(): PathFormatter? {
+            format ?: return null
+            return PathFormatter(
+                format,
+                plugins.toPathFormatterPlugins(properties),
+                checkMinimalDistinction = false,
+            )
+        }
 
         private val logger = LoggerFactory.getLogger(FormattedPathFactory::class.java)
     }
