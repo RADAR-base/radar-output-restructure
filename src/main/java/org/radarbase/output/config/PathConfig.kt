@@ -20,7 +20,7 @@ data class PathConfig(
     val path: PathFormatterConfig = PathFormatterConfig(),
     /**
      * Bucket formatting rules for the target storage. If no configuration is provided, this
-     * will not format any bucket for local or HDFS storage, and it will use the target bucket (s3)
+     * will not format any bucket for local storage, and it will use the target bucket (s3)
      * or container (azure) as the default target bucket.
      */
     val bucket: BucketFormatterConfig? = null,

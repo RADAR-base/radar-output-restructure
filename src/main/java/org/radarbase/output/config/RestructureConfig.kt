@@ -43,14 +43,6 @@ data class RestructureConfig(
         args.tmpDir?.let { copy(paths = paths.copy(temp = Paths.get(it))) }
         args.inputPaths?.let { inputs -> copy(paths = paths.copy(inputs = inputs.map { Paths.get(it) })) }
         args.outputDirectory?.let { copy(paths = paths.copy(output = Paths.get(it))) }
-        args.hdfsName?.let {
-            copy(
-                source = source.copy(
-                    hdfs = source.hdfs?.copy(nameNodes = listOf(it))
-                        ?: HdfsConfig(nameNodes = listOf(it)),
-                ),
-            )
-        }
         args.format?.let { copy(format = format.copy(type = it)) }
         args.deduplicate?.let {
             copy(format = format.copy(deduplication = format.deduplication.copy(enable = it)))

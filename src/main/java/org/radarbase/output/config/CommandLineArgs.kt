@@ -51,19 +51,12 @@ class CommandLineArgs {
     )
     var compression: String? = null
 
-    // Default set to false because causes loss of records from Biovotion data. https://github.com/RADAR-base/Restructure-HDFS-topic/issues/16
+    // Default set to false because causes loss of records from Biovotion data. https://github.com/RADAR-base/radar-output-restructure/issues/16
     @Parameter(
         names = ["-d", "--deduplicate"],
         description = "Boolean to define if to use deduplication or not.",
     )
     var deduplicate: Boolean? = null
-
-    @Parameter(
-        names = ["-n", "--nameservice"],
-        description = "The HDFS name services to connect to. Eg - '<HOST>' for single configurations or <CLUSTER_ID> for high availability web services.",
-        validateWith = [NonEmptyValidator::class],
-    )
-    var hdfsName: String? = null
 
     @Parameter(
         names = ["-o", "--output-directory"],

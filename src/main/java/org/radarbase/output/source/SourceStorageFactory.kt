@@ -31,14 +31,6 @@ class SourceStorageFactory(
             val minioClient = requireNotNull(s3SourceClient) { "Missing S3 client configuration for source storage" }
             S3SourceStorage(minioClient, s3Config, tempPath)
         }
-        ResourceType.HDFS -> {
-            val storage = Class.forName("org.radarbase.output.source.HdfsSourceStorageFactory")
-            val constructor =
-                storage.getDeclaredConstructor(ResourceConfig::class.java, Path::class.java)
-            val factory = constructor.newInstance(resourceConfig, tempPath)
-            val createSourceStorage = storage.getDeclaredMethod("createSourceStorage")
-            createSourceStorage.invoke(factory) as SourceStorage
-        }
         ResourceType.AZURE -> {
             val azureClient = requireNotNull(azureSourceClient) { "Missing Azure client configuration for source storage" }
             val azureConfig = requireNotNull(resourceConfig.azure) { "Missing Azure configuration for source storage" }

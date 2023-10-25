@@ -7,7 +7,7 @@ service:
 # Source data resource
 # @since: 0.7.0
 source:
-  type: s3  # hdfs, azure or s3
+  type: s3  # azure or s3
   s3:
     endpoint: http://localhost:9000  # using AWS S3 endpoint is also possible.
     bucket: radar
@@ -31,9 +31,6 @@ source:
     # If true, try to read the metadata property "endOffset" to determine the
     # final offset of an input object.
     #endOffsetFromMetadata: false
-  # only actually needed if source type is hdfs
-  hdfs:
-    nameNodes: [hdfs-namenode-1, hdfs-namenode-2]
   index:
     # Interval to fully synchronize the index with the storage
     fullSyncInterval: 3600
@@ -80,7 +77,7 @@ compression:
   # Compression type: none, zip or gzip
   type: gzip
   # Compression Factory class
-  # factory: org.radarbase.hdfs.compression.CompressionFactory
+  # factory: org.radarbase.output.compression.CompressionFactory
   # Additional compression properties
   # properties: {}
 
@@ -96,7 +93,7 @@ format:
     # Ignore specific fields to consider records distinct. Disregarded if empty.
     # ignoreFields: []
   # Format factory class
-  # factory: org.radarbase.hdfs.format.FormatFactory
+  # factory: org.radarbase.output.format.FormatFactory
   # Additional format properties
   # properties: {}
   # Do not write certain fields to file
