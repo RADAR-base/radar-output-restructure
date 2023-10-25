@@ -9,13 +9,13 @@ data class TargetFormatterConfig(
      * custom class names.
      */
     val plugins: String = "fixed time key value",
-    /** List of regexes to disable the formatted string for and use [defaultName] instead. */
+    /** List of regexes to disable the formatted string for and use [default] instead. */
     val disabledFormats: List<String> = emptyList(),
     /**
      * Default name to use for the output storage if the output format is disabled via
      * [disabledFormats].
      */
-    val defaultName: String = "radar-output-storage",
+    val default: String = "radar-output-storage",
     /** Additional plugin properties. */
     val properties: Map<String, String> = emptyMap(),
 )

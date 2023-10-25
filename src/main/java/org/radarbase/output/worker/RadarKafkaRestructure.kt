@@ -192,7 +192,7 @@ class RadarKafkaRestructure(
                     logger.info(
                         "Out: bucket {} (default {}) - path {}",
                         pathConfig.target.format,
-                        pathConfig.target.defaultName,
+                        pathConfig.target.default,
                         pathConfig.path.format,
                     )
                     restructure.process()

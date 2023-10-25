@@ -26,7 +26,7 @@ data class PathConfig(
     ): RecordPathFactory {
         val pathFactory = factory.constructClass<RecordPathFactory>()
 
-        require(targetStorage.allowsPrefix(target.defaultName)) { "Default bucket ${target.defaultName} is not specified as a target storage" }
+        require(targetStorage.allowsPrefix(target.default)) { "Default bucket ${target.default} is not specified as a target storage" }
 
         pathFactory.init(
             targetStorage = targetStorage,

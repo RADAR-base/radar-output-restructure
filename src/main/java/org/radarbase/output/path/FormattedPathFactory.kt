@@ -42,7 +42,7 @@ open class FormattedPathFactory : RecordPathFactory() {
         disabledBucketRegexes = pathConfig.target
             .disabledFormats
             .map { it.toRegex(RegexOption.IGNORE_CASE) }
-        defaultBucketName = pathConfig.target.defaultName
+        defaultBucketName = pathConfig.target.default
 
         logger.info("Formatting path with {}", pathFormatter)
     }

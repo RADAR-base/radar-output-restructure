@@ -70,7 +70,7 @@ class Application(
         }
 
     override val targetStorage: TargetStorage = TargetStorageFactory()
-        .createTargetStorage(config.paths.target.defaultName, config.consolidatedTargets)
+        .createTargetStorage(config.paths.target.default, config.consolidatedTargets)
 
     override val pathFactory: RecordPathFactory =
         config.paths.createFactory(

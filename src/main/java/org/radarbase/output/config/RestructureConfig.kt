@@ -41,8 +41,8 @@ data class RestructureConfig(
                     put(name, target)
                 } else {
                     val bucketConfig = paths.target
-                    require(bucketConfig.defaultName !in this) { "Deprecated target storage does not have a proper name." }
-                    put(bucketConfig.defaultName, target)
+                    require(bucketConfig.default !in this) { "Deprecated target storage does not have a proper name." }
+                    put(bucketConfig.default, target)
                 }
             }
         }

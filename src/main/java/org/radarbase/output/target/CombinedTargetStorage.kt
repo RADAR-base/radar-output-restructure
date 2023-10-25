@@ -8,12 +8,12 @@ import java.nio.file.Path
 
 class CombinedTargetStorage(
     private val delegates: Map<String, TargetStorage>,
-    defaultName: String? = null,
+    default: String? = null,
 ) : TargetStorage {
-    private val defaultDelegate = if (defaultName != null) {
-        requireNotNull(delegates[defaultName]) { "Default target storage $defaultName not found in ${delegates.keys}" }
+    private val defaultDelegate = if (default != null) {
+        requireNotNull(delegates[default]) { "Default target storage $default not found in ${delegates.keys}" }
     } else {
-        require(delegates.size == 1) { "Must provide a default taret storage if more than one target storage is defined: ${delegates.keys}" }
+        require(delegates.size == 1) { "Must provide a default target storage if more than one target storage is defined: ${delegates.keys}" }
         delegates.values.first()
     }
 
