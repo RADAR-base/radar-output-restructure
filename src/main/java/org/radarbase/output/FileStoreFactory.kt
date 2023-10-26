@@ -26,14 +26,14 @@ import org.radarbase.output.config.RestructureConfig
 import org.radarbase.output.format.RecordConverterFactory
 import org.radarbase.output.path.RecordPathFactory
 import org.radarbase.output.source.SourceStorageManager
-import org.radarbase.output.target.TargetStorage
+import org.radarbase.output.target.TargetManager
 import org.radarbase.output.worker.FileCacheStore
 import java.io.IOException
 
 /** Factory for all factory classes and settings.  */
 interface FileStoreFactory {
     val sourceStorage: List<SourceStorageManager>
-    val targetStorage: TargetStorage
+    val targetManager: TargetManager
     val pathFactory: RecordPathFactory
     val compression: Compression
     val recordConverter: RecordConverterFactory

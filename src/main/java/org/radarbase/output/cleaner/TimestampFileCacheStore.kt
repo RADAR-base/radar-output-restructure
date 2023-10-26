@@ -18,6 +18,7 @@ package org.radarbase.output.cleaner
 
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.FileStoreFactory
+import org.radarbase.output.path.TargetPath
 import org.radarbase.output.util.Timer.time
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -29,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap
  * the longest ago cache are evicted from cache.
  */
 class TimestampFileCacheStore(private val factory: FileStoreFactory) {
-    private val caches: MutableMap<Path, TimestampFileCache>
+    private val caches: MutableMap<TargetPath, TimestampFileCache>
     private val maxCacheSize: Int
     private val schemasAdded: MutableMap<Path, Path>
 
@@ -50,14 +51,14 @@ class TimestampFileCacheStore(private val factory: FileStoreFactory) {
      * @throws IOException when failing to open a file or writing to it.
      */
     @Throws(IOException::class)
-    suspend fun contains(path: Path, record: GenericRecord): FindResult {
+    suspend fun contains(targetPath: TargetPath, record: GenericRecord): FindResult {
         return try {
-            val fileCache = caches[path]
+            val fileCache = caches[targetPath]
                 ?: time("cleaner.cache") {
                     ensureCapacity()
-                    TimestampFileCache(factory, path).apply {
+                    TimestampFileCache(factory, targetPath).apply {
                         initialize()
-                        caches[path] = this
+                        caches[targetPath] = this
                     }
                 }
 
@@ -82,7 +83,7 @@ class TimestampFileCacheStore(private val factory: FileStoreFactory) {
             val cacheList = ArrayList(caches.values)
                 .sorted()
             for (i in 0 until cacheList.size / 2) {
-                caches.remove(cacheList[i].path)
+                caches.remove(cacheList[i].targetPath)
             }
         }
     }

@@ -61,18 +61,18 @@ class TimestampExtractionCheck(
         var suffix = 0
 
         do {
-            val path = pathFactory.getRecordPath(
+            val targetPath = pathFactory.getRecordPath(
                 topicFile.topic,
                 record,
                 suffix,
             )
 
             try {
-                when (cacheStore.contains(path, record)) {
+                when (cacheStore.contains(targetPath, record)) {
                     TimestampFileCacheStore.FindResult.FILE_NOT_FOUND -> {
                         logger.warn(
                             "Target {} for record of {} (offset {}) has not been created yet.",
-                            path,
+                            targetPath,
                             topicFile.path,
                             offset,
                         )
@@ -81,7 +81,7 @@ class TimestampExtractionCheck(
                     TimestampFileCacheStore.FindResult.NOT_FOUND -> {
                         logger.warn(
                             "Target {} does not contain record of {} (offset {})",
-                            path,
+                            targetPath,
                             topicFile.path,
                             offset,
                         )
@@ -91,7 +91,7 @@ class TimestampExtractionCheck(
                     TimestampFileCacheStore.FindResult.BAD_SCHEMA -> {
                         logger.debug(
                             "Schema of {} does not match schema of {} (offset {})",
-                            path,
+                            targetPath,
                             topicFile.path,
                             offset,
                         )
@@ -99,7 +99,7 @@ class TimestampExtractionCheck(
                     }
                 }
             } catch (ex: IOException) {
-                logger.error("Failed to read target file {} for checking data integrity", path, ex)
+                logger.error("Failed to read target file {} for checking data integrity", targetPath, ex)
                 return false
             }
         } while (true)

@@ -20,7 +20,7 @@ import org.radarbase.output.config.PathConfig
 import org.radarbase.output.config.PathFormatterConfig
 import org.radarbase.output.config.TargetFormatterConfig
 import org.radarbase.output.config.TopicConfig
-import org.radarbase.output.target.TargetStorage
+import org.radarbase.output.target.TargetManager
 import org.slf4j.LoggerFactory
 
 open class FormattedPathFactory : RecordPathFactory() {
@@ -31,12 +31,12 @@ open class FormattedPathFactory : RecordPathFactory() {
     private lateinit var defaultBucketName: String
 
     override fun init(
-        targetStorage: TargetStorage,
+        targetManager: TargetManager,
         extension: String,
         config: PathConfig,
         topics: Map<String, TopicConfig>,
     ) {
-        super.init(targetStorage, extension, config, topics)
+        super.init(targetManager, extension, config, topics)
         pathFormatter = pathConfig.path.toPathFormatter()
         targetFormatter = pathConfig.target.toTargetFormatter()
         disabledBucketRegexes = pathConfig.target

@@ -37,7 +37,7 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 
 class AzureTargetStorage(
-    private val root: Path,
+    override val baseDir: Path,
     private val config: AzureConfig,
 ) : TargetStorage {
     private lateinit var serviceClient: BlobServiceClient
@@ -129,11 +129,14 @@ class AzureTargetStorage(
         blob(path).delete()
     }
 
-    override suspend fun createDirectories(directory: Path?) = Unit
+    override suspend fun createDirectories(directory: Path) = Unit
 
     private suspend fun blob(path: Path): BlobClient {
-        return client(container).getBlobClient(root.resolve(path).toString())
+        return client(container).getBlobClient(baseDir.resolve(path).toString())
     }
+
+    override fun toString(): String =
+        "AzureTargetStorage(baseDir=$baseDir, container='$container')"
 
     companion object {
         private val logger = LoggerFactory.getLogger(AzureTargetStorage::class.java)

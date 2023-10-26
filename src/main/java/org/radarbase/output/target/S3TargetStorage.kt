@@ -38,7 +38,7 @@ import java.nio.file.Path
 import kotlin.io.path.deleteExisting
 
 class S3TargetStorage(
-    private val root: Path,
+    override val baseDir: Path,
     config: S3Config,
 ) : TargetStorage {
     private val s3Client: MinioClient = try {
@@ -104,7 +104,7 @@ class S3TargetStorage(
         }
     }
 
-    private fun Path.withRoot(): Path = this@S3TargetStorage.root.resolve(this)
+    private fun Path.withRoot(): Path = this@S3TargetStorage.baseDir.resolve(this)
 
     @Throws(IOException::class)
     override suspend fun newInputStream(path: Path): InputStream {
@@ -137,7 +137,9 @@ class S3TargetStorage(
         faultTolerant { s3Client.removeObject(removeRequest) }
     }
 
-    override suspend fun createDirectories(directory: Path?) = Unit
+    override suspend fun createDirectories(directory: Path) = Unit
+
+    override fun toString(): String = "S3TargetStorage(baseDir=$baseDir, bucket='$bucket')"
 
     companion object {
         private val logger = LoggerFactory.getLogger(S3TargetStorage::class.java)

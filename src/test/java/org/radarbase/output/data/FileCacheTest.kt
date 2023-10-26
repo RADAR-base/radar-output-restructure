@@ -37,6 +37,8 @@ import org.radarbase.output.config.PathConfig
 import org.radarbase.output.config.ResourceConfig
 import org.radarbase.output.config.RestructureConfig
 import org.radarbase.output.config.S3Config
+import org.radarbase.output.path.TargetPath
+import org.radarbase.output.path.toTargetPath
 import org.radarbase.output.util.ResourceContext.Companion.resourceContext
 import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.worker.FileCache
@@ -54,7 +56,7 @@ import kotlin.io.path.inputStream
  */
 class FileCacheTest {
     private lateinit var localPath: Path
-    private lateinit var path: Path
+    private lateinit var path: TargetPath
     private lateinit var exampleRecord: Record
     private lateinit var tmpDir: Path
     private lateinit var factory: Application
@@ -68,8 +70,8 @@ class FileCacheTest {
     @BeforeEach
     @Throws(IOException::class)
     fun setUp(@TempDir path: Path, @TempDir tmpPath: Path) {
-        this.path = Paths.get("radar-output-storage/f")
-        this.localPath = path.resolve("f")
+        this.path = "f".toTargetPath("radar-output-storage")
+        this.localPath = this.path.toLocalPath(path)
         this.tmpDir = tmpPath
 
         val schema = SchemaBuilder.record("simple").fields()
@@ -199,7 +201,7 @@ class FileCacheTest {
     @Test
     @Throws(IOException::class)
     fun compareTo() = runTest {
-        val file3 = path.parent.resolve("g")
+        val file3 = path.navigate { it.resolveSibling("g") }
 
         resourceContext {
             val cache1 = createResource { FileCache(factory, "topic", path, tmpDir, accountant) }

@@ -8,29 +8,26 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.io.TempDir
 import org.radarbase.output.config.LocalConfig
 import org.radarbase.output.config.PathConfig
 import org.radarbase.output.config.PathFormatterConfig
-import org.radarbase.output.target.CombinedTargetStorage
 import org.radarbase.output.target.LocalTargetStorage
+import org.radarbase.output.target.TargetManager
 import org.radarcns.kafka.ObservationKey
 import org.radarcns.passive.phone.PhoneLight
-import java.nio.file.Paths
+import java.nio.file.Path
 import java.time.Instant
 import kotlin.reflect.jvm.jvmName
 
 internal class FormattedPathFactoryTest {
-    private lateinit var targetStorage: CombinedTargetStorage
+    private lateinit var targetStorage: TargetManager
 
     @BeforeEach
-    fun setUp() {
-        targetStorage = CombinedTargetStorage(
-            mapOf(
-                Pair(
-                    "radar-output-storage",
-                    LocalTargetStorage(Paths.get("/test"), LocalConfig()),
-                ),
-            ),
+    fun setUp(@TempDir dir: Path) {
+        targetStorage = TargetManager(
+            "radar-output-storage",
+            LocalTargetStorage(dir, LocalConfig()),
         )
     }
 
@@ -67,7 +64,7 @@ internal class FormattedPathFactoryTest {
     fun unparameterized() = runBlocking {
         val factory = FormattedPathFactory().apply {
             init(
-                targetStorage = targetStorage,
+                targetManager = targetStorage,
                 extension = ".csv.gz",
                 config = PathConfig(),
             )
@@ -127,7 +124,7 @@ internal class FormattedPathFactoryTest {
 
     private fun createFactory(format: String): FormattedPathFactory = FormattedPathFactory().apply {
         init(
-            targetStorage = targetStorage,
+            targetManager = targetStorage,
             extension = ".csv.gz",
             config = PathConfig(
                 path = PathFormatterConfig(

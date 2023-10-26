@@ -41,11 +41,12 @@ import org.radarbase.output.config.ResourceConfig
 import org.radarbase.output.config.RestructureConfig
 import org.radarbase.output.config.S3Config
 import org.radarbase.output.config.WorkerConfig
+import org.radarbase.output.path.TargetPath
+import org.radarbase.output.path.toTargetPath
 import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.worker.FileCacheStore
 import java.io.IOException
 import java.nio.file.Path
-import java.nio.file.Paths
 import java.time.Instant
 import kotlin.io.path.createDirectories
 import kotlin.io.path.readBytes
@@ -56,17 +57,15 @@ class FileCacheStoreTest {
     @Test
     @Throws(IOException::class)
     fun appendLine(@TempDir root: Path, @TempDir tmpDir: Path) = runTest {
-        val bucketName = Paths.get("radar-output-storage")
+        fun TargetPath.toLocalPath(): Path = toLocalPath(root)
 
-        fun Path.toLocalPath() = root.resolve(bucketName.relativize(this))
-
-        val f1 = bucketName.resolve("f1")
-        val f2 = bucketName.resolve("f2")
-        val f3 = bucketName.resolve("f3")
-        val d4 = bucketName.resolve("d4")
+        val f1 = "f1".toTargetPath("radar-output-storage")
+        val f2 = "f2".toTargetPath("radar-output-storage")
+        val f3 = "f3".toTargetPath("radar-output-storage")
+        val d4 = "d4".toTargetPath("radar-output-storage")
         d4.toLocalPath().createDirectories()
-        val f4 = d4.resolve("f4.txt")
-        val newFile = bucketName.resolve("newFile")
+        val f4 = d4.navigate { it.resolve("f4.txt") }
+        val newFile = "newFile".toTargetPath("radar-output-storage")
 
         val simpleSchema = SchemaBuilder.record("simple").fields()
             .name("a").type("string").noDefault()

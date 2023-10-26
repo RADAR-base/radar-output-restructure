@@ -37,7 +37,7 @@ import kotlin.io.path.setAttribute
 import kotlin.io.path.setPosixFilePermissions
 
 class LocalTargetStorage(
-    private val root: Path,
+    override val baseDir: Path,
     private val config: LocalConfig,
 ) : TargetStorage {
     init {
@@ -87,8 +87,8 @@ class LocalTargetStorage(
         doMove(localPath, newPath.withRoot())
     }
 
-    override suspend fun createDirectories(directory: Path?) = withContext(Dispatchers.IO) {
-        val dir = directory?.withRoot() ?: root
+    override suspend fun createDirectories(directory: Path) = withContext(Dispatchers.IO) {
+        val dir = directory.withRoot()
         dir.createDirectories(
             PosixFilePermissions.asFileAttribute(
                 PosixFilePermissions.fromString("rwxr-xr-x"),
@@ -111,7 +111,9 @@ class LocalTargetStorage(
         path.withRoot().deleteExisting()
     }
 
-    private fun Path.withRoot() = this@LocalTargetStorage.root.resolve(this)
+    private fun Path.withRoot() = this@LocalTargetStorage.baseDir.resolve(this)
+
+    override fun toString(): String = "LocalTargetStorage(baseDir=$baseDir)"
 
     companion object {
         private val logger = LoggerFactory.getLogger(LocalTargetStorage::class.java)

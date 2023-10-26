@@ -37,7 +37,7 @@ import org.radarbase.output.path.RecordPathFactory
 import org.radarbase.output.source.InMemoryStorageIndex
 import org.radarbase.output.source.SourceStorageFactory
 import org.radarbase.output.source.SourceStorageManager
-import org.radarbase.output.target.TargetStorage
+import org.radarbase.output.target.TargetManager
 import org.radarbase.output.target.TargetStorageFactory
 import org.radarbase.output.util.Timer
 import org.radarbase.output.worker.FileCacheStore
@@ -69,12 +69,12 @@ class Application(
             SourceStorageManager(storage, InMemoryStorageIndex(), sourceConfig.index)
         }
 
-    override val targetStorage: TargetStorage = TargetStorageFactory()
+    override val targetManager: TargetManager = TargetStorageFactory()
         .createTargetStorage(config.paths.target.default, config.consolidatedTargets)
 
     override val pathFactory: RecordPathFactory =
         config.paths.createFactory(
-            targetStorage,
+            targetManager,
             recordConverter.extension + compression.extension,
             config.topics,
         )
@@ -121,7 +121,7 @@ class Application(
         }
 
         runBlocking {
-            targetStorage.initialize()
+            targetManager.initialize()
         }
 
         if (config.service.enable) {

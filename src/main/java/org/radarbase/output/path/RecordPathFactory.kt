@@ -23,9 +23,8 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.avro.generic.GenericRecordBuilder
 import org.radarbase.output.config.PathConfig
 import org.radarbase.output.config.TopicConfig
-import org.radarbase.output.target.TargetStorage
+import org.radarbase.output.target.TargetManager
 import org.radarbase.output.util.TimeUtil
-import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.regex.Pattern
 
@@ -34,7 +33,7 @@ abstract class RecordPathFactory {
         private set
 
     open fun init(
-        targetStorage: TargetStorage,
+        targetManager: TargetManager,
         extension: String,
         config: PathConfig,
         topics: Map<String, TopicConfig> = emptyMap(),
@@ -62,7 +61,7 @@ abstract class RecordPathFactory {
         topic: String,
         record: GenericRecord,
         attempt: Int,
-    ): Path {
+    ): TargetPath {
         val keyField = requireNotNull(record.get("key")) { "Failed to process $record; no key present" }
         val valueField = requireNotNull(record.get("value") as? GenericRecord) { "Failed to process $record; no value present" }
 
@@ -86,10 +85,9 @@ abstract class RecordPathFactory {
 
         return coroutineScope {
             val targetJob = async { target(params) }
-            val pathJob = async { relativePath(params) }
+            val pathJob = async { Paths.get(relativePath(params)) }
 
-            Paths.get(targetJob.await())
-                .resolve(pathJob.await())
+            TargetPath(targetJob.await(), pathJob.await())
         }
     }
 

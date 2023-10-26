@@ -4,8 +4,8 @@ import org.radarbase.output.config.ResourceConfig
 import org.radarbase.output.config.ResourceType
 
 class TargetStorageFactory {
-    fun createTargetStorage(default: String, configs: Map<String, ResourceConfig>): TargetStorage =
-        CombinedTargetStorage(configs.mapValues { (_, config) -> createTargetStorage(config) }, default)
+    fun createTargetStorage(default: String, configs: Map<String, ResourceConfig>): TargetManager =
+        TargetManager(configs.mapValues { (_, config) -> createTargetStorage(config) }, default)
 
     private fun createTargetStorage(config: ResourceConfig) = when (config.sourceType) {
         ResourceType.S3 -> S3TargetStorage(config.path, config.s3!!)
