@@ -28,7 +28,7 @@ open class FormattedPathFactory : RecordPathFactory() {
     private var topicFormatters: Map<String, PathFormatter> = emptyMap()
     private var targetFormatter: PathFormatter? = null
     private lateinit var disabledBucketRegexes: List<Regex>
-    private lateinit var defaultBucketName: String
+    private lateinit var defaultTarget: String
 
     override fun init(
         targetManager: TargetManager,
@@ -42,7 +42,7 @@ open class FormattedPathFactory : RecordPathFactory() {
         disabledBucketRegexes = pathConfig.target
             .disabledFormats
             .map { it.toRegex(RegexOption.IGNORE_CASE) }
-        defaultBucketName = pathConfig.target.default
+        defaultTarget = pathConfig.target.default
 
         logger.info("Formatting path with {}", pathFormatter)
     }
@@ -52,7 +52,7 @@ open class FormattedPathFactory : RecordPathFactory() {
         return if (format != null && disabledBucketRegexes.none { it.matches(format) }) {
             format
         } else {
-            defaultBucketName
+            defaultTarget
         }
     }
 
