@@ -8,7 +8,6 @@ import org.apache.avro.file.SeekableFileInput
 import org.apache.avro.file.SeekableInput
 import org.radarbase.output.config.AzureConfig
 import org.radarbase.output.util.TemporaryDirectory
-import org.radarbase.output.util.withoutFirstSegment
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Instant
@@ -16,7 +15,7 @@ import kotlin.io.path.createTempFile
 import kotlin.io.path.deleteIfExists
 
 class AzureSourceStorage(
-    override val root: Path,
+    override val baseDir: Path,
     client: BlobServiceClient,
     config: AzureConfig,
     private val tempPath: Path,
@@ -24,25 +23,27 @@ class AzureSourceStorage(
     private val blobContainerClient = client.getBlobContainerClient(config.container)
     private val readOffsetFromMetadata = config.endOffsetFromMetadata
 
-    private fun blobClient(path: Path) = blobContainerClient.getBlobClient(path.withoutFirstSegment())
+    private fun blobClient(path: Path) = blobContainerClient.getBlobClient(path.toSourcePath().toString())
 
     override suspend fun list(path: Path, startAfter: Path?, maxKeys: Int?): List<StorageNode> =
         withContext(Dispatchers.IO) {
-            var iterable: Iterable<BlobItem> = blobContainerClient.listBlobsByHierarchy("$path/")
+            var iterable: Iterable<BlobItem> = blobContainerClient.listBlobsByHierarchy("${path.toSourcePath()}/")
             if (startAfter != null) {
                 iterable = iterable.filter { Paths.get(it.name) > startAfter }
             }
             if (maxKeys != null) {
                 iterable = iterable.take(maxKeys)
             }
-            iterable.map {
-                if (it.isPrefix == true) {
+            val baseDirPrefix = "$baseDir/"
+            iterable.map { item ->
+                val itemPath = Paths.get(item.name.removePrefix(baseDirPrefix))
+                if (item.isPrefix == true) {
                     StorageNode.StorageFile(
-                        Paths.get(it.name),
-                        it.properties?.lastModified?.toInstant() ?: Instant.now(),
+                        itemPath,
+                        item.properties?.lastModified?.toInstant() ?: Instant.now(),
                     )
                 } else {
-                    StorageNode.StorageDirectory(Paths.get(it.name))
+                    StorageNode.StorageDirectory(itemPath)
                 }
             }
         }
@@ -76,6 +77,9 @@ class AzureSourceStorage(
     }
 
     override fun createReader(): SourceStorage.SourceStorageReader = AzureSourceStorageReader()
+
+    override fun toString(): String =
+        "AzureSourceStorage(container=${blobContainerClient.blobContainerName}, baseDir=$baseDir)"
 
     private inner class AzureSourceStorageReader : SourceStorage.SourceStorageReader {
         private val tempDir = TemporaryDirectory(tempPath, "worker-")

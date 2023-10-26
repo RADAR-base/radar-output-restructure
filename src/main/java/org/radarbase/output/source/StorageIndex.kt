@@ -24,6 +24,6 @@ interface StorageIndex {
          * Root directory. All files that are in the index can be found by traversing the index
          * starting at this root.
          */
-        val ROOT = StorageNode.StorageDirectory(Paths.get("/"))
+        val ROOT = StorageNode.StorageDirectory(Paths.get("."))
     }
 }

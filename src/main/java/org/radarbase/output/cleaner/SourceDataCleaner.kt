@@ -24,7 +24,6 @@ import java.nio.file.Path
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.atomic.LongAdder
-import kotlin.coroutines.coroutineContext
 
 class SourceDataCleaner(
     private val fileStoreFactory: FileStoreFactory,
@@ -47,11 +46,13 @@ class SourceDataCleaner(
     @Throws(IOException::class, InterruptedException::class)
     suspend fun process() {
         // Get files and directories
-        val paths = topicPaths(sourceStorage.root)
+        val paths = sourceStorageManager.listTopics(excludeTopics)
+            // different services start on different topics to decrease lock contention
+            .shuffled()
 
         logger.info("{} topics found", paths.size)
 
-        withContext(coroutineContext + supervisor) {
+        withContext(supervisor) {
             paths.forEach { p ->
                 launch {
                     try {
@@ -127,11 +128,6 @@ class SourceDataCleaner(
             }
     }
 
-    private suspend fun topicPaths(path: Path): List<Path> =
-        sourceStorageManager.listTopics(path, excludeTopics)
-            // different services start on different topics to decrease lock contention
-            .shuffled()
-
     override fun close() {
         supervisor.cancel()
     }
@@ -149,7 +145,7 @@ class SourceDataCleaner(
             factory.sourceStorage.launchJoin { sourceStorage ->
                 SourceDataCleaner(factory, sourceStorage).useSuspended { cleaner ->
                     sourceStorage.storageIndexManager.update()
-                    logger.info("Cleaning {}", sourceStorage.sourceStorage.root)
+                    logger.info("Cleaning {}", sourceStorage.sourceStorage.baseDir)
                     cleaner.process()
                     logger.info("Cleaned up {} files", cleaner.deletedFileCount.format())
                 }

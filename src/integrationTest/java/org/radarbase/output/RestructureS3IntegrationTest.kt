@@ -10,12 +10,12 @@ import io.minio.RemoveBucketArgs
 import io.minio.RemoveObjectArgs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.radarbase.kotlin.coroutines.launchJoin
 import org.radarbase.output.config.PathConfig
 import org.radarbase.output.config.PathFormatterConfig
 import org.radarbase.output.config.ResourceConfig
@@ -73,20 +73,18 @@ class RestructureS3IntegrationTest {
             "application_server_status/partition=1/application_server_status+1+0000000021.avro",
             "android_phone_acceleration/partition=0/android_phone_acceleration+0+0003018784.avro",
         )
-        val targetFiles = resourceFiles.map { Paths.get("in/$it") }
-        resourceFiles.mapIndexed { i, resourceFile ->
-            launch(Dispatchers.IO) {
-                this@RestructureS3IntegrationTest.javaClass.getResourceAsStream("/$resourceFile")
-                    .useSuspended { statusFile ->
-                        sourceClient.putObject(
-                            PutObjectArgs.Builder()
-                                .objectBuild(sourceBucket, targetFiles[i]) {
-                                    stream(statusFile, -1, MAX_PART_SIZE)
-                                },
-                        )
-                    }
-            }
-        }.joinAll()
+        val targetFiles = resourceFiles.associateWith { Paths.get("in/$it") }
+        targetFiles.entries.launchJoin(Dispatchers.IO) { (resourceFile, targetFile) ->
+            this@RestructureS3IntegrationTest.javaClass.getResourceAsStream("/$resourceFile")
+                .useSuspended { statusFile ->
+                    sourceClient.putObject(
+                        PutObjectArgs.Builder()
+                            .objectBuild(sourceBucket, targetFile) {
+                                stream(statusFile, -1, MAX_PART_SIZE)
+                            },
+                    )
+                }
+        }
 
         application.start()
 
@@ -149,13 +147,11 @@ class RestructureS3IntegrationTest {
         coroutineScope {
             // delete source files
             launch {
-                targetFiles.map {
-                    launch(Dispatchers.IO) {
-                        sourceClient.removeObject(
-                            RemoveObjectArgs.Builder().objectBuild(sourceBucket, it),
-                        )
-                    }
-                }.joinAll()
+                targetFiles.values.launchJoin(Dispatchers.IO) {
+                    sourceClient.removeObject(
+                        RemoveObjectArgs.Builder().objectBuild(sourceBucket, it),
+                    )
+                }
 
                 launch(Dispatchers.IO) {
                     sourceClient.removeBucket(
@@ -166,15 +162,13 @@ class RestructureS3IntegrationTest {
 
             // delete target files
             launch {
-                files.map {
-                    launch(Dispatchers.IO) {
-                        targetClient.removeObject(
-                            RemoveObjectArgs.Builder().bucketBuild(targetBucket) {
-                                `object`(it)
-                            },
-                        )
-                    }
-                }.joinAll()
+                files.launchJoin(Dispatchers.IO) { file ->
+                    targetClient.removeObject(
+                        RemoveObjectArgs.Builder().bucketBuild(targetBucket) {
+                            `object`(file)
+                        },
+                    )
+                }
                 launch(Dispatchers.IO) {
                     targetClient.removeBucket(
                         RemoveBucketArgs.Builder().bucketBuild(targetBucket),

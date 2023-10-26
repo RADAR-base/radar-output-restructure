@@ -7,7 +7,7 @@ import java.time.Instant
 
 /** Source storage type. */
 interface SourceStorage {
-    val root: Path
+    val baseDir: Path
 
     /** Create a reader for the storage medium. It should be closed by the caller. */
     fun createReader(): SourceStorageReader
@@ -23,9 +23,11 @@ interface SourceStorage {
     suspend fun delete(path: Path)
     suspend fun createTopicFile(topic: String, status: StorageNode): TopicFile = TopicFile(
         topic = topic,
-        path = status.path,
+        path = status.path.toSourcePath(),
         lastModified = if (status is StorageNode.StorageFile) status.lastModified else Instant.now(),
     )
+
+    fun Path.toSourcePath(): Path = baseDir.resolve(this).normalize()
 
     /**
      * File reader for the storage medium.

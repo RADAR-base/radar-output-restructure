@@ -25,14 +25,14 @@ import kotlin.io.path.createTempDirectory
 import kotlin.io.path.exists
 
 /** Temporary directory that will be removed on close or shutdown.  */
-class TemporaryDirectory(root: Path, prefix: String) : Closeable {
+class TemporaryDirectory(baseDir: Path, prefix: String) : Closeable {
 
     private val shutdownHook: Thread
     val path: Path
 
     init {
-        root.createDirectories()
-        path = createTempDirectory(root, prefix)
+        baseDir.createDirectories()
+        path = createTempDirectory(baseDir, prefix)
         shutdownHook = Thread(
             { this.doClose() },
             "remove-" + path.toString().replace("/".toRegex(), "-"),

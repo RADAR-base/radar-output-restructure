@@ -14,7 +14,7 @@ data class TargetPath(
 
     fun navigate(block: (Path) -> Path): TargetPath = copy(path = block(path))
 
-    fun toLocalPath(root: Path): Path = root.resolve(path)
+    fun toLocalPath(baseDir: Path): Path = baseDir.resolve(path)
 
     companion object {
         private val comparator = compareBy(TargetPath::target, TargetPath::path)

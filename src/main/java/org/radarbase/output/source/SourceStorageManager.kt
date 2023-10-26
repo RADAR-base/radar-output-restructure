@@ -9,13 +9,12 @@ import java.time.Instant
 
 class SourceStorageManager(
     val sourceStorage: SourceStorage,
-    val storageIndex: StorageIndex,
+    private val storageIndex: StorageIndex,
     storageIndexConfig: StorageIndexConfig,
 ) {
     val storageIndexManager: StorageIndexManager = StorageIndexManager(
         storageIndex,
         sourceStorage,
-        sourceStorage.root,
         storageIndexConfig,
     )
 
@@ -41,9 +40,8 @@ class SourceStorageManager(
      * Exclude paths belonging to the set of given excluded topics.
      */
     suspend fun listTopics(
-        root: Path,
         exclude: Set<String>,
     ): List<Path> = storageIndex.avroTopicTreeLister()
-        .listTo(LinkedHashSet(), root)
+        .listTo(LinkedHashSet(), StorageIndex.ROOT.path)
         .filter { it.fileName.toString() !in exclude }
 }

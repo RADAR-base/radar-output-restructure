@@ -17,8 +17,6 @@
 package org.radarbase.output.data
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.joinAll
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.apache.avro.SchemaBuilder
 import org.apache.avro.generic.GenericData.Record
@@ -29,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.mockito.kotlin.mock
+import org.radarbase.kotlin.coroutines.launchJoin
 import org.radarbase.output.Application
 import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.TopicPartition
@@ -208,9 +207,9 @@ class FileCacheTest {
             val cache2 = createResource { FileCache(factory, "topic", path, tmpDir, accountant) }
             val cache3 = createResource { FileCache(factory, "topic", file3, tmpDir, accountant) }
 
-            listOf(cache1, cache2, cache3)
-                .map { cache -> launch(Dispatchers.IO) { cache.initialize(exampleRecord) } }
-                .joinAll()
+            listOf(cache1, cache2, cache3).launchJoin(Dispatchers.IO) { cache ->
+                cache.initialize(exampleRecord)
+            }
 
             val transaction = Accountant.Transaction(topicPartition, 0, lastModified)
             assertEquals(0, cache1.compareTo(cache2))

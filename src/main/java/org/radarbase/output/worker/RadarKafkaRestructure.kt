@@ -39,7 +39,6 @@ import java.io.IOException
 import java.nio.file.Path
 import java.time.Duration
 import java.util.concurrent.atomic.LongAdder
-import kotlin.coroutines.coroutineContext
 
 /**
  * Performs the following actions
@@ -81,15 +80,15 @@ class RadarKafkaRestructure(
     @Throws(IOException::class, InterruptedException::class)
     suspend fun process() {
         // Get files and directories
-        val absolutePath = sourceStorage.root
-
         logger.info("Scanning topics...")
 
-        val paths = topicPaths(absolutePath)
+        val paths = sourceStorageManager.listTopics(excludeTopics)
+            // different services start on different topics to decrease lock contention
+            .shuffled()
 
         logger.info("{} topics found", paths.size)
 
-        withContext(coroutineContext + supervisor) {
+        withContext(supervisor) {
             paths.forEach { p ->
                 launch {
                     try {
@@ -163,11 +162,6 @@ class RadarKafkaRestructure(
         supervisor.cancel()
     }
 
-    private suspend fun topicPaths(root: Path): List<Path> =
-        sourceStorageManager.listTopics(root, excludeTopics)
-            // different services start on different topics to decrease lock contention
-            .shuffled()
-
     private data class ProcessingStatistics(
         val fileCount: Long,
         val recordCount: Long,
@@ -188,9 +182,9 @@ class RadarKafkaRestructure(
             factory.sourceStorage.launchJoin { sourceStorage ->
                 RadarKafkaRestructure(factory, sourceStorage).useSuspended { restructure ->
                     sourceStorage.storageIndexManager.update()
-                    logger.info("In:  {}", sourceStorage.sourceStorage.root)
+                    logger.info("In:  {}", sourceStorage.sourceStorage)
                     logger.info(
-                        "Out: bucket {} (default {}) - path {}",
+                        "Out: target format '{}' (default {}) - path format '{}'",
                         pathConfig.target.format,
                         pathConfig.target.default,
                         pathConfig.path.format,

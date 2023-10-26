@@ -10,16 +10,16 @@ import kotlin.io.path.listDirectoryEntries
 
 internal class TemporaryDirectoryTest {
     @Test
-    fun createAndDelete(@TempDir root: Path) {
-        TemporaryDirectory(root, "worker-").use {
-            assertThat(root.listDirectoryEntries().size, `is`(1))
+    fun createAndDelete(@TempDir baseDir: Path) {
+        TemporaryDirectory(baseDir, "worker-").use {
+            assertThat(baseDir.listDirectoryEntries().size, `is`(1))
             createTempFile(it.path, "test", "txt")
             createTempFile(it.path, "test", "txt")
 
             assertThat(it.path.listDirectoryEntries().size, `is`(2))
-            assertThat(root.listDirectoryEntries().size, `is`(1))
+            assertThat(baseDir.listDirectoryEntries().size, `is`(1))
         }
 
-        assertThat(root.listDirectoryEntries().size, `is`(0))
+        assertThat(baseDir.listDirectoryEntries().size, `is`(0))
     }
 }

@@ -56,8 +56,8 @@ class FileCacheStoreTest {
 
     @Test
     @Throws(IOException::class)
-    fun appendLine(@TempDir root: Path, @TempDir tmpDir: Path) = runTest {
-        fun TargetPath.toLocalPath(): Path = toLocalPath(root)
+    fun appendLine(@TempDir baseDir: Path, @TempDir tmpDir: Path) = runTest {
+        fun TargetPath.toLocalPath(): Path = toLocalPath(baseDir)
 
         val f1 = "f1".toTargetPath("radar-output-storage")
         val f2 = "f2".toTargetPath("radar-output-storage")
@@ -93,7 +93,7 @@ class FileCacheStoreTest {
                 ),
                 worker = WorkerConfig(cacheSize = 2),
                 sources = listOf(ResourceConfig("s3", tmpDir, s3 = S3Config("http://ep", "null", "null", bucket = "Test"))),
-                targets = mapOf("radar-output-storage" to ResourceConfig("local", path = root, local = LocalConfig())),
+                targets = mapOf("radar-output-storage" to ResourceConfig("local", path = baseDir, local = LocalConfig())),
             ),
         )
 
