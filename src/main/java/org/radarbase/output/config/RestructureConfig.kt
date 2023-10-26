@@ -83,20 +83,15 @@ data class RestructureConfig(
     }
 
     fun withEnv(): RestructureConfig = this
-        .copyOnChange(source, { it?.withEnv("SOURCE_") }) { copy(source = it) }
-        .copyOnChange(sources, { it.map { source -> source.withEnv("SOURCE_") } }) { copy(sources = it) }
+        .copyOnChange(source, { it?.withNamedEnv("SOURCE_") }) { copy(source = it) }
+        .copyOnChange(sources, { it.map { source -> source.withNamedEnv("SOURCE_") } }) { copy(sources = it) }
         .copyOnChange(
             targets,
             {
-                it.mapValues { (name, target) ->
-                    val prefix = "TARGET_" + name.replace('-', '_').uppercase()
-                    target
-                        .withEnv("TARGET_")
-                        .withEnv(prefix)
-                }
+                it.mapValues { (name, target) -> target.withNamedEnv("TARGET_", name) }
             },
         ) { copy(targets = it) }
-        .copyOnChange(target, { it?.withEnv("TARGET_") }) { copy(target = it) }
+        .copyOnChange(target, { it?.withNamedEnv("TARGET_") }) { copy(target = it) }
         .copyOnChange(redis, { it.withEnv() }) { copy(redis = it) }
 
     companion object {
@@ -108,6 +103,18 @@ data class RestructureConfig(
 
         private val logger = LoggerFactory.getLogger(RestructureConfig::class.java)
         internal const val RESTRUCTURE_CONFIG_FILE_NAME = "restructure.yml"
+
+        private val illegalEnvSymbols = "[^A-Za-z0-9]+".toRegex()
+
+        private fun ResourceConfig.withNamedEnv(prefix: String, targetName: String? = null): ResourceConfig {
+            val withFixedPrefix = withEnv(prefix)
+            val useName = targetName
+                ?: this.name
+                ?: return withFixedPrefix
+            return withFixedPrefix.withEnv(
+                prefix + useName.replace(illegalEnvSymbols, "_").uppercase(),
+            )
+        }
 
         inline fun <T> T.copyEnv(key: String, doCopy: T.(String) -> T): T =
             copyOnChange<T, String?>(
