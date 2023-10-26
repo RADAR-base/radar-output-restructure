@@ -4,21 +4,6 @@ import io.minio.BucketArgs
 import io.minio.ObjectArgs
 import java.nio.file.Path
 
-fun Path.withoutFirstSegment(): String {
-    // remove bucket prefix
-    return first().relativize(this).toString()
-}
-
-fun Path.splitFirstSegment(): Pair<String, Path> {
-    val bucketPath = first()
-    return Pair(
-        bucketPath.toString(),
-        bucketPath.relativize(this),
-    )
-}
-
-fun Path.firstSegment(): String = first().toString()
-
 inline fun <S : BucketArgs, T : BucketArgs.Builder<out T, out S>> T.bucketBuild(
     bucket: String,
     configure: T.() -> T = { this },
