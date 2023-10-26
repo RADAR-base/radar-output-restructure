@@ -35,10 +35,9 @@ import org.radarbase.output.config.RestructureConfig
 import org.radarbase.output.format.RecordConverterFactory
 import org.radarbase.output.path.RecordPathFactory
 import org.radarbase.output.source.InMemoryStorageIndex
-import org.radarbase.output.source.SourceStorage
 import org.radarbase.output.source.SourceStorageFactory
-import org.radarbase.output.source.StorageIndexManager
-import org.radarbase.output.target.TargetStorage
+import org.radarbase.output.source.SourceStorageManager
+import org.radarbase.output.target.TargetManager
 import org.radarbase.output.target.TargetStorageFactory
 import org.radarbase.output.util.Timer
 import org.radarbase.output.worker.FileCacheStore
@@ -47,9 +46,7 @@ import org.radarbase.output.worker.RadarKafkaRestructure
 import org.slf4j.LoggerFactory
 import redis.clients.jedis.JedisPool
 import java.io.IOException
-import java.nio.file.Path
 import java.text.NumberFormat
-import java.time.Duration
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.atomic.LongAdder
@@ -64,18 +61,23 @@ class Application(
     override val config = config.apply { validate() }
     override val recordConverter: RecordConverterFactory = config.format.createConverter()
     override val compression: Compression = config.compression.createCompression()
-    override val pathFactory: RecordPathFactory = config.paths.createFactory(
-        config.target,
-        recordConverter.extension + compression.extension,
-        config.topics,
-    )
 
-    private val sourceStorageFactory = SourceStorageFactory(config.source, config.paths.temp)
-    override val sourceStorage: SourceStorage
-        get() = sourceStorageFactory.createSourceStorage()
+    private val sourceStorageFactory = SourceStorageFactory(config.paths.temp)
+    override val sourceStorage: List<SourceStorageManager> = config.consolidatedSources
+        .map { sourceConfig ->
+            val storage = sourceStorageFactory.createSourceStorage(sourceConfig)
+            SourceStorageManager(storage, InMemoryStorageIndex(), sourceConfig.index)
+        }
 
-    override val targetStorage: TargetStorage =
-        TargetStorageFactory(config.target).createTargetStorage()
+    override val targetManager: TargetManager = TargetStorageFactory()
+        .createTargetStorage(config.paths.target.default, config.consolidatedTargets)
+
+    override val pathFactory: RecordPathFactory =
+        config.paths.createFactory(
+            targetManager,
+            recordConverter.extension + compression.extension,
+            config.topics,
+        )
 
     override val redisHolder: RedisHolder = RedisHolder(JedisPool(config.redis.uri))
     override val remoteLockManager: RemoteLockManager = RedisRemoteLockManager(
@@ -88,27 +90,9 @@ class Application(
 
     override val workerSemaphore = Semaphore(config.worker.numThreads * 2)
 
-    override val storageIndexManagers: Map<Path, StorageIndexManager>
-
     private val jobs: List<Job>
 
     init {
-        val indexConfig = config.source.index
-        val (fullScan, emptyScan) = if (indexConfig == null) {
-            listOf(3600L, 900L)
-        } else {
-            listOf(indexConfig.fullSyncInterval, indexConfig.emptyDirectorySyncInterval)
-        }.map { Duration.ofSeconds(it) }
-
-        storageIndexManagers = config.paths.inputs.associateWith { input ->
-            StorageIndexManager(
-                InMemoryStorageIndex(),
-                sourceStorage,
-                input,
-                fullScan,
-                emptyScan,
-            )
-        }
         val serviceMutex = Mutex()
         jobs = listOfNotNull(
             RadarKafkaRestructure.job(config, serviceMutex),
@@ -137,7 +121,7 @@ class Application(
         }
 
         runBlocking {
-            launch { targetStorage.initialize() }
+            targetManager.initialize()
         }
 
         if (config.service.enable) {

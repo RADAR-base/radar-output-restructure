@@ -35,32 +35,37 @@ import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.OffsetRangeSet
 import org.radarbase.output.accounting.TopicPartition
 import org.radarbase.output.accounting.TopicPartitionOffsetRange
+import org.radarbase.output.config.LocalConfig
 import org.radarbase.output.config.PathConfig
 import org.radarbase.output.config.ResourceConfig
 import org.radarbase.output.config.RestructureConfig
 import org.radarbase.output.config.S3Config
 import org.radarbase.output.config.WorkerConfig
+import org.radarbase.output.path.TargetPath
+import org.radarbase.output.path.toTargetPath
 import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.worker.FileCacheStore
 import java.io.IOException
-import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import kotlin.io.path.createDirectories
+import kotlin.io.path.readBytes
 
 class FileCacheStoreTest {
     private val lastModified = Instant.now()
 
     @Test
     @Throws(IOException::class)
-    fun appendLine(@TempDir root: Path, @TempDir tmpDir: Path) = runTest {
-        val f1 = root.resolve("f1")
-        val f2 = root.resolve("f2")
-        val f3 = root.resolve("f3")
-        val d4 = root.resolve("d4")
-        d4.createDirectories()
-        val f4 = d4.resolve("f4.txt")
-        val newFile = root.resolve("newFile")
+    fun appendLine(@TempDir baseDir: Path, @TempDir tmpDir: Path) = runTest {
+        fun TargetPath.toLocalPath(): Path = toLocalPath(baseDir)
+
+        val f1 = "f1".toTargetPath("radar-output-storage")
+        val f2 = "f2".toTargetPath("radar-output-storage")
+        val f3 = "f3".toTargetPath("radar-output-storage")
+        val d4 = "d4".toTargetPath("radar-output-storage")
+        d4.toLocalPath().createDirectories()
+        val f4 = d4.navigate { it.resolve("f4.txt") }
+        val newFile = "newFile".toTargetPath("radar-output-storage")
 
         val simpleSchema = SchemaBuilder.record("simple").fields()
             .name("a").type("string").noDefault()
@@ -84,11 +89,11 @@ class FileCacheStoreTest {
         val factory = Application(
             RestructureConfig(
                 paths = PathConfig(
-                    output = root,
                     temp = tmpDir,
                 ),
                 worker = WorkerConfig(cacheSize = 2),
-                source = ResourceConfig(type = "s3", s3 = S3Config("endpoint", null, null)),
+                sources = listOf(ResourceConfig("s3", tmpDir, s3 = S3Config("http://ep", "null", "null", bucket = "Test"))),
+                targets = mapOf("radar-output-storage" to ResourceConfig("local", path = baseDir, local = LocalConfig())),
             ),
         )
 
@@ -188,19 +193,19 @@ class FileCacheStoreTest {
         assertTrue(offsets.contains(offsetRange1))
 
         launch(Dispatchers.IO) {
-            assertEquals("a\nsomething\nsomethingElse\nthird\n", String(Files.readAllBytes(f1)))
+            assertEquals("a\nsomething\nsomethingElse\nthird\n", String(f1.toLocalPath().readBytes()))
         }
         launch(Dispatchers.IO) {
-            assertEquals("a\nsomething\nf2\n", String(Files.readAllBytes(f2)))
+            assertEquals("a\nsomething\nf2\n", String(f2.toLocalPath().readBytes()))
         }
         launch(Dispatchers.IO) {
-            assertEquals("a\nf3\nf3\nf3\n", String(Files.readAllBytes(f3)))
+            assertEquals("a\nf3\nf3\nf3\n", String(f3.toLocalPath().readBytes()))
         }
         launch(Dispatchers.IO) {
-            assertEquals("a\nf4\n", String(Files.readAllBytes(f4)))
+            assertEquals("a\nf4\n", String(f4.toLocalPath().readBytes()))
         }
         launch(Dispatchers.IO) {
-            assertEquals("a,b\nf1,conflict\n", String(Files.readAllBytes(newFile)))
+            assertEquals("a,b\nf1,conflict\n", String(newFile.toLocalPath().readBytes()))
         }
     }
 }

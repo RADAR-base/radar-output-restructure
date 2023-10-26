@@ -2,14 +2,10 @@ package org.radarbase.output.accounting
 
 import kotlinx.coroutines.CoroutineScope
 import org.radarbase.output.FileStoreFactory
-import org.radarbase.output.config.RestructureConfig
-import org.radarbase.output.target.TargetStorage
 import org.radarbase.output.util.Timer
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.nio.file.Paths
-import kotlin.io.path.deleteExisting
-import kotlin.io.path.exists
 
 open class AccountantImpl(
     private val factory: FileStoreFactory,
@@ -27,29 +23,6 @@ open class AccountantImpl(
 
         val offsets = offsetPersistence.read(offsetsKey)
         offsetFile = offsetPersistence.writer(scope, offsetsKey, offsets)
-        readDeprecatedOffsets(factory.config, factory.targetStorage, topic)
-            ?.takeUnless { it.isEmpty }
-            ?.let {
-                offsetFile.addAll(it)
-                offsetFile.triggerWrite()
-            }
-    }
-
-    private suspend fun readDeprecatedOffsets(
-        config: RestructureConfig,
-        targetStorage: TargetStorage,
-        topic: String,
-    ): OffsetRangeSet? {
-        val offsetsPath = config.paths.output
-            .resolve(OFFSETS_FILE_NAME)
-            .resolve("$topic.csv")
-
-        return if (offsetsPath.exists()) {
-            OffsetFilePersistence(targetStorage).read(offsetsPath)
-                .also { offsetsPath.deleteExisting() }
-        } else {
-            null
-        }
     }
 
     override suspend fun remove(range: TopicPartitionOffsetRange) =

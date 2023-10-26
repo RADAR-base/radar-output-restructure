@@ -1,15 +1,14 @@
 package org.radarbase.output.source
 
 import org.apache.avro.file.SeekableInput
-import org.radarbase.output.util.AvroFileLister.Companion.avroFileTreeLister
-import org.radarbase.output.util.AvroTopicLister.Companion.avroTopicTreeLister
 import org.radarbase.output.util.SuspendedCloseable
-import org.radarbase.output.util.TopicPath
 import java.nio.file.Path
 import java.time.Instant
 
 /** Source storage type. */
 interface SourceStorage {
+    val baseDir: Path
+
     /** Create a reader for the storage medium. It should be closed by the caller. */
     fun createReader(): SourceStorageReader
 
@@ -24,34 +23,11 @@ interface SourceStorage {
     suspend fun delete(path: Path)
     suspend fun createTopicFile(topic: String, status: StorageNode): TopicFile = TopicFile(
         topic = topic,
-        path = status.path,
+        path = status.path.toSourcePath(),
         lastModified = if (status is StorageNode.StorageFile) status.lastModified else Instant.now(),
     )
 
-    /**
-     * Recursively returns all record files in a sequence of a given topic with path.
-     * The path must only contain records of a single topic, this is not verified.
-     */
-    suspend fun listTopicFiles(
-        storageIndex: StorageIndex,
-        topic: String,
-        topicPath: Path,
-        limit: Int,
-        predicate: (TopicFile) -> Boolean,
-    ): List<TopicFile> = storageIndex.avroFileTreeLister(this)
-        .list(TopicPath(topic, topicPath), limit, predicate)
-
-    /**
-     * Recursively find all topic root paths of records in the given path.
-     * Exclude paths belonging to the set of given excluded topics.
-     */
-    suspend fun listTopics(
-        storageIndex: StorageIndex,
-        root: Path,
-        exclude: Set<String>,
-    ): List<Path> = storageIndex.avroTopicTreeLister()
-        .listTo(LinkedHashSet(), root)
-        .filter { it.fileName.toString() !in exclude }
+    fun Path.toSourcePath(): Path = baseDir.resolve(this).normalize()
 
     /**
      * File reader for the storage medium.

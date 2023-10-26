@@ -22,6 +22,8 @@ import java.io.InputStream
 import java.nio.file.Path
 
 interface TargetStorage {
+    val baseDir: Path
+
     suspend fun initialize()
 
     /**

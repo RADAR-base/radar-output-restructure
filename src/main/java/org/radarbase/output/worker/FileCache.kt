@@ -25,6 +25,7 @@ import org.radarbase.output.compression.Compression
 import org.radarbase.output.config.DeduplicationConfig
 import org.radarbase.output.format.RecordConverter
 import org.radarbase.output.format.RecordConverterFactory
+import org.radarbase.output.path.TargetPath
 import org.radarbase.output.target.TargetStorage
 import org.radarbase.output.util.SuspendedCloseable
 import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
@@ -49,7 +50,7 @@ class FileCache(
     factory: FileStoreFactory,
     topic: String,
     /** File that the cache is maintaining.  */
-    val path: Path,
+    val targetPath: TargetPath,
     /** Local temporary directory to store files in. */
     tmpDir: Path,
     private val accountant: Accountant,
@@ -57,7 +58,8 @@ class FileCache(
 
     private lateinit var writer: Writer
     private lateinit var recordConverter: RecordConverter
-    private val targetStorage: TargetStorage = factory.targetStorage
+    private val targetStorage: TargetStorage = factory.targetManager[targetPath]
+    private val path = targetPath.path
     private val tmpPath: Path
     private val compression: Compression = factory.compression
     private val converterFactory: RecordConverterFactory = factory.recordConverter
@@ -111,7 +113,8 @@ class FileCache(
             inputStream.reader().useSuspended { reader ->
                 converterFactory.converterFor(writer, record, fileIsNew, reader, excludeFields)
             }
-        } catch (ex: IOException) {
+        } catch (ex: Exception) {
+            logger.error("Failed to initialize record converter for {}: {}", path, ex.toString())
             withContext(Dispatchers.IO) {
                 try {
                     writer.close()

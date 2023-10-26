@@ -10,17 +10,18 @@ import io.minio.RemoveBucketArgs
 import io.minio.RemoveObjectArgs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.radarbase.kotlin.coroutines.launchJoin
 import org.radarbase.output.config.PathConfig
 import org.radarbase.output.config.PathFormatterConfig
 import org.radarbase.output.config.ResourceConfig
 import org.radarbase.output.config.RestructureConfig
 import org.radarbase.output.config.S3Config
+import org.radarbase.output.config.TargetFormatterConfig
 import org.radarbase.output.config.TopicConfig
 import org.radarbase.output.config.WorkerConfig
 import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
@@ -49,11 +50,16 @@ class RestructureS3IntegrationTest {
             ),
         )
         val config = RestructureConfig(
-            source = ResourceConfig("s3", s3 = sourceConfig),
-            target = ResourceConfig("s3", s3 = targetConfig),
-            paths = PathConfig(inputs = listOf(Paths.get("in"))),
+            sources = listOf(ResourceConfig("s3", path = Paths.get("in"), s3 = sourceConfig)),
+            targets = mapOf(
+                "radar-output-storage" to ResourceConfig("s3", path = Paths.get("output"), s3 = targetConfig),
+                "radar-test-root" to ResourceConfig("s3", path = Paths.get("otherOutput"), s3 = targetConfig),
+            ),
             worker = WorkerConfig(minimumFileAge = 0L),
             topics = topicConfig,
+            paths = PathConfig(
+                target = TargetFormatterConfig("\${projectId}"),
+            ),
         )
         val application = Application(config)
         val sourceClient = sourceConfig.createS3Client()
@@ -67,20 +73,18 @@ class RestructureS3IntegrationTest {
             "application_server_status/partition=1/application_server_status+1+0000000021.avro",
             "android_phone_acceleration/partition=0/android_phone_acceleration+0+0003018784.avro",
         )
-        val targetFiles = resourceFiles.map { Paths.get("in/$it") }
-        resourceFiles.mapIndexed { i, resourceFile ->
-            launch(Dispatchers.IO) {
-                this@RestructureS3IntegrationTest.javaClass.getResourceAsStream("/$resourceFile")
-                    .useSuspended { statusFile ->
-                        sourceClient.putObject(
-                            PutObjectArgs.Builder()
-                                .objectBuild(sourceBucket, targetFiles[i]) {
-                                    stream(statusFile, -1, MAX_PART_SIZE)
-                                },
-                        )
-                    }
-            }
-        }.joinAll()
+        val targetFiles = resourceFiles.associateWith { Paths.get("in/$it") }
+        targetFiles.entries.launchJoin(Dispatchers.IO) { (resourceFile, targetFile) ->
+            this@RestructureS3IntegrationTest.javaClass.getResourceAsStream("/$resourceFile")
+                .useSuspended { statusFile ->
+                    sourceClient.putObject(
+                        PutObjectArgs.Builder()
+                            .objectBuild(sourceBucket, targetFile) {
+                                stream(statusFile, -1, MAX_PART_SIZE)
+                            },
+                    )
+                }
+        }
 
         application.start()
 
@@ -94,7 +98,7 @@ class RestructureS3IntegrationTest {
         val firstParticipantOutput =
             "output/STAGING_PROJECT/1543bc93-3c17-4381-89a5-c5d6272b827c/application_server_status/CONNECTED"
         val secondParticipantOutput =
-            "output/radar-test-root/4ab9b985-6eec-4e51-9a29-f4c571c89f99/android_phone_acceleration"
+            "otherOutput/radar-test-root/4ab9b985-6eec-4e51-9a29-f4c571c89f99/android_phone_acceleration"
 
         val targetBucket = requireNotNull(targetConfig.bucket)
 
@@ -121,7 +125,6 @@ class RestructureS3IntegrationTest {
             return@coroutineScope withContext(Dispatchers.IO) {
                 targetClient.listObjects(
                     ListObjectsArgs.Builder().bucketBuild(targetBucket) {
-                        prefix("output")
                         recursive(true)
                         useUrlEncodingType(false)
                     },
@@ -144,13 +147,11 @@ class RestructureS3IntegrationTest {
         coroutineScope {
             // delete source files
             launch {
-                targetFiles.map {
-                    launch(Dispatchers.IO) {
-                        sourceClient.removeObject(
-                            RemoveObjectArgs.Builder().objectBuild(sourceBucket, it),
-                        )
-                    }
-                }.joinAll()
+                targetFiles.values.launchJoin(Dispatchers.IO) {
+                    sourceClient.removeObject(
+                        RemoveObjectArgs.Builder().objectBuild(sourceBucket, it),
+                    )
+                }
 
                 launch(Dispatchers.IO) {
                     sourceClient.removeBucket(
@@ -161,15 +162,13 @@ class RestructureS3IntegrationTest {
 
             // delete target files
             launch {
-                files.map {
-                    launch(Dispatchers.IO) {
-                        targetClient.removeObject(
-                            RemoveObjectArgs.Builder().bucketBuild(targetBucket) {
-                                `object`(it)
-                            },
-                        )
-                    }
-                }.joinAll()
+                files.launchJoin(Dispatchers.IO) { file ->
+                    targetClient.removeObject(
+                        RemoveObjectArgs.Builder().bucketBuild(targetBucket) {
+                            `object`(file)
+                        },
+                    )
+                }
                 launch(Dispatchers.IO) {
                     targetClient.removeBucket(
                         RemoveBucketArgs.Builder().bucketBuild(targetBucket),

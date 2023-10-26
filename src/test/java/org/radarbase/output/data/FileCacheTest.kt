@@ -17,8 +17,6 @@
 package org.radarbase.output.data
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.joinAll
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.apache.avro.SchemaBuilder
 import org.apache.avro.generic.GenericData.Record
@@ -29,18 +27,23 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.mockito.kotlin.mock
+import org.radarbase.kotlin.coroutines.launchJoin
 import org.radarbase.output.Application
 import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.TopicPartition
+import org.radarbase.output.config.LocalConfig
 import org.radarbase.output.config.PathConfig
 import org.radarbase.output.config.ResourceConfig
 import org.radarbase.output.config.RestructureConfig
 import org.radarbase.output.config.S3Config
+import org.radarbase.output.path.TargetPath
+import org.radarbase.output.path.toTargetPath
 import org.radarbase.output.util.ResourceContext.Companion.resourceContext
 import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.worker.FileCache
 import java.io.IOException
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.time.Instant
 import java.util.zip.GZIPInputStream
 import kotlin.io.path.bufferedReader
@@ -51,7 +54,8 @@ import kotlin.io.path.inputStream
  * Created by joris on 03/07/2017.
  */
 class FileCacheTest {
-    private lateinit var path: Path
+    private lateinit var localPath: Path
+    private lateinit var path: TargetPath
     private lateinit var exampleRecord: Record
     private lateinit var tmpDir: Path
     private lateinit var factory: Application
@@ -65,7 +69,8 @@ class FileCacheTest {
     @BeforeEach
     @Throws(IOException::class)
     fun setUp(@TempDir path: Path, @TempDir tmpPath: Path) {
-        this.path = path.resolve("f")
+        this.path = "f".toTargetPath("radar-output-storage")
+        this.localPath = this.path.toLocalPath(path)
         this.tmpDir = tmpPath
 
         val schema = SchemaBuilder.record("simple").fields()
@@ -75,10 +80,10 @@ class FileCacheTest {
 
         config = RestructureConfig(
             paths = PathConfig(
-                output = path.parent,
                 temp = tmpPath,
             ),
-            source = ResourceConfig("s3", S3Config("endpoint", null, null)),
+            source = ResourceConfig("s3", path = Paths.get("in"), s3 = S3Config("http://ep", "null", "null", "test")),
+            targets = mapOf("radar-output-storage" to ResourceConfig("local", path = path, local = LocalConfig())),
         )
 
         setUp(config)
@@ -105,10 +110,10 @@ class FileCacheTest {
             )
         }
 
-        println("Gzip: " + path.fileSize())
+        println("Gzip: " + localPath.fileSize())
 
         val lines = resourceContext {
-            resourceChain { path.inputStream() }
+            resourceChain { localPath.inputStream() }
                 .chain { GZIPInputStream(it) }
                 .chain { it.reader() }
                 .result
@@ -139,9 +144,9 @@ class FileCacheTest {
             )
         }
 
-        println("Gzip appended: " + path.fileSize())
+        println("Gzip appended: " + localPath.fileSize())
         val lines = resourceContext {
-            resourceChain { path.inputStream() }
+            resourceChain { localPath.inputStream() }
                 .chain { GZIPInputStream(it) }
                 .chain { it.reader() }
                 .result
@@ -161,9 +166,9 @@ class FileCacheTest {
             )
         }
 
-        println("Plain: " + path.fileSize())
+        println("Plain: " + localPath.fileSize())
 
-        val lines = path.bufferedReader().use { it.readLines() }
+        val lines = localPath.bufferedReader().use { it.readLines() }
         assertEquals(listOf("a", "something"), lines)
     }
 
@@ -186,25 +191,25 @@ class FileCacheTest {
             )
         }
 
-        println("Plain appended: " + path.fileSize())
+        println("Plain appended: " + localPath.fileSize())
 
-        val lines = path.bufferedReader().use { it.readLines() }
+        val lines = localPath.bufferedReader().use { it.readLines() }
         assertEquals(listOf("a", "something", "something"), lines)
     }
 
     @Test
     @Throws(IOException::class)
     fun compareTo() = runTest {
-        val file3 = path.parent.resolve("g")
+        val file3 = path.navigate { it.resolveSibling("g") }
 
         resourceContext {
             val cache1 = createResource { FileCache(factory, "topic", path, tmpDir, accountant) }
             val cache2 = createResource { FileCache(factory, "topic", path, tmpDir, accountant) }
             val cache3 = createResource { FileCache(factory, "topic", file3, tmpDir, accountant) }
 
-            listOf(cache1, cache2, cache3)
-                .map { cache -> launch(Dispatchers.IO) { cache.initialize(exampleRecord) } }
-                .joinAll()
+            listOf(cache1, cache2, cache3).launchJoin(Dispatchers.IO) { cache ->
+                cache.initialize(exampleRecord)
+            }
 
             val transaction = Accountant.Transaction(topicPartition, 0, lastModified)
             assertEquals(0, cache1.compareTo(cache2))

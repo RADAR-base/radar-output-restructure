@@ -16,46 +16,43 @@
 
 package org.radarbase.output.path
 
-import org.radarbase.output.config.BucketFormatterConfig
 import org.radarbase.output.config.PathConfig
 import org.radarbase.output.config.PathFormatterConfig
+import org.radarbase.output.config.TargetFormatterConfig
 import org.radarbase.output.config.TopicConfig
+import org.radarbase.output.target.TargetManager
 import org.slf4j.LoggerFactory
 
 open class FormattedPathFactory : RecordPathFactory() {
     private lateinit var pathFormatter: PathFormatter
     private var topicFormatters: Map<String, PathFormatter> = emptyMap()
-    private var bucketFormatter: PathFormatter? = null
+    private var targetFormatter: PathFormatter? = null
     private lateinit var disabledBucketRegexes: List<Regex>
-    private lateinit var defaultBucketName: String
+    private lateinit var defaultTarget: String
 
     override fun init(
+        targetManager: TargetManager,
         extension: String,
         config: PathConfig,
         topics: Map<String, TopicConfig>,
     ) {
-        super.init(extension, config, topics)
+        super.init(targetManager, extension, config, topics)
         pathFormatter = pathConfig.path.toPathFormatter()
-        bucketFormatter = pathConfig.bucket?.toBucketFormatter()
-        disabledBucketRegexes = pathConfig.bucket
-            ?.disabledFormats
-            ?.map { it.toRegex(RegexOption.IGNORE_CASE) }
-            ?: emptyList()
-        defaultBucketName = pathConfig.bucket
-            ?.defaultName
-            ?: "radar-output-storage"
+        targetFormatter = pathConfig.target.toTargetFormatter()
+        disabledBucketRegexes = pathConfig.target
+            .disabledFormats
+            .map { it.toRegex(RegexOption.IGNORE_CASE) }
+        defaultTarget = pathConfig.target.default
 
         logger.info("Formatting path with {}", pathFormatter)
     }
 
-    override suspend fun bucket(pathParameters: PathFormatParameters?): String? {
-        val formatter = bucketFormatter ?: return null
-        pathParameters ?: return pathConfig.bucket?.defaultName
-        val format = formatter.format(pathParameters)
-        return if (disabledBucketRegexes.any { it.matches(format) }) {
-            defaultBucketName
-        } else {
+    override suspend fun target(pathParameters: PathFormatParameters): String {
+        val format = targetFormatter?.format(pathParameters)
+        return if (format != null && disabledBucketRegexes.none { it.matches(format) }) {
             format
+        } else {
+            defaultTarget
         }
     }
 
@@ -74,8 +71,10 @@ open class FormattedPathFactory : RecordPathFactory() {
 
     override suspend fun relativePath(
         pathParameters: PathFormatParameters,
-    ): String = (topicFormatters[pathParameters.topic] ?: pathFormatter)
-        .format(pathParameters)
+    ): String {
+        val formatter = topicFormatters[pathParameters.topic] ?: pathFormatter
+        return formatter.format(pathParameters)
+    }
 
     companion object {
         private fun PathFormatterConfig.toPathFormatter(): PathFormatter = PathFormatter(
@@ -83,11 +82,14 @@ open class FormattedPathFactory : RecordPathFactory() {
             plugins.toPathFormatterPlugins(properties),
         )
 
-        private fun BucketFormatterConfig.toBucketFormatter(): PathFormatter = PathFormatter(
-            format,
-            plugins.toPathFormatterPlugins(properties),
-            checkMinimalDistinction = false,
-        )
+        private fun TargetFormatterConfig.toTargetFormatter(): PathFormatter? {
+            format ?: return null
+            return PathFormatter(
+                format,
+                plugins.toPathFormatterPlugins(properties),
+                checkMinimalDistinction = false,
+            )
+        }
 
         private val logger = LoggerFactory.getLogger(FormattedPathFactory::class.java)
     }

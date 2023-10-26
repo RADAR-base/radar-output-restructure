@@ -19,28 +19,29 @@ package org.radarbase.output.cleaner
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.format.RecordConverterFactory
+import org.radarbase.output.path.TargetPath
 import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.util.TimeUtil.getDate
 import org.radarbase.output.util.TimeUtil.toDouble
 import java.io.FileNotFoundException
-import java.nio.file.Path
 
 /** Keeps path handles of a path.  */
 class TimestampFileCache(
     private val factory: FileStoreFactory,
     /** File that the cache is maintaining.  */
-    val path: Path,
+    val targetPath: TargetPath,
 ) : Comparable<TimestampFileCache> {
+    private val targetStorage = factory.targetManager[targetPath]
+    private val path = targetPath.path
     private val converterFactory: RecordConverterFactory = factory.recordConverter
     private var lastUse: Long = 0
     private var header: Array<String>? = null
     private lateinit var times: Set<Double>
 
     suspend fun initialize() {
-        val targetStorage = factory.targetStorage
         targetStorage.status(path)
             ?.takeIf { it.size > 0 }
-            ?: throw FileNotFoundException()
+            ?: throw FileNotFoundException("Path $path not found on target $targetStorage")
 
         val readDates = targetStorage.newInputStream(path).useSuspended {
             converterFactory.readTimeSeconds(it, factory.compression)
@@ -75,6 +76,6 @@ class TimestampFileCache(
     override fun compareTo(other: TimestampFileCache): Int = comparator.compare(this, other)
 
     companion object {
-        val comparator = compareBy(TimestampFileCache::lastUse, TimestampFileCache::path)
+        val comparator = compareBy(TimestampFileCache::lastUse, TimestampFileCache::targetPath)
     }
 }

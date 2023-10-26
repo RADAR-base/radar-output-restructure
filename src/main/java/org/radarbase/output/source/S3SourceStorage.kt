@@ -23,6 +23,7 @@ import kotlin.io.path.pathString
 import kotlin.time.Duration.Companion.seconds
 
 class S3SourceStorage(
+    override val baseDir: Path,
     private val s3Client: MinioClient,
     config: S3Config,
     private val tempPath: Path,
@@ -39,7 +40,7 @@ class S3SourceStorage(
             if (maxKeys != null) {
                 maxKeys(maxKeys.coerceAtMost(1000))
             }
-            prefix("$path/")
+            prefix("${path.toSourcePath()}/")
             recursive(false)
             if (startAfter != null) {
                 startAfter(startAfter.pathString)
@@ -50,10 +51,11 @@ class S3SourceStorage(
         if (maxKeys != null) {
             iterable = iterable.take(maxKeys)
         }
+        val baseDirPrefix = "$baseDir/"
         return iterable
             .map {
                 val item = it.get()
-                val itemPath = Paths.get(item.objectName())
+                val itemPath = Paths.get(item.objectName().removePrefix(baseDirPrefix))
                 if (item.isDir) {
                     StorageNode.StorageDirectory(itemPath)
                 } else {
@@ -85,16 +87,20 @@ class S3SourceStorage(
     }
 
     private suspend fun getObjectTags(path: Path): Tags {
-        val tagRequest = GetObjectTagsArgs.Builder().objectBuild(bucket, path)
+        val tagRequest = GetObjectTagsArgs.Builder().objectBuild(bucket, path.toSourcePath())
         return faultTolerant { s3Client.getObjectTags(tagRequest) }
     }
 
     override suspend fun delete(path: Path) {
-        val removeRequest = RemoveObjectArgs.Builder().objectBuild(bucket, path)
+        val removeRequest = RemoveObjectArgs.Builder().objectBuild(bucket, path.toSourcePath())
         faultTolerant { s3Client.removeObject(removeRequest) }
     }
 
     override fun createReader(): SourceStorage.SourceStorageReader = S3SourceStorageReader(tempPath, s3Client, bucket)
+
+    override fun toString(): String {
+        return "S3SourceStorage(bucket=$bucket, baseDir=$baseDir)"
+    }
 
     companion object {
         private val logger = LoggerFactory.getLogger(S3SourceStorage::class.java)

@@ -25,8 +25,6 @@ import kotlinx.coroutines.withContext
 import org.radarbase.kotlin.coroutines.CacheConfig
 import org.radarbase.kotlin.coroutines.CachedValue
 import org.radarbase.output.config.AzureConfig
-import org.radarbase.output.util.firstSegment
-import org.radarbase.output.util.splitFirstSegment
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.io.InputStream
@@ -38,7 +36,10 @@ import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 
-class AzureTargetStorage(private val config: AzureConfig) : TargetStorage {
+class AzureTargetStorage(
+    override val baseDir: Path,
+    private val config: AzureConfig,
+) : TargetStorage {
     private lateinit var serviceClient: BlobServiceClient
     private val containerClient: ConcurrentMap<String, CachedValue<BlobContainerClient>> = ConcurrentHashMap()
     private val cacheConfig = CacheConfig(
@@ -46,6 +47,7 @@ class AzureTargetStorage(private val config: AzureConfig) : TargetStorage {
         retryDuration = 1.hours,
         exceptionCacheDuration = 1.minutes,
     )
+    private val container = requireNotNull(config.container) { "Missing Azure Blob Storage container setting" }
 
     init {
         logger.info(
@@ -62,8 +64,6 @@ class AzureTargetStorage(private val config: AzureConfig) : TargetStorage {
             throw ex
         }
     }
-
-    private suspend fun client(path: Path) = client(path.firstSegment())
 
     private suspend fun client(container: String) =
         containerClient.computeIfAbsent(container) {
@@ -129,15 +129,14 @@ class AzureTargetStorage(private val config: AzureConfig) : TargetStorage {
         blob(path).delete()
     }
 
-    override suspend fun createDirectories(directory: Path) {
-        // ensure bucket exists
-        client(directory)
-    }
+    override suspend fun createDirectories(directory: Path) = Unit
 
     private suspend fun blob(path: Path): BlobClient {
-        val (container, key) = path.splitFirstSegment()
-        return client(container).getBlobClient(key)
+        return client(container).getBlobClient(baseDir.resolve(path).toString())
     }
+
+    override fun toString(): String =
+        "AzureTargetStorage(baseDir=$baseDir, container='$container')"
 
     companion object {
         private val logger = LoggerFactory.getLogger(AzureTargetStorage::class.java)

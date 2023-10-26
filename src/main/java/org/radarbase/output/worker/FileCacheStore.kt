@@ -24,13 +24,13 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.accounting.Accountant
+import org.radarbase.output.path.TargetPath
 import org.radarbase.output.util.SuspendedCloseable
 import org.radarbase.output.util.TemporaryDirectory
 import org.radarbase.output.util.Timer.time
 import org.radarbase.output.worker.FileCacheStore.WriteResponse.NO_CACHE_AND_NO_WRITE
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.nio.file.Path
 import kotlin.io.path.createTempFile
 import kotlin.io.path.outputStream
 
@@ -44,9 +44,9 @@ class FileCacheStore(
 ) : SuspendedCloseable {
     private val tmpDir: TemporaryDirectory
 
-    private val caches: MutableMap<Path, FileCache>
+    private val caches: MutableMap<TargetPath, FileCache>
     private val maxCacheSize: Int
-    private val schemasAdded: MutableMap<Path, Path>
+    private val schemasAdded: MutableMap<TargetPath, Unit>
 
     init {
         val config = factory.config
@@ -67,7 +67,7 @@ class FileCacheStore(
      */
     @Throws(IOException::class)
     suspend fun writeRecord(
-        path: Path,
+        path: TargetPath,
         record: GenericRecord,
         transaction: Accountant.Transaction,
     ): WriteResponse {
@@ -84,27 +84,29 @@ class FileCacheStore(
     }
 
     private suspend fun createCache(
-        path: Path,
+        targetPath: TargetPath,
         record: GenericRecord,
         transaction: Accountant.Transaction,
     ): FileCache {
         ensureCapacity()
 
-        val dir = path.parent
-        factory.targetStorage.createDirectories(dir)
+        val dir = targetPath.path.parent
+        if (dir != null) {
+            factory.targetManager[targetPath].createDirectories(dir)
+        }
 
         val cache = time("write.open") {
             FileCache(
                 factory,
                 transaction.topicPartition.topic,
-                path,
+                targetPath,
                 tmpDir.path,
                 accountant,
             )
         }
         cache.initialize(record)
-        writeSchema(transaction.topicPartition.topic, path, record.schema)
-        caches[path] = cache
+        writeSchema(transaction.topicPartition.topic, targetPath, record.schema)
+        caches[targetPath] = cache
         return cache
     }
 
@@ -120,31 +122,32 @@ class FileCacheStore(
                 isSuccessful = fileCache.writeRecord(record, transaction),
             )
         } catch (ex: IOException) {
-            logger.error("Failed to write record. Closing cache {}.", fileCache.path, ex)
+            logger.error("Failed to write record. Closing cache {}.", fileCache.targetPath, ex)
             fileCache.markError()
-            caches.remove(fileCache.path)
+            caches.remove(fileCache.targetPath)
             fileCache.closeAndJoin()
             NO_CACHE_AND_NO_WRITE
         }
     }
 
     @Throws(IOException::class)
-    private suspend fun writeSchema(topic: String, path: Path, schema: Schema) =
+    private suspend fun writeSchema(topic: String, targetPath: TargetPath, schema: Schema) =
         time("write.schema") {
             // Write was successful, finalize the write operation
-            val schemaPath = path.resolveSibling("schema-$topic.json")
+            val schemaPath = targetPath.navigate { it.resolveSibling("schema-$topic.json") }
             // First check if we already checked this path, because otherwise the storage.exists call
             // will take too much time.
-            if (schemasAdded.putIfAbsent(schemaPath, schemaPath) == null) {
-                withContext(Dispatchers.IO) {
-                    val storage = factory.targetStorage
+            if (schemasAdded.putIfAbsent(schemaPath, Unit) == null) {
+                val storage = factory.targetManager[schemaPath]
+                val path = schemaPath.path
 
-                    if (storage.status(schemaPath) == null) {
+                withContext(Dispatchers.IO) {
+                    if (storage.status(path) == null) {
                         val tmpSchemaPath = createTempFile(tmpDir.path, "schema-$topic", ".json")
                         tmpSchemaPath.outputStream().use { out ->
                             out.write(schema.toString(true).toByteArray())
                         }
-                        storage.store(tmpSchemaPath, schemaPath)
+                        storage.store(tmpSchemaPath, path)
                     }
                 }
             }
@@ -160,7 +163,7 @@ class FileCacheStore(
                 .sorted()
             for (i in 0 until cacheList.size / 2) {
                 val rmCache = cacheList[i]
-                caches.remove(rmCache.path)
+                caches.remove(rmCache.targetPath)
                 rmCache.closeAndJoin()
             }
             accountant.flush()
