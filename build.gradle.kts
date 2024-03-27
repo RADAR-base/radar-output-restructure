@@ -31,9 +31,9 @@ radarPublishing {
     githubUrl.set("https://github.com/$githubRepoName.git")
     developers {
         developer {
-            id.set("blootsvoets")
-            name.set("Joris Borgdorff")
-            email.set("joris@thehyve.nl")
+            id.set("bdegraaf1234")
+            name.set("Bastiaan de Graaf")
+            email.set("bastiaan@thehyve.nl")
             organization.set("The Hyve")
         }
     }
