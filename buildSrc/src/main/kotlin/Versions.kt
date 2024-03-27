@@ -28,10 +28,10 @@ object Versions {
     const val guava = "31.1-jre"
     const val opencsv = "5.8"
     const val okhttp = "4.12.0"
-    const val jedis = "5.0.1"
-    const val azureStorage = "12.24.0"
+    const val jedis = "jedis-3.6.2"
+    const val azureStorage = "12.25.1"
     const val netty = "4.1.100.Final"
     const val snakeYaml = "2.2"
     const val apacheCommonsText = "1.10.0"
-    const val projectReactorNetty = "1.1.11"
+    const val projectReactorNetty = "1.1.13"
 }
