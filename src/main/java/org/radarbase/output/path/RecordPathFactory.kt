@@ -24,6 +24,7 @@ import org.apache.avro.generic.GenericRecordBuilder
 import org.radarbase.output.config.PathConfig
 import org.radarbase.output.config.TopicConfig
 import org.radarbase.output.util.TimeUtil
+import org.slf4j.LoggerFactory
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.regex.Pattern
@@ -44,12 +45,13 @@ abstract class RecordPathFactory {
                 config.output
             },
             path = config.path.copy(
-                properties = buildMap(config.path.properties.size + 1) {
+                properties = buildMap {
                     putAll(config.path.properties)
                     putIfAbsent("extension", extension)
                 },
             ),
         )
+
         this.addTopicConfiguration(topics)
     }
 
@@ -67,7 +69,8 @@ abstract class RecordPathFactory {
         attempt: Int,
     ): Path {
         val keyField = requireNotNull(record.get("key")) { "Failed to process $record; no key present" }
-        val valueField = requireNotNull(record.get("value") as? GenericRecord) { "Failed to process $record; no value present" }
+        val valueField =
+            requireNotNull(record.get("value") as? GenericRecord) { "Failed to process $record; no value present" }
 
         val keyRecord: GenericRecord = if (keyField is GenericRecord) {
             keyField
@@ -145,6 +148,8 @@ abstract class RecordPathFactory {
         fun GenericRecord.getOrNull(fieldName: String): Any? = getFieldOrNull(fieldName)
             ?.let { get(it.pos()) }
     }
+
+    private val logger = LoggerFactory.getLogger(RecordPathFactory::class.java)
 
     protected open fun addTopicConfiguration(topicConfig: Map<String, TopicConfig>) = Unit
 }
