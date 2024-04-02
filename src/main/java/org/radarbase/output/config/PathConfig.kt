@@ -45,9 +45,19 @@ data class PathConfig(
                 else -> null
             }
 
+        // Pass any properties from the given PathConfig to the PathFormatterConfig for the factory.
+        // Properties passed in the PathConfig.path.properties take precedent
+        val pathProperties = buildMap {
+            putAll(path.properties)
+            putAll(properties)
+        }
+
+        val pathFormatterConfig = path.copy(properties = pathProperties)
+        val pathConfig = copy(bucket = bucketConfig, path = pathFormatterConfig)
+
         pathFactory.init(
             extension = extension,
-            config = copy(bucket = bucketConfig),
+            config = pathConfig,
             topics = topics,
         )
 

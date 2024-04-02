@@ -32,6 +32,39 @@ import java.nio.file.Paths
 
 class RestructureS3IntegrationTest {
     @Test
+    fun configuration() = runTest {
+        Timer.isEnabled = true
+        val sourceConfig = S3Config(
+            endpoint = "http://localhost:9000",
+            accessToken = "minioadmin",
+            secretKey = "minioadmin",
+            bucket = "source",
+        )
+        val targetConfig = sourceConfig.copy(bucket = "target")
+        val topicConfig = mapOf(
+            "application_server_status" to TopicConfig(
+                pathProperties = PathFormatterConfig(
+                    format = "\${projectId}/\${userId}/\${topic}/\${value:serverStatus}/\${filename}",
+                ),
+            ),
+        )
+        val config = RestructureConfig(
+            source = ResourceConfig("s3", s3 = sourceConfig),
+            target = ResourceConfig("s3", s3 = targetConfig),
+            paths = PathConfig(
+                inputs = listOf(Paths.get("in")),
+                // These properties were added to verify that they are present later in PathConfig.createFactory()
+                properties = mapOf("one" to "1", "two" to "2", "three" to "3"),
+            ),
+            worker = WorkerConfig(minimumFileAge = 0L),
+            topics = topicConfig,
+        )
+        val application = Application(config)
+
+        assertEquals(4, application.pathFactory.pathConfig.path.properties.count())
+    }
+
+    @Test
     fun integration() = runTest {
         Timer.isEnabled = true
         val sourceConfig = S3Config(
@@ -51,11 +84,18 @@ class RestructureS3IntegrationTest {
         val config = RestructureConfig(
             source = ResourceConfig("s3", s3 = sourceConfig),
             target = ResourceConfig("s3", s3 = targetConfig),
-            paths = PathConfig(inputs = listOf(Paths.get("in"))),
+            paths = PathConfig(
+                inputs = listOf(Paths.get("in")),
+                // These properties were added to verify that they are present later in PathConfig.createFactory()
+                properties = mapOf("one" to "1", "two" to "2", "three" to "3"),
+            ),
             worker = WorkerConfig(minimumFileAge = 0L),
             topics = topicConfig,
         )
         val application = Application(config)
+
+        assertEquals(4, application.pathFactory.pathConfig.path.properties.count())
+
         val sourceClient = sourceConfig.createS3Client()
         val sourceBucket = requireNotNull(sourceConfig.bucket)
         if (!sourceClient.bucketExists(BucketExistsArgs.builder().bucketBuild(sourceBucket))) {
