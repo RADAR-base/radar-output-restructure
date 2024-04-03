@@ -4,9 +4,9 @@ name: CI
 # Run in main and dev branches and in all pull requests to those branches
 on:
   push:
-    branches: [ main, dev ]
+    branches: [ "main", "dev", "v2" ]
   pull_request:
-    branches: [ main, dev ]
+    branches: [ "main", "dev", "v2" ]
 
 env:
   DOCKER_IMAGE: radarbase/radar-output-restructure
