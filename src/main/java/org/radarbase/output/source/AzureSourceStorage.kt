@@ -34,7 +34,7 @@ class AzureSourceStorage(
                 SimpleFileStatus(
                     Paths.get(it.name),
                     it.isPrefix ?: false,
-                    it.properties?.lastModified?.toInstant(),
+                    if (it.isPrefix) null else it.properties?.lastModified?.toInstant(),
                 )
             }
         }
