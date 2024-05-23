@@ -70,7 +70,7 @@ When upgrading to version 0.6.0 from version 0.5.x or earlier, please follow the
 This package is available as docker image [`radarbase/radar-output-restructure`](https://hub.docker.com/r/radarbase/radar-output-restructure). The entrypoint of the image is the current application. So in all the commands listed in usage, replace `radar-output-restructure` with for example:
 
 ```shell
-docker run --rm -t --network s3 -v "$PWD/output:/output" radarbase/radar-output-restructure:2.3.3 -o /output /myTopic
+docker run --rm -t --network s3 -v "$PWD/output:/output" radarbase/radar-output-restructure:2.3.4 -o /output /myTopic
 ```
 
 ## Command line usage
