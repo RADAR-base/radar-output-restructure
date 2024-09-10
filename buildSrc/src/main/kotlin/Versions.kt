@@ -24,7 +24,7 @@ object Versions {
     const val snappy = "1.1.10.5"
     const val jCommander = "1.82"
     const val almworks = "1.1.2"
-    const val minio = "8.5.9"
+    const val minio = "8.5.10"
     const val guava = "31.1-jre"
     const val opencsv = "5.8"
     const val okhttp = "4.12.0"
