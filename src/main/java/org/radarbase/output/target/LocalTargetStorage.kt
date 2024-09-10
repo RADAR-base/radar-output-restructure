@@ -27,7 +27,14 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.attribute.PosixFilePermissions
-import kotlin.io.path.*
+import kotlin.io.path.createDirectories
+import kotlin.io.path.deleteExisting
+import kotlin.io.path.exists
+import kotlin.io.path.fileSize
+import kotlin.io.path.inputStream
+import kotlin.io.path.moveTo
+import kotlin.io.path.setAttribute
+import kotlin.io.path.setPosixFilePermissions
 
 class LocalTargetStorage(private val config: LocalConfig) : TargetStorage {
     init {
@@ -75,7 +82,7 @@ class LocalTargetStorage(private val config: LocalConfig) : TargetStorage {
         doMove(localPath, newPath)
     }
 
-    override fun createDirectories(directory: Path) {
+    override suspend fun createDirectories(directory: Path) = withContext(Dispatchers.IO) {
         directory.createDirectories(
             PosixFilePermissions.asFileAttribute(
                 PosixFilePermissions.fromString("rwxr-xr-x"),
@@ -94,7 +101,9 @@ class LocalTargetStorage(private val config: LocalConfig) : TargetStorage {
     }
 
     @Throws(IOException::class)
-    override suspend fun delete(path: Path) = path.deleteExisting()
+    override suspend fun delete(path: Path) = withContext(Dispatchers.IO) {
+        path.deleteExisting()
+    }
 
     companion object {
         private val logger = LoggerFactory.getLogger(LocalTargetStorage::class.java)

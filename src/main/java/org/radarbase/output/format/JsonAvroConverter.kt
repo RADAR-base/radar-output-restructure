@@ -29,8 +29,9 @@ import java.io.Writer
  */
 class JsonAvroConverter(
     writer: Writer,
-    private val converter: JsonAvroDataConverter,
+    excludeFields: Set<String>,
 ) : RecordConverter {
+    private val converter = JsonAvroDataConverter(excludeFields)
     private val generator: JsonGenerator = JSON_FACTORY.createGenerator(writer)
         .setPrettyPrinter(MinimalPrettyPrinter("\n"))
 

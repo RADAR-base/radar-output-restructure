@@ -21,16 +21,12 @@ class TreeLister<T, C>(
         predicate: ((T) -> Boolean)? = null,
     ): S = coroutineScope {
         val channel = Channel<T>(capacity = limit)
+
         val producer = launch {
-            coroutineScope {
-                descend(
-                    context,
-                    if (predicate == null) channel::send else (
-                        { value ->
-                            if (predicate(value)) channel.send(value)
-                        }
-                        ),
-                )
+            descend(context) { value ->
+                if (predicate == null || predicate(value)) {
+                    channel.send(value)
+                }
             }
             channel.close()
         }
@@ -47,8 +43,15 @@ class TreeLister<T, C>(
         collection
     }
 
-    private suspend fun descend(context: C, emit: suspend (T) -> Unit) {
-        levelLister.listLevel(context, { descend(it, emit) }, emit)
+    private suspend fun descend(
+        context: C,
+        emit: suspend (T) -> Unit,
+    ) {
+        levelLister.listLevel(
+            context = context,
+            descend = { descend(it, emit) },
+            emit = emit,
+        )
     }
 
     interface LevelLister<T, C> {

@@ -75,7 +75,9 @@ class CsvAvroConverterFactory : RecordConverterFactory {
                         if (indexIndex < lineIndexes.size && lineIndexes[indexIndex] == i) {
                             indexIndex += 1
                             true
-                        } else false
+                        } else {
+                            false
+                        }
                     },
                 )
             }
@@ -127,7 +129,9 @@ class CsvAvroConverterFactory : RecordConverterFactory {
 
             Pair(
                 header,
-                if (parsers.isEmpty()) emptyList() else {
+                if (parsers.isEmpty()) {
+                    emptyList()
+                } else {
                     lines.mapNotNull { line ->
                         for ((index, parser) in parsers) {
                             parser(line[index])?.let {
@@ -150,8 +154,8 @@ class CsvAvroConverterFactory : RecordConverterFactory {
     ): Boolean = source.inputStream().use { input ->
         processLines(input, compression) { header, lines ->
             checkNotNull(header) { "Empty file found" }
-            val converter = CsvAvroDataConverter(header)
-            val recordValues = converter.convertRecordValues(record).toTypedArray()
+            val converter = CsvAvroDataConverter(header, emptySet())
+            val recordValues = converter.convertRecordValues(record)
             val indexes = fieldIndexes(header, usingFields, ignoreFields)
 
             if (indexes == null) {
@@ -168,7 +172,8 @@ class CsvAvroConverterFactory : RecordConverterFactory {
         record: GenericRecord,
         writeHeader: Boolean,
         reader: Reader,
-    ): CsvAvroConverter = CsvAvroConverter(writer, writeHeader, reader, headerFor(record))
+        excludeFields: Set<String>,
+    ): CsvAvroConverter = CsvAvroConverter(writer, writeHeader, reader, headerFor(record), excludeFields)
 
     override val hasHeader: Boolean = true
 
@@ -189,7 +194,9 @@ class CsvAvroConverterFactory : RecordConverterFactory {
             val header = csvReader.readNext()
             val lines = if (header != null) {
                 generateSequence { csvReader.readNext() }
-            } else emptySequence()
+            } else {
+                emptySequence()
+            }
             process(header, lines)
         }
 
@@ -216,7 +223,9 @@ class CsvAvroConverterFactory : RecordConverterFactory {
         @Throws(IndexOutOfBoundsException::class)
         inline fun <reified T> Array<T>.byIndex(
             indexes: IntArray?,
-        ): Array<T> = if (indexes == null) this else {
+        ): Array<T> = if (indexes == null) {
+            this
+        } else {
             Array(indexes.size) { i -> this[indexes[i]] }
         }
     }

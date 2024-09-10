@@ -21,7 +21,11 @@ import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.compression.Compression
 import org.radarbase.output.util.ResourceContext.Companion.resourceContext
-import java.io.*
+import java.io.BufferedReader
+import java.io.IOException
+import java.io.InputStream
+import java.io.Reader
+import java.io.Writer
 import java.nio.file.Path
 import java.util.regex.Pattern
 import kotlin.collections.component1
@@ -45,6 +49,7 @@ interface RecordConverterFactory : Format {
         record: GenericRecord,
         writeHeader: Boolean,
         reader: Reader,
+        excludeFields: Set<String> = emptySet(),
     ): RecordConverter
 
     val hasHeader: Boolean
@@ -151,7 +156,8 @@ interface RecordConverterFactory : Format {
             }
             Schema.Type.BYTES, Schema.Type.FIXED, Schema.Type.ENUM, Schema.Type.STRING,
             Schema.Type.INT, Schema.Type.LONG, Schema.Type.DOUBLE, Schema.Type.FLOAT,
-            Schema.Type.BOOLEAN, Schema.Type.NULL ->
+            Schema.Type.BOOLEAN, Schema.Type.NULL,
+            ->
                 headers.add(prefix)
             else -> throw IllegalArgumentException("Cannot parse field type " + schema.type)
         }
@@ -166,7 +172,9 @@ interface RecordConverterFactory : Format {
         fun readFile(reader: BufferedReader, withHeader: Boolean): Pair<String?, Set<String>> {
             val header = if (withHeader) {
                 reader.readLine() ?: return Pair(null, emptySet())
-            } else null
+            } else {
+                null
+            }
 
             return Pair(header, reader.lineSequence().toCollection(LinkedHashSet()))
         }

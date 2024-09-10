@@ -16,20 +16,37 @@
 
 package org.radarbase.output.target
 
-import io.minio.*
+import io.minio.BucketArgs
+import io.minio.BucketExistsArgs
+import io.minio.CopyObjectArgs
+import io.minio.CopySource
+import io.minio.GetObjectArgs
+import io.minio.MakeBucketArgs
+import io.minio.MinioClient
+import io.minio.RemoveObjectArgs
+import io.minio.StatObjectArgs
+import io.minio.UploadObjectArgs
+import org.radarbase.kotlin.coroutines.CacheConfig
+import org.radarbase.kotlin.coroutines.CachedValue
 import org.radarbase.output.config.S3Config
 import org.radarbase.output.source.S3SourceStorage.Companion.faultTolerant
 import org.radarbase.output.util.bucketBuild
+import org.radarbase.output.util.firstSegment
 import org.radarbase.output.util.objectBuild
 import org.slf4j.LoggerFactory
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.io.InputStream
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.deleteExisting
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 
-class S3TargetStorage(config: S3Config) : TargetStorage {
-    private val bucket: String = config.bucket
+class S3TargetStorage(
+    config: S3Config,
+) : TargetStorage {
     private val s3Client: MinioClient = try {
         config.createS3Client()
     } catch (ex: IllegalArgumentException) {
@@ -37,29 +54,25 @@ class S3TargetStorage(config: S3Config) : TargetStorage {
         throw ex
     }
 
+    private val buckets = ConcurrentHashMap<String, CachedValue<Unit>>()
+    private val cacheConfig = CacheConfig(
+        refreshDuration = 1.days,
+        retryDuration = 1.hours,
+        exceptionCacheDuration = 1.minutes,
+    )
+
     init {
         logger.info(
-            "Object storage configured with endpoint {} in bucket {}",
+            "Object storage configured with endpoint {}",
             config.endpoint,
-            config.bucket,
         )
     }
 
-    override suspend fun initialize() {
-        // Check if the bucket already exists.
-        val bucketExistsRequest = BucketExistsArgs.Builder().bucketBuild(bucket)
-        val isExist: Boolean = faultTolerant { s3Client.bucketExists(bucketExistsRequest) }
-        if (isExist) {
-            logger.info("Bucket $bucket already exists.")
-        } else {
-            val makeBucketRequest = MakeBucketArgs.Builder().bucketBuild(bucket)
-            faultTolerant { s3Client.makeBucket(makeBucketRequest) }
-            logger.info("Bucket $bucket was created.")
-        }
-    }
+    override suspend fun initialize() {}
 
     override suspend fun status(path: Path): TargetStorage.PathStatus? {
-        val statRequest = StatObjectArgs.Builder().objectBuild(bucket, path)
+        val statRequest = StatObjectArgs.builder().objectBuild(path)
+            .also { it.ensureBucket() }
         return try {
             faultTolerant {
                 s3Client.statObject(statRequest)
@@ -70,16 +83,44 @@ class S3TargetStorage(config: S3Config) : TargetStorage {
         }
     }
 
+    private suspend fun BucketArgs.ensureBucket() = ensureBucket(bucket())
+
+    private suspend fun ensureBucket(bucket: String) {
+        try {
+            buckets.computeIfAbsent(bucket) {
+                CachedValue(cacheConfig) {
+                    val bucketExistsRequest = BucketExistsArgs.builder().bucketBuild(bucket)
+                    val isExist: Boolean = faultTolerant { s3Client.bucketExists(bucketExistsRequest) }
+                    if (isExist) {
+                        logger.info("Bucket $bucket already exists.")
+                    } else {
+                        val makeBucketRequest = MakeBucketArgs.builder().bucketBuild(bucket)
+                        faultTolerant { s3Client.makeBucket(makeBucketRequest) }
+                        logger.info("Bucket $bucket was created.")
+                    }
+                }
+            }.get()
+        } catch (ex: Exception) {
+            logger.error(
+                "Failed to create bucket {}: {}",
+                bucket,
+                ex.message,
+            )
+            throw ex
+        }
+    }
+
     @Throws(IOException::class)
     override suspend fun newInputStream(path: Path): InputStream {
-        val getRequest = GetObjectArgs.Builder().objectBuild(bucket, path)
+        val getRequest = GetObjectArgs.builder().objectBuild(path)
+            .also { it.ensureBucket() }
         return faultTolerant { s3Client.getObject(getRequest) }
     }
 
     @Throws(IOException::class)
     override suspend fun move(oldPath: Path, newPath: Path) {
-        val copyRequest = CopyObjectArgs.Builder().objectBuild(bucket, newPath) {
-            source(CopySource.Builder().objectBuild(bucket, oldPath))
+        val copyRequest = CopyObjectArgs.builder().objectBuild(newPath) {
+            source(CopySource.Builder().objectBuild(oldPath))
         }
         faultTolerant { s3Client.copyObject(copyRequest) }
         delete(oldPath)
@@ -87,21 +128,24 @@ class S3TargetStorage(config: S3Config) : TargetStorage {
 
     @Throws(IOException::class)
     override suspend fun store(localPath: Path, newPath: Path) {
-        val uploadRequest = UploadObjectArgs.Builder().objectBuild(bucket, newPath) {
+        val uploadRequest = UploadObjectArgs.builder().objectBuild(newPath) {
             filename(localPath.toAbsolutePath().toString())
         }
+            .also { it.ensureBucket() }
+
         faultTolerant { s3Client.uploadObject(uploadRequest) }
         localPath.deleteExisting()
     }
 
     @Throws(IOException::class)
     override suspend fun delete(path: Path) {
-        val removeRequest = RemoveObjectArgs.Builder().objectBuild(bucket, path)
+        val removeRequest = RemoveObjectArgs.builder().objectBuild(path)
+            .also { it.ensureBucket() }
         faultTolerant { s3Client.removeObject(removeRequest) }
     }
 
-    override fun createDirectories(directory: Path) {
-        // noop
+    override suspend fun createDirectories(directory: Path) {
+        ensureBucket(directory.firstSegment())
     }
 
     companion object {

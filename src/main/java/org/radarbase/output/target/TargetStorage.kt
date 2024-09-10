@@ -59,7 +59,7 @@ interface TargetStorage {
 
     /** Create given directory, by recursively creating all parent directories. */
     @Throws(IOException::class)
-    fun createDirectories(directory: Path)
+    suspend fun createDirectories(directory: Path)
 
     data class PathStatus(
         /** Size in bytes */

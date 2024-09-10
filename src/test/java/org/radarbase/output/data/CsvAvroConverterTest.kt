@@ -17,7 +17,6 @@
 package org.radarbase.output.data
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.apache.avro.Schema.Parser
@@ -27,7 +26,9 @@ import org.apache.avro.generic.GenericDatumReader
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.generic.GenericRecordBuilder
 import org.apache.avro.io.DecoderFactory
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.radarbase.output.compression.GzipCompression
@@ -49,7 +50,6 @@ import kotlin.io.path.bufferedWriter
 import kotlin.io.path.inputStream
 import kotlin.io.path.outputStream
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class CsvAvroConverterTest {
     @Test
     @Throws(IOException::class)
@@ -63,11 +63,10 @@ class CsvAvroConverterTest {
 
         val writer = StringWriter()
         val factory = CsvAvroConverter.factory
-        val converter = factory.converterFor(writer, record, true, StringReader("test"))
+        val converter = factory.converterFor(writer, record, true, StringReader("test"), setOf("a", "i.other"))
 
         val map = converter.convertRecord(record)
         val keys = listOf(
-            "a",
             "b",
             "c",
             "d",
@@ -76,7 +75,6 @@ class CsvAvroConverterTest {
             "g",
             "h",
             "i.some",
-            "i.other",
             "j.0",
             "j.1",
             "k",
@@ -87,7 +85,6 @@ class CsvAvroConverterTest {
 
         val actualIterator = map.values.iterator()
         val expectedIterator = listOf<Any>(
-            "a",
             byteArrayOf(255.toByte()),
             byteArrayOf(255.toByte()),
             "1000000000000000000",
@@ -96,7 +93,6 @@ class CsvAvroConverterTest {
             "132101",
             "",
             "1",
-            "-1",
             "",
             "some",
             "Y",
@@ -250,7 +246,7 @@ class CsvAvroConverterTest {
             source = path,
             target = toPath,
             compression = IdentityCompression(),
-            distinctFields = setOf("a")
+            distinctFields = setOf("a"),
         )
         assertEquals(listOf("a,b", "1,2", "a,a", "3,3"), toPath.readAllLines())
     }

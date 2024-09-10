@@ -14,7 +14,11 @@ data class TopicConfig(
      * Specify alternative path format, following
      * [org.radarbase.output.path.FormattedPathFactory] format.
      */
-    val pathProperties: Map<String, String> = emptyMap(),
+    val pathProperties: PathFormatterConfig,
+    /**
+     * Exclude given fields from output files.
+     */
+    val excludeFields: Set<String>? = null,
 ) {
     fun deduplication(deduplicationDefault: DeduplicationConfig): DeduplicationConfig =
         deduplication

@@ -9,5 +9,4 @@ data class PathFormatParameters(
     val value: GenericRecord,
     val time: Instant?,
     val attempt: Int,
-    val extension: String,
 )

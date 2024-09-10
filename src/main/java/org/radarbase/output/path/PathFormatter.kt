@@ -17,16 +17,16 @@
 package org.radarbase.output.path
 
 import org.slf4j.LoggerFactory
-import java.nio.file.Path
-import java.nio.file.Paths
 
 class PathFormatter(
     private val format: String,
-    private val plugins: List<PathFormatterPlugin>
+    private val plugins: List<PathFormatterPlugin>,
+    checkMinimalDistinction: Boolean = true,
 ) {
-    private val parameterLookups: Map<String, PathFormatParameters.() -> String>
+    private val parameterLookups: Map<String, suspend PathFormatParameters.() -> String>
 
     init {
+        require(format.isNotBlank()) { "Path format may not be an empty string" }
         val foundParameters = "\\$\\{([^}]*)}".toRegex()
             .findAll(format)
             .mapTo(HashSet()) { it.groupValues[1] }
@@ -39,7 +39,7 @@ class PathFormatter(
                     } catch (ex: IllegalArgumentException) {
                         logger.error("Cannot parse path format {}, illegal format parameter found by plugin {}", format, plugin.name, ex)
                         throw ex
-                    }
+                    },
                 )
             }
         }
@@ -49,25 +49,23 @@ class PathFormatter(
             "Cannot use path format $format: unknown parameters $unsupportedParameters." +
                 " Legal parameter names are parameters $allowedFormats"
         }
-        require("topic" in parameterLookups) { "Path must include topic parameter." }
-        require(
-            "filename" in parameterLookups ||
-                ("extension" in parameterLookups && "attempt" in parameterLookups)
-        ) {
-            "Path must include filename parameter or extension and attempt parameters."
+        if (checkMinimalDistinction) {
+            require("topic" in parameterLookups) { "Path must include topic parameter." }
+            require(
+                "filename" in parameterLookups ||
+                    ("extension" in parameterLookups && "attempt" in parameterLookups),
+            ) {
+                "Path must include filename parameter or extension and attempt parameters."
+            }
         }
     }
 
-    fun format(
+    suspend fun format(
         parameters: PathFormatParameters,
-    ): Path {
-        val path = parameterLookups.asSequence()
-            .fold(format) { p, (name, lookup) ->
-                p.replace("\${$name}", parameters.lookup())
-            }
-
-        return Paths.get(path)
-    }
+    ): String = parameterLookups.asSequence()
+        .fold(format) { p, (name, lookup) ->
+            p.replace("\${$name}", parameters.lookup())
+        }
 
     override fun toString(): String = "PathFormatter{" +
         "format=$format," +

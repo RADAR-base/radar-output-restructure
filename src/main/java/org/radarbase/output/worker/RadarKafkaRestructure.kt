@@ -28,6 +28,7 @@ import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.AccountantImpl
 import org.radarbase.output.accounting.OffsetRangeSet
 import org.radarbase.output.config.RestructureConfig
+import org.radarbase.output.source.StorageIndex
 import org.radarbase.output.source.TopicFileList
 import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.util.TimeUtil.durationSince
@@ -77,13 +78,13 @@ class RadarKafkaRestructure(
     val processedRecordsCount = LongAdder()
 
     @Throws(IOException::class, InterruptedException::class)
-    suspend fun process(directoryName: String) {
+    suspend fun process(directoryName: String, storageIndex: StorageIndex) {
         // Get files and directories
         val absolutePath = Paths.get(directoryName)
 
         logger.info("Scanning topics...")
 
-        val paths = topicPaths(absolutePath)
+        val paths = topicPaths(storageIndex, absolutePath)
 
         logger.info("{} topics found", paths.size)
 
@@ -92,7 +93,7 @@ class RadarKafkaRestructure(
                 launch {
                     try {
                         val (fileCount, recordCount) = fileStoreFactory.workerSemaphore.withPermit {
-                            mapTopic(p)
+                            mapTopic(storageIndex, p)
                         }
                         processedFileCount.add(fileCount)
                         processedRecordsCount.add(recordCount)
@@ -104,7 +105,7 @@ class RadarKafkaRestructure(
         }
     }
 
-    private suspend fun mapTopic(topicPath: Path): ProcessingStatistics {
+    private suspend fun mapTopic(storageIndex: StorageIndex, topicPath: Path): ProcessingStatistics {
         val topic = topicPath.fileName.toString()
 
         return try {
@@ -112,7 +113,7 @@ class RadarKafkaRestructure(
                 coroutineScope {
                     AccountantImpl(fileStoreFactory, topic).useSuspended { accountant ->
                         accountant.initialize(this)
-                        startWorker(topic, topicPath, accountant, accountant.offsets)
+                        startWorker(storageIndex, topic, topicPath, accountant, accountant.offsets)
                     }
                 }
             }
@@ -127,6 +128,7 @@ class RadarKafkaRestructure(
     }
 
     private suspend fun startWorker(
+        storageIndex: StorageIndex,
         topic: String,
         topicPath: Path,
         accountant: Accountant,
@@ -135,12 +137,12 @@ class RadarKafkaRestructure(
         return RestructureWorker(
             sourceStorage,
             accountant,
-            fileStoreFactory
+            fileStoreFactory,
         ).useSuspended { worker ->
             try {
                 val topicPaths = TopicFileList(
                     topic,
-                    sourceStorage.listTopicFiles(topic, topicPath, maxFilesPerTopic) { f ->
+                    sourceStorage.listTopicFiles(storageIndex, topic, topicPath, maxFilesPerTopic) { f ->
                         !seenFiles.contains(f.range) &&
                             f.lastModified.durationSince() >= minimumFileAge
                     },
@@ -161,8 +163,8 @@ class RadarKafkaRestructure(
         supervisor.cancel()
     }
 
-    private suspend fun topicPaths(root: Path): List<Path> =
-        sourceStorage.listTopics(root, excludeTopics)
+    private suspend fun topicPaths(storageIndex: StorageIndex, root: Path): List<Path> =
+        sourceStorage.listTopics(storageIndex, root, excludeTopics)
             // different services start on different topics to decrease lock contention
             .shuffled()
 
@@ -176,14 +178,22 @@ class RadarKafkaRestructure(
 
         fun job(config: RestructureConfig, serviceMutex: Mutex): Job? = if (config.worker.enable) {
             Job("restructure", config.service.interval, ::runRestructure, serviceMutex)
-        } else null
+        } else {
+            null
+        }
 
         private suspend fun runRestructure(factory: FileStoreFactory) {
             RadarKafkaRestructure(factory).useSuspended { restructure ->
-                for (input in factory.config.paths.inputs) {
+                for ((input, index) in factory.storageIndexManagers) {
+                    index.update()
                     logger.info("In:  {}", input)
-                    logger.info("Out: {}", factory.pathFactory.root)
-                    restructure.process(input.toString())
+                    logger.info(
+                        "Out: bucket {} (default {}) - path {}",
+                        factory.pathFactory.pathConfig.bucket?.format,
+                        factory.pathFactory.pathConfig.bucket?.defaultName,
+                        factory.pathFactory.pathConfig.path.format,
+                    )
+                    restructure.process(input.toString(), index.storageIndex)
                 }
 
                 logger.info(

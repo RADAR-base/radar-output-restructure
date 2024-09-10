@@ -6,7 +6,11 @@ import org.radarbase.output.format.JsonAvroConverter.Companion.JSON_READER
 import org.radarbase.output.format.JsonAvroConverter.Companion.JSON_WRITER
 import org.radarbase.output.util.ResourceContext.Companion.resourceContext
 import org.radarbase.output.util.TimeUtil.getDate
-import java.io.*
+import java.io.BufferedReader
+import java.io.IOException
+import java.io.InputStream
+import java.io.Reader
+import java.io.Writer
 import java.nio.file.Path
 import kotlin.io.path.inputStream
 
@@ -15,7 +19,7 @@ class JsonAvroConverterFactory : RecordConverterFactory {
 
     override val formats: Collection<String> = setOf("json")
 
-    private val converter = JsonAvroDataConverter()
+    private val converter = JsonAvroDataConverter(setOf())
 
     @Throws(IOException::class)
     override fun converterFor(
@@ -23,7 +27,8 @@ class JsonAvroConverterFactory : RecordConverterFactory {
         record: GenericRecord,
         writeHeader: Boolean,
         reader: Reader,
-    ): RecordConverter = JsonAvroConverter(writer, converter)
+        excludeFields: Set<String>,
+    ): RecordConverter = JsonAvroConverter(writer, excludeFields)
 
     override suspend fun readTimeSeconds(
         source: InputStream,

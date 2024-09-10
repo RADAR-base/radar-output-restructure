@@ -95,8 +95,8 @@ jobs:
           # Use runtime labels from docker_meta as well as fixed labels
           labels: |
             ${{ steps.docker_meta.outputs.labels }}
-            maintainer=Joris Borgdorff <joris@thehyve.nl>
-            org.opencontainers.image.authors=Joris Borgdorff <joris@thehyve.nl>
+            maintainer=Bastiaan de Graaf <bastiaan@thehyve.nl>
+            org.opencontainers.image.authors=Bastiaan de Graaf <bastiaan@thehyve.nl>
             org.opencontainers.image.vendor=RADAR-base
             org.opencontainers.image.licenses=Apache-2.0
 

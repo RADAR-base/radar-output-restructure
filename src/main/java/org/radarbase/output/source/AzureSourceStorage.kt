@@ -8,9 +8,10 @@ import org.apache.avro.file.SeekableFileInput
 import org.apache.avro.file.SeekableInput
 import org.radarbase.output.config.AzureConfig
 import org.radarbase.output.util.TemporaryDirectory
-import org.radarbase.output.util.toKey
+import org.radarbase.output.util.withoutFirstSegment
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.time.Instant
 import kotlin.io.path.createTempFile
 import kotlin.io.path.deleteIfExists
 
@@ -22,24 +23,30 @@ class AzureSourceStorage(
     private val blobContainerClient = client.getBlobContainerClient(config.container)
     private val readOffsetFromMetadata = config.endOffsetFromMetadata
 
-    private fun blobClient(path: Path) = blobContainerClient.getBlobClient(path.toKey())
+    private fun blobClient(path: Path) = blobContainerClient.getBlobClient(path.withoutFirstSegment())
 
-    override suspend fun list(path: Path, maxKeys: Int?): List<SimpleFileStatus> =
+    override suspend fun list(path: Path, startAfter: Path?, maxKeys: Int?): List<StorageNode> =
         withContext(Dispatchers.IO) {
             var iterable: Iterable<BlobItem> = blobContainerClient.listBlobsByHierarchy("$path/")
+            if (startAfter != null) {
+                iterable = iterable.filter { Paths.get(it.name) > startAfter }
+            }
             if (maxKeys != null) {
                 iterable = iterable.take(maxKeys)
             }
             iterable.map {
-                SimpleFileStatus(
-                    Paths.get(it.name),
-                    it.isPrefix ?: false,
-                    it.properties?.lastModified?.toInstant(),
-                )
+                if (it.isPrefix == true) {
+                    StorageNode.StorageFile(
+                        Paths.get(it.name),
+                        it.properties?.lastModified?.toInstant() ?: Instant.now(),
+                    )
+                } else {
+                    StorageNode.StorageDirectory(Paths.get(it.name))
+                }
             }
         }
 
-    override suspend fun createTopicFile(topic: String, status: SimpleFileStatus): TopicFile {
+    override suspend fun createTopicFile(topic: String, status: StorageNode): TopicFile {
         var topicFile = super.createTopicFile(topic, status)
 
         if (readOffsetFromMetadata && topicFile.range.range.to == null) {

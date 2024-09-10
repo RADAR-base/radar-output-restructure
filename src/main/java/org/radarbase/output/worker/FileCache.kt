@@ -17,8 +17,6 @@
 package org.radarbase.output.worker
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.FileStoreFactory
@@ -32,7 +30,12 @@ import org.radarbase.output.util.SuspendedCloseable
 import org.radarbase.output.util.SuspendedCloseable.Companion.useSuspended
 import org.radarbase.output.util.Timer.time
 import org.slf4j.LoggerFactory
-import java.io.*
+import java.io.ByteArrayInputStream
+import java.io.FileNotFoundException
+import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
+import java.io.Writer
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -63,11 +66,15 @@ class FileCache(
     private var lastUse: Long = 0
     private val hasError: AtomicBoolean = AtomicBoolean(false)
     private val deduplicate: DeduplicationConfig
+    private val excludeFields: Set<String>
 
     init {
         val topicConfig = factory.config.topics[topic]
         val defaultDeduplicate = factory.config.format.deduplication
         deduplicate = topicConfig?.deduplication(defaultDeduplicate) ?: defaultDeduplicate
+
+        val defaultExclude = factory.config.format.excludeFields
+        excludeFields = topicConfig?.excludeFields ?: defaultExclude
 
         this.tmpPath = createTempFile(tmpDir, fileName, ".tmp" + compression.extension)
     }
@@ -102,16 +109,14 @@ class FileCache(
 
         this.recordConverter = try {
             inputStream.reader().useSuspended { reader ->
-                converterFactory.converterFor(writer, record, fileIsNew, reader)
+                converterFactory.converterFor(writer, record, fileIsNew, reader, excludeFields)
             }
         } catch (ex: IOException) {
-            coroutineScope {
-                launch(Dispatchers.IO) {
-                    try {
-                        writer.close()
-                    } catch (exClose: IOException) {
-                        logger.error("Failed to close writer for {}", path, ex)
-                    }
+            withContext(Dispatchers.IO) {
+                try {
+                    writer.close()
+                } catch (exClose: IOException) {
+                    logger.error("Failed to close writer for {}", path, ex)
                 }
             }
 

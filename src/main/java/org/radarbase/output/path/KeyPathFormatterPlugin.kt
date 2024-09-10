@@ -8,7 +8,7 @@ class KeyPathFormatterPlugin : PathFormatterPlugin() {
 
     override val allowedFormats: String = "key:my.key.index"
 
-    override fun lookup(parameterContents: String): PathFormatParameters.() -> String {
+    override fun lookup(parameterContents: String): suspend PathFormatParameters.() -> String {
         val index = parameterContents.split('.')
         require(index.none { it.isBlank() }) { "Cannot format key record with index $parameterContents" }
         return {
