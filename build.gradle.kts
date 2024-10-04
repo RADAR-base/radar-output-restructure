@@ -9,6 +9,9 @@ plugins {
     id("org.radarbase.radar-kotlin") version Versions.radarCommons
     id("org.radarbase.radar-publishing") version Versions.radarCommons
     id("com.avast.gradle.docker-compose") version Versions.dockerCompose
+    // TODO Remove this when new release of radar-commons is available and used in this project.
+    // This version has Sentry suppor1t built in for radar-kotlin plugin.
+    id("io.sentry.jvm.gradle") version "4.11.0"
 }
 
 description = "RADAR-base output restructuring"
