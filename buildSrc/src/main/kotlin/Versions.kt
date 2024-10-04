@@ -6,12 +6,10 @@ object Versions {
     const val kotlin = "1.9.22"
     const val dockerCompose = "0.17.5"
 
-    const val radarCommons = "1.1.2"
+    const val radarCommons = "1.1.3"
     const val radarSchemas = "0.8.7"
     const val jackson = "2.15.3"
-    const val slf4j = "2.0.9"
     const val log4j2 = "2.21.0"
-    const val junit = "5.10.0"
     const val avro = "1.11.3"
 
     const val mockitoKotlin = "5.1.0"
