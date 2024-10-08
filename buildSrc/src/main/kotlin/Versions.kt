@@ -7,19 +7,19 @@ object Versions {
     const val dockerCompose = "0.17.5"
 
     const val radarCommons = "1.1.2"
-    const val radarSchemas = "0.8.7"
-    const val jackson = "2.15.3"
+    const val radarSchemas = "0.8.11"
+    const val jackson = "2.16.1"
     const val slf4j = "2.0.9"
     const val log4j2 = "2.21.0"
     const val junit = "5.10.0"
-    const val avro = "1.11.3"
+    const val avro = "1.11.4"
 
     const val mockitoKotlin = "5.1.0"
     const val hamcrest = "2.2"
 
     const val wrapper = "8.4"
 
-    const val managementPortal = "2.1.1"
+    const val managementPortal = "2.1.5"
     const val coroutines = "1.7.3"
     const val snappy = "1.1.10.5"
     const val jCommander = "1.82"
