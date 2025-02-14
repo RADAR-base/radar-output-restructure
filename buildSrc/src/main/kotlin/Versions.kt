@@ -33,5 +33,5 @@ object Versions {
     const val netty = "4.1.100.Final"
     const val snakeYaml = "2.2"
     const val apacheCommonsText = "1.10.0"
-    const val projectReactorNetty = "1.1.13"
+    const val projectReactorNetty = "1.1.27"
 }
