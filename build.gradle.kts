@@ -19,11 +19,9 @@ radarRootProject {
 }
 
 radarKotlin {
-    kotlinVersion.set(Versions.kotlin)
     javaVersion.set(Versions.java)
     log4j2Version.set(Versions.log4j2)
-    slf4jVersion.set(Versions.slf4j)
-    junitVersion.set(Versions.junit)
+    sentryEnabled.set(true)
 }
 
 radarPublishing {
@@ -31,9 +29,9 @@ radarPublishing {
     githubUrl.set("https://github.com/$githubRepoName.git")
     developers {
         developer {
-            id.set("bdegraaf1234")
-            name.set("Bastiaan de Graaf")
-            email.set("bastiaan@thehyve.nl")
+            id.set("pvannierop")
+            name.set("Pim Van Nierop")
+            email.set("pim@thehyve.nl")
             organization.set("The Hyve")
         }
     }
