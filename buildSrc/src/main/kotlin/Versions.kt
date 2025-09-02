@@ -1,6 +1,6 @@
 @Suppress("ConstPropertyName")
 object Versions {
-    const val project = "3.0.2"
+    const val project = "3.0.3"
 
     const val java = 17
     const val dockerCompose = "0.17.5"
