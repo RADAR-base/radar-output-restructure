@@ -53,6 +53,19 @@ configurations["integrationTestRuntimeOnly"].extendsFrom(
     configurations.testRuntimeOnly.get(),
 )
 
+configurations.all {
+    resolutionStrategy {
+        /* The entries in the block below are added here to force the version of
+         * transitive dependencies and mitigate reported vulnerabilities */
+        force(
+            "com.fasterxml.jackson.core:jackson-databind:${Versions.jackson}",
+            "io.netty:netty-codec-http:${Versions.netty}",
+            "io.projectreactor.netty:reactor-netty-http:${Versions.projectReactorNetty}",
+            "org.apache.commons:commons-lang3:3.18.0",
+        )
+    }
+}
+
 dependencies {
     api("org.apache.avro:avro:${Versions.avro}")
     runtimeOnly("org.xerial.snappy:snappy-java:${Versions.snappy}")
