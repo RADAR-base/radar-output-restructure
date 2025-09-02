@@ -16,7 +16,7 @@ object Versions {
     const val mockitoKotlin = "5.1.0"
     const val hamcrest = "2.2"
 
-    const val wrapper = "8.4"
+    const val wrapper = "8.13"
 
     const val managementPortal = "2.1.5"
     const val coroutines = "1.7.3"
