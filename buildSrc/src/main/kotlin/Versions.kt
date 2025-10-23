@@ -18,7 +18,7 @@ object Versions {
 
     const val wrapper = "8.13"
 
-    const val managementPortal = "2.1.12"
+    const val managementPortal = "2.1.13"
     const val coroutines = "1.7.3"
     const val snappy = "1.1.10.5"
     const val jCommander = "1.82"
