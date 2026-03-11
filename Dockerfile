@@ -17,6 +17,7 @@ WORKDIR /code
 ENV GRADLE_USER_HOME=/code/.gradlecache \
    GRADLE_OPTS="-Djdk.lang.Process.launchMechanism=vfork -Dorg.gradle.vfs.watch=false"
 
+COPY ./gradle/libs.versions.toml /code/gradle/
 COPY ./build.gradle.kts ./gradle.properties ./settings.gradle.kts /code/
 
 RUN gradle downloadDependencies copyDependencies startScripts
