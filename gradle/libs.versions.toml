@@ -4,12 +4,12 @@ java = "17"
 kotlin = "1.9.24"
 gradle = "8.13"
 dockerCompose = "0.17.5"
-radarCommons = "1.2.4"
-radarSchemas = "0.8.14"
-jackson = "2.17.3"
+radarCommons = "1.2.5"
+radarSchemas = "0.8.15"
+jackson = "2.20.2"
 slf4j = "2.0.9"
 log4j2 = "2.21.0"
-avro = "1.12.0"
+avro = "1.12.1"
 mockitoKotlin = "5.1.0"
 hamcrest = "2.2"
 managementPortal = "2.1.13"
@@ -17,12 +17,12 @@ coroutines = "1.7.3"
 snappy = "1.1.10.5"
 jCommander = "1.82"
 almworks = "1.1.2"
-minio = "8.5.10"
+minio = "8.6.0"
 guava = "31.1-jre"
 opencsv = "5.12.0"
 okhttp = "4.12.0"
 jedis = "3.6.2"
-azureStorage = "12.25.1"
+azureStorage = "12.33.2"
 netty = "4.1.124.Final"
 snakeYaml = "2.2"
 apacheCommonsText = "1.14.0"
@@ -60,7 +60,7 @@ netty-codec-http = { module = "io.netty:netty-codec-http", version.ref = "netty"
 reactor-netty-http = { module = "io.projectreactor.netty:reactor-netty-http", version.ref = "projectReactorNetty" }
 opencsv = { module = "com.opencsv:opencsv", version.ref = "opencsv" }
 apache-commons-text = { module = "org.apache.commons:commons-text", version.ref = "apacheCommonsText" }
-commons-lang3 = { module = "org.apache.commons:commons-lang3", version.ref = "commonsLang3" }
+apache-commons-lang = { module = "org.apache.commons:commons-lang3", version.ref = "commonsLang3" }
 
 hamcrest = { module = "org.hamcrest:hamcrest", version.ref = "hamcrest" }
 mockito-kotlin = { module = "org.mockito.kotlin:mockito-kotlin", version.ref = "mockitoKotlin" }

@@ -55,20 +55,19 @@ configurations["integrationTestRuntimeOnly"].extendsFrom(
     configurations.testRuntimeOnly.get(),
 )
 
-configurations.all {
-    resolutionStrategy {
-        /* The entries in the block below are added here to force the version of
-         * transitive dependencies and mitigate reported vulnerabilities */
-        force(
-            libs.jackson.databind,
-            libs.netty.codec.http,
-            libs.reactor.netty.http,
-            libs.commons.lang3,
-        )
-    }
-}
-
 dependencies {
+
+    // --- Vulnerability fixes start ---
+    constraints {
+        add("implementation", rootProject.libs.jackson.bom) {
+            because("Force safe version of Jackson across all modules")
+        }
+        add("implementation", rootProject.libs.apache.commons.lang) {
+            because("Force safe version of commons-lang across all modules")
+        }
+    }
+    // --- Vulnerability fixes end ---
+
     api(libs.avro)
     runtimeOnly(libs.snappy.java)
 
