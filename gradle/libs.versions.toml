@@ -2,7 +2,7 @@
 project = "3.0.5"
 java = "17"
 kotlin = "1.9.24"
-gradle = "8.13"
+gradle = "8.14"
 dockerCompose = "0.17.5"
 radarCommons = "1.2.5"
 radarSchemas = "0.8.15"
