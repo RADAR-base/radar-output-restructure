@@ -19,11 +19,9 @@ radarRootProject {
 }
 
 radarKotlin {
-    javaVersion.set(libs.versions.java.get().toInt())
-    kotlinVersion.set(libs.versions.kotlin)
     log4j2Version.set(libs.versions.log4j2)
-    slf4jVersion.set(libs.versions.slf4j)
     sentryEnabled.set(true)
+    openTelemetryAgentEnabled.set(false)
 }
 
 radarPublishing {
