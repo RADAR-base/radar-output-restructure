@@ -28,7 +28,7 @@ RUN gradle jar
 
 FROM eclipse-temurin:17-jre
 
-MAINTAINER Joris Borgdorff <joris@thehyve.nl>, Yatharth Ranjan<yatharth.ranjan@kcl.ac.uk>
+MAINTAINER Pim van Nierop <pim@thehyve.nl>, Yatharth Ranjan<yatharth.ranjan@kcl.ac.uk>
 
 LABEL description="RADAR-base output data restructuring"
 
