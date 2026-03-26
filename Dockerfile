@@ -10,15 +10,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=$BUILDPLATFORM gradle:8.14-jdk17 AS builder
+FROM --platform=$BUILDPLATFORM gradle:8.13-jdk17 AS builder
 
 RUN mkdir /code
 WORKDIR /code
 ENV GRADLE_USER_HOME=/code/.gradlecache \
    GRADLE_OPTS="-Djdk.lang.Process.launchMechanism=vfork -Dorg.gradle.vfs.watch=false"
 
-COPY ./gradle/libs.versions.toml /code/gradle/
 COPY ./build.gradle.kts ./gradle.properties ./settings.gradle.kts /code/
+COPY ./buildSrc /code/buildSrc
 
 RUN gradle downloadDependencies copyDependencies startScripts
 
@@ -28,7 +28,7 @@ RUN gradle jar
 
 FROM eclipse-temurin:17-jre
 
-MAINTAINER Pim van Nierop <pim@thehyve.nl>, Yatharth Ranjan<yatharth.ranjan@kcl.ac.uk>
+MAINTAINER Joris Borgdorff <joris@thehyve.nl>, Yatharth Ranjan<yatharth.ranjan@kcl.ac.uk>
 
 LABEL description="RADAR-base output data restructuring"
 

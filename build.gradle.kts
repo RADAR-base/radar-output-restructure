@@ -4,24 +4,24 @@ import java.time.Duration
 
 plugins {
     id("application")
-    alias(libs.plugins.radar.root.project)
-    alias(libs.plugins.radar.dependency.management)
-    alias(libs.plugins.radar.kotlin)
-    alias(libs.plugins.radar.publishing)
-    alias(libs.plugins.docker.compose)
+    id("org.radarbase.radar-root-project") version Versions.radarCommons
+    id("org.radarbase.radar-dependency-management") version Versions.radarCommons
+    id("org.radarbase.radar-kotlin") version Versions.radarCommons
+    id("org.radarbase.radar-publishing") version Versions.radarCommons
+    id("com.avast.gradle.docker-compose") version Versions.dockerCompose
 }
 
 description = "RADAR-base output restructuring"
 
 radarRootProject {
-    projectVersion.set(libs.versions.project)
-    gradleVersion.set(libs.versions.gradle)
+    projectVersion.set(Versions.project)
+    gradleVersion.set(Versions.wrapper)
 }
 
 radarKotlin {
-    log4j2Version.set(libs.versions.log4j2)
+    javaVersion.set(Versions.java)
+    log4j2Version.set(Versions.log4j2)
     sentryEnabled.set(true)
-    openTelemetryAgentEnabled.set(false)
 }
 
 radarPublishing {
@@ -53,60 +53,61 @@ configurations["integrationTestRuntimeOnly"].extendsFrom(
     configurations.testRuntimeOnly.get(),
 )
 
-dependencies {
-
-    // --- Vulnerability fixes start ---
-    constraints {
-        add("implementation", rootProject.libs.jackson.bom) {
-            because("Force safe version of Jackson across all modules")
-        }
-        add("implementation", rootProject.libs.apache.commons.lang) {
-            because("Force safe version of commons-lang across all modules")
-        }
+configurations.all {
+    resolutionStrategy {
+        /* The entries in the block below are added here to force the version of
+         * transitive dependencies and mitigate reported vulnerabilities */
+        force(
+            "com.fasterxml.jackson.core:jackson-databind:${Versions.jackson}",
+            "io.netty:netty-codec-http:${Versions.netty}",
+            "io.projectreactor.netty:reactor-netty-http:${Versions.projectReactorNetty}",
+            "org.apache.commons:commons-lang3:3.18.0",
+        )
     }
-    // --- Vulnerability fixes end ---
+}
 
-    api(libs.avro)
-    runtimeOnly(libs.snappy.java)
+dependencies {
+    api("org.apache.avro:avro:${Versions.avro}")
+    runtimeOnly("org.xerial.snappy:snappy-java:${Versions.snappy}")
 
     implementation(kotlin("reflect"))
-    implementation(libs.kotlinx.coroutines.core)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:${Versions.coroutines}")
 
-    api(platform(libs.jackson.bom))
-    implementation(libs.jackson.databind)
-    implementation(libs.jackson.dataformat.yaml) {
-        runtimeOnly(libs.snakeyaml)
+    api(platform("com.fasterxml.jackson:jackson-bom:${Versions.jackson}"))
+    implementation("com.fasterxml.jackson.core:jackson-databind")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml") {
+        runtimeOnly("org.yaml:snakeyaml:${Versions.snakeYaml}")
     }
-    implementation(libs.jackson.dataformat.csv)
-    implementation(libs.jackson.module.kotlin)
-    implementation(libs.jackson.datatype.jsr310)
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-csv")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
 
-    implementation(libs.jedis)
+    implementation("redis.clients:jedis:${Versions.jedis}")
 
-    implementation(libs.jcommander)
+    implementation("com.beust:jcommander:${Versions.jCommander}")
 
-    implementation(libs.integers)
+    implementation("com.almworks.integers:integers:${Versions.almworks}")
 
-    implementation(libs.minio) {
-        runtimeOnly(libs.guava)
-        runtimeOnly(libs.okhttp)
+    implementation("io.minio:minio:${Versions.minio}") {
+        runtimeOnly("com.google.guava:guava:${Versions.guava}")
+        runtimeOnly("com.squareup.okhttp3:okhttp:${Versions.okhttp}")
     }
 
-    implementation(libs.azure.storage.blob) {
-        runtimeOnly(platform(libs.netty.bom))
-        runtimeOnly(libs.reactor.netty.http)
+    implementation("com.azure:azure-storage-blob:${Versions.azureStorage}") {
+        runtimeOnly(platform("io.netty:netty-bom:${Versions.netty}"))
+        runtimeOnly("io.projectreactor.netty:reactor-netty-http:${Versions.projectReactorNetty}")
     }
-    implementation(libs.opencsv) {
-        runtimeOnly(libs.apache.commons.text)
+    implementation("com.opencsv:opencsv:${Versions.opencsv}") {
+        runtimeOnly("org.apache.commons:commons-text:${Versions.apacheCommonsText}")
     }
-    implementation(libs.managementportal.client)
-    implementation(libs.radar.commons.kotlin)
+    implementation("org.radarbase:managementportal-client:${Versions.managementPortal}")
+    implementation("org.radarbase:radar-commons-kotlin:${Versions.radarCommons}")
 
-    testImplementation(libs.radar.schemas.commons)
-    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation("org.radarbase:radar-schemas-commons:${Versions.radarSchemas}")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:${Versions.coroutines}")
 
-    testImplementation(libs.hamcrest)
-    testImplementation(libs.mockito.kotlin)
+    testImplementation("org.hamcrest:hamcrest:${Versions.hamcrest}")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:${Versions.mockitoKotlin}")
 }
 
 application {
