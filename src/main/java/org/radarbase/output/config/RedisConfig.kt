@@ -15,7 +15,13 @@ data class RedisConfig(
      * Prefix to use for creating a lock of a topic.
      */
     val lockPrefix: String = "radar-output/lock",
+    /**
+     * Timeout in milliseconds for Redis operations.
+     */
+    val timeoutMs: Int = 5000
 ) {
     fun withEnv(): RedisConfig = this
         .copyEnv("REDIS_URI") { copy(uri = URI.create(it)) }
+        .copyEnv("REDIS_TIMEOUT_MS") { copy(timeoutMs = it.toInt()) }
+        .copyEnv("REDIS_LOCK_PREFIX") { copy(lockPrefix = it) }
 }
