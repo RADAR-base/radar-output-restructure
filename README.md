@@ -1,5 +1,22 @@
 # Restructure Kafka connector output files
 
+<!-- TOC -->
+* [Restructure Kafka connector output files](#restructure-kafka-connector-output-files)
+  * [Upgrade instructions](#upgrade-instructions)
+  * [Docker usage](#docker-usage)
+  * [Command line usage](#command-line-usage)
+    * [File Format](#file-format)
+    * [Compression](#compression)
+    * [Redis](#redis)
+    * [Source and target](#source-and-target)
+    * [Path format](#path-format)
+    * [Cleaner](#cleaner)
+    * [Service](#service)
+  * [Sentry monitoring](#sentry-monitoring)
+  * [Local build](#local-build)
+    * [Extending the connector](#extending-the-connector)
+<!-- TOC -->
+
 Data streamed by a Kafka Connector will be converted to a RADAR-base oriented output directory, by organizing it by project, user and collection date.
 It supports data written by [RADAR S3 sink connector](https://github.com/RADAR-base/RADAR-S3-Connector) is streamed to files based on topic name only. This package transforms that output to a local directory structure as follows: `projectId/userId/topic/date_hour.csv`. The date and hour are extracted from the `time` field of each record, and is formatted in UTC time.
 
@@ -224,6 +241,23 @@ The cleaner can also be enabled with the `--cleaner` command-line flag. To run t
 ### Service
 
 To run the output generator as a service that will regularly poll the source directory, add the `--service` flag and optionally the `--interval` flag to adjust the polling interval or use the corresponding configuration file parameters.
+
+## Sentry monitoring
+
+To enable Sentry monitoring:
+
+1. Set a `SENTRY_DSN` environment variable that points to the desired Sentry DSN.
+2. (Optional) Set the `SENTRY_LOG_LEVEL` environment variable to control the minimum log level of events sent to Sentry.
+   The default log level for Sentry is `ERROR`. Possible values are `TRACE`, `DEBUG`, `INFO`, `WARN`, and `ERROR`.
+
+For further configuration of Sentry via environmental variables see [here](https://docs.sentry.io/platforms/java/configuration/#configuration-via-the-runtime-environment). For instance:
+
+```
+SENTRY_LOG_LEVEL: 'ERROR'
+SENTRY_DSN: 'https://000000000000.ingest.de.sentry.io/000000000000'
+SENTRY_ATTACHSTACKTRACE: true
+SENTRY_STACKTRACE_APP_PACKAGES: io.confluent.connect,org.radarbase.connect.rest
+```
 
 ## Local build
 
