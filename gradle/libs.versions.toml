@@ -1,5 +1,5 @@
 [versions]
-project = "3.0.6"
+project = "3.0.7-SNAPSHOT"
 gradle = "8.14"
 dockerCompose = "0.17.5"
 radarCommons = "1.2.6"
