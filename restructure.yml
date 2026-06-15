@@ -160,6 +160,14 @@ paths:
   #   format: ${projectId}/${userId}/${topic}/${time:mm}/${time:YYYYmmDD_HH'00'}${attempt}${extension}
   #   plugins: fixed time key value org.example.plugin.MyPathPlugin
 
+# Topic whitelist: if set, only these topics are processed.
+# Use this when the number of topics to include is much smaller than the number to exclude.
+# Takes precedence over per-topic exclude flags below.
+# includeTopics:
+#   - questionnaire_response
+#   - questionnaire_completion_log
+#   - connect_fitbit_activity
+
 # Individual topic configuration
 topics:
   # topic name

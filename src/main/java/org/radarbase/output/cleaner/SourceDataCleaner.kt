@@ -32,10 +32,7 @@ class SourceDataCleaner(
 ) : Closeable {
     private val lockManager = fileStoreFactory.remoteLockManager
     private val sourceStorage = fileStoreFactory.sourceStorage
-    private val excludeTopics: Set<String> = fileStoreFactory.config.topics
-        .mapNotNullTo(HashSet()) { (topic, conf) ->
-            topic.takeIf { conf.excludeFromDelete }
-        }
+    private val config = fileStoreFactory.config
     private val maxFilesPerTopic: Int =
         fileStoreFactory.config.cleaner.maxFilesPerTopic ?: Int.MAX_VALUE
     private val deleteThreshold: Instant? = Instant.now()
@@ -132,8 +129,9 @@ class SourceDataCleaner(
     }
 
     private suspend fun topicPaths(storageIndex: StorageIndex, path: Path): List<Path> =
-        sourceStorage.listTopics(storageIndex, path, excludeTopics)
-            // different services start on different topics to decrease lock contention
+        // different services start on different topics to decrease lock contention
+        sourceStorage.listTopics(storageIndex, path)
+            .filter { config.topics[it.fileName.toString()]?.excludeFromDelete != true }
             .shuffled()
 
     override fun close() {

@@ -12,6 +12,12 @@ data class RestructureConfig(
     val worker: WorkerConfig = WorkerConfig(),
     /** Topic exceptional handling. */
     val topics: Map<String, TopicConfig> = emptyMap(),
+    /**
+     * If non-empty, only these topics are processed (whitelist). Takes precedence over
+     * per-topic [TopicConfig.exclude] flags. Use this when the number of topics to include
+     * is much smaller than the number to exclude.
+     */
+    val includeTopics: Set<String> = emptySet(),
     /** Source data resource configuration. */
     val source: ResourceConfig = ResourceConfig("s3"),
     /** Target data resource configuration. */
@@ -25,6 +31,18 @@ data class RestructureConfig(
     /** File format to use for output files. */
     val format: FormatConfig = FormatConfig(),
 ) {
+    /**
+     * Returns true if the given topic should be processed during restructuring.
+     *
+     * When [includeTopics] is non-empty it acts as a whitelist — only listed topics are
+     * processed. Otherwise, any topic whose [TopicConfig.exclude] flag is true is skipped.
+     */
+    fun topicIncluded(name: String): Boolean = if (includeTopics.isNotEmpty()) {
+        name in includeTopics
+    } else {
+        topics[name]?.exclude != true
+    }
+
     fun validate() {
         source.validate()
         target.validate()
