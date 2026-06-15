@@ -49,6 +49,7 @@ interface SourceStorage {
         root: Path,
     ): List<Path> = storageIndex.avroTopicTreeLister()
         .listTo(LinkedHashSet(), root)
+        .toList()
 
     /**
      * File reader for the storage medium.
