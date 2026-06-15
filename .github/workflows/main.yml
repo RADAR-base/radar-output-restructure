@@ -9,17 +9,15 @@ on:
     branches: [ main, dev ]
 
 env:
-  DOCKER_IMAGE: radarbase/radar-output-restructure
+  REGISTRY: ghcr.io
+  REPOSITORY: ${{ github.repository }}
+  IMAGE_NAME: radar-output-restructure
 
 jobs:
-  # Build and test the code
   build:
-    # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
 
       - uses: actions/setup-java@v3
@@ -28,7 +26,7 @@ jobs:
           java-version: 17
 
       - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/actions/setup-gradle@v3
 
       # Compile the code
       - name: Compile code
@@ -47,13 +45,17 @@ jobs:
 
   # Check that the docker image builds correctly
   docker:
-    # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+
+      # Setup docker build environment
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Cache Docker layers
         uses: actions/cache@v3
@@ -63,27 +65,25 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
+      - name: Login to Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lowercase image name
+        run: |
+          echo "DOCKER_IMAGE=${REGISTRY}/${REPOSITORY,,}/${IMAGE_NAME}" >>${GITHUB_ENV}
+
       # Add Docker labels and tags
       - name: Docker meta
         id: docker_meta
-        uses: docker/metadata-action@v4
+        uses: docker/metadata-action@v5
         with:
           images: ${{ env.DOCKER_IMAGE }}
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      # Setup docker build environment
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Build
+      - name: Build docker image and push
         uses: docker/build-push-action@v3
         with:
           context: .
@@ -95,8 +95,8 @@ jobs:
           # Use runtime labels from docker_meta as well as fixed labels
           labels: |
             ${{ steps.docker_meta.outputs.labels }}
-            maintainer=Bastiaan de Graaf <bastiaan@thehyve.nl>
-            org.opencontainers.image.authors=Bastiaan de Graaf <bastiaan@thehyve.nl>
+            maintainer=Pim van Nierop <pim@thehyve.nl>
+            org.opencontainers.image.authors=Pim van Nierop <pim@thehyve.nl>
             org.opencontainers.image.vendor=RADAR-base
             org.opencontainers.image.licenses=Apache-2.0
 
