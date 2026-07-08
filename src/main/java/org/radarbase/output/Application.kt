@@ -77,7 +77,9 @@ class Application(
     override val targetStorage: TargetStorage =
         TargetStorageFactory(config.target).createTargetStorage()
 
-    override val redisHolder: RedisHolder = RedisHolder(JedisPool(config.redis.uri))
+    override val redisHolder: RedisHolder = RedisHolder(
+        JedisPool(config.redis.uri, config.redis.timeoutMs)
+    )
     override val remoteLockManager: RemoteLockManager = RedisRemoteLockManager(
         redisHolder,
         config.redis.lockPrefix,
