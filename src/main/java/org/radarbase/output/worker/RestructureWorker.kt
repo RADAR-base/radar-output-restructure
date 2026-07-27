@@ -7,7 +7,6 @@ import org.apache.avro.generic.GenericRecord
 import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.OffsetRangeSet
-import org.radarbase.output.config.TopicConfig
 import org.radarbase.output.path.RecordPathFactory
 import org.radarbase.output.path.RecordPathFactory.Companion.projectIdFrom
 import org.radarbase.output.source.SourceStorage
@@ -36,7 +35,7 @@ internal class RestructureWorker(
     private val reader = storage.createReader()
     private val pathFactory: RecordPathFactory = fileStoreFactory.pathFactory
     private val batchSize = fileStoreFactory.config.worker.cacheOffsetsSize
-    private val topicConfigs = fileStoreFactory.config.topics
+    private val config = fileStoreFactory.config
 
     private val cacheStore = fileStoreFactory.newFileCacheStore(accountant)
 
@@ -126,7 +125,6 @@ internal class RestructureWorker(
         logger.debug("Reading {}", file.path)
 
         val offset = file.range.range.from
-        val topicConfig = topicConfigs[topic] ?: TopicConfig()
 
         return reader.newInput(file).use { input ->
             // processing zero-length files may trigger a stall. See:
@@ -156,7 +154,7 @@ internal class RestructureWorker(
                             )
                         }
                         if (!alreadyContains) {
-                            if (topicConfig.includesProject(projectIdFrom(record))) {
+                            if (config.projectIncluded(projectIdFrom(record))) {
                                 writeRecord(transaction, record)
                                 offsetPendingCommit = false
                             }

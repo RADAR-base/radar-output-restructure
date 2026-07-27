@@ -160,13 +160,11 @@ paths:
   #   format: ${projectId}/${userId}/${topic}/${time:mm}/${time:YYYYmmDD_HH'00'}${attempt}${extension}
   #   plugins: fixed time key value org.example.plugin.MyPathPlugin
 
-# Topic whitelist: if set, only these topics are processed.
-# Use this when the number of topics to include is much smaller than the number to exclude.
-# Takes precedence over per-topic exclude flags below.
-# includeTopics:
-#   - questionnaire_response
-#   - questionnaire_completion_log
-#   - connect_fitbit_activity
+# Project whitelist: if set, only records from these projects are written.
+# Empty or omitted means all projects are included.
+# includeProjectIds:
+#   - RECURRENT-GB
+#   - RECURRENT-GB-Proxy
 
 # Individual topic configuration
 topics:
@@ -201,5 +199,3 @@ topics:
     pathProperties:
       format: ${projectId}/${userId}/${topic}/${value:name}/${filename}
       plugins: fixed value
-    # Only write records for these projects (empty or omitted = all projects)
-    # includeProjectIds: [RECURRENT-GB, RECURRENT-GB-Proxy]
