@@ -68,19 +68,10 @@ abstract class RecordPathFactory {
         record: GenericRecord,
         attempt: Int,
     ): Path {
-        val keyField = requireNotNull(record.get("key")) { "Failed to process $record; no key present" }
+        val keyRecord = observationKey(record)
+            ?: throw IllegalArgumentException("Failed to process $record; no key present")
         val valueField =
             requireNotNull(record.get("value") as? GenericRecord) { "Failed to process $record; no value present" }
-
-        val keyRecord: GenericRecord = if (keyField is GenericRecord) {
-            keyField
-        } else {
-            GenericRecordBuilder(observationKeySchema).apply {
-                set("projectId", valueField.getOrNull("projectId"))
-                set("userId", keyField.toString())
-                set("sourceId", valueField.getOrNull("sourceId") ?: "unknown")
-            }.build()
-        }
 
         val params = PathFormatParameters(
             topic = topic,
@@ -123,6 +114,24 @@ abstract class RecordPathFactory {
             ?.let { ILLEGAL_CHARACTER_PATTERN.matcher(it.toString()).replaceAll("") }
             ?.takeIf { it.isNotEmpty() }
             ?: defaultValue
+
+        /** Resolves the observation key record from a combined key-value Avro record. */
+        fun observationKey(record: GenericRecord): GenericRecord? {
+            val keyField = record.get("key") ?: return null
+            if (keyField is GenericRecord) {
+                return keyField
+            }
+            val valueField = record.get("value") as? GenericRecord ?: return null
+            return GenericRecordBuilder(observationKeySchema).apply {
+                set("projectId", valueField.getOrNull("projectId"))
+                set("userId", keyField.toString())
+                set("sourceId", valueField.getOrNull("sourceId") ?: "unknown")
+            }.build()
+        }
+
+        /** Project ID from [record], or null if it cannot be resolved. */
+        fun projectIdFrom(record: GenericRecord): String? =
+            observationKey(record)?.getOrNull("projectId")?.toString()?.takeIf { it.isNotBlank() }
 
         private val observationKeySchema = Schema.Parser().parse(
             """

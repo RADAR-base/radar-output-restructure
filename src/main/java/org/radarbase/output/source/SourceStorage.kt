@@ -43,15 +43,13 @@ interface SourceStorage {
 
     /**
      * Recursively find all topic root paths of records in the given path.
-     * Exclude paths belonging to the set of given excluded topics.
      */
     suspend fun listTopics(
         storageIndex: StorageIndex,
         root: Path,
-        exclude: Set<String>,
     ): List<Path> = storageIndex.avroTopicTreeLister()
         .listTo(LinkedHashSet(), root)
-        .filter { it.fileName.toString() !in exclude }
+        .toList()
 
     /**
      * File reader for the storage medium.

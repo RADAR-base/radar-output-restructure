@@ -56,19 +56,13 @@ class RadarKafkaRestructure(
 
     private val lockManager = fileStoreFactory.remoteLockManager
 
-    private val excludeTopics: Set<String>
+    private val config = fileStoreFactory.config
     private val maxFilesPerTopic: Int
     private val minimumFileAge: Duration
 
     private val supervisor = SupervisorJob()
 
     init {
-        val config = fileStoreFactory.config
-        excludeTopics = config.topics
-            .mapNotNullTo(HashSet()) { (topic, conf) ->
-                topic.takeIf { conf.exclude }
-            }
-
         val workerConfig = config.worker
         maxFilesPerTopic = workerConfig.maxFilesPerTopic ?: Int.MAX_VALUE
         minimumFileAge = Duration.ofSeconds(workerConfig.minimumFileAge.coerceAtLeast(0L))
@@ -164,8 +158,9 @@ class RadarKafkaRestructure(
     }
 
     private suspend fun topicPaths(storageIndex: StorageIndex, root: Path): List<Path> =
-        sourceStorage.listTopics(storageIndex, root, excludeTopics)
-            // different services start on different topics to decrease lock contention
+        // different services start on different topics to decrease lock contention
+        sourceStorage.listTopics(storageIndex, root)
+            .filter { config.topicIncluded(it.fileName.toString()) }
             .shuffled()
 
     private data class ProcessingStatistics(

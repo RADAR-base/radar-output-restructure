@@ -8,6 +8,7 @@ import org.radarbase.output.FileStoreFactory
 import org.radarbase.output.accounting.Accountant
 import org.radarbase.output.accounting.OffsetRangeSet
 import org.radarbase.output.path.RecordPathFactory
+import org.radarbase.output.path.RecordPathFactory.Companion.projectIdFrom
 import org.radarbase.output.source.SourceStorage
 import org.radarbase.output.source.TopicFile
 import org.radarbase.output.source.TopicFileList
@@ -34,6 +35,7 @@ internal class RestructureWorker(
     private val reader = storage.createReader()
     private val pathFactory: RecordPathFactory = fileStoreFactory.pathFactory
     private val batchSize = fileStoreFactory.config.worker.cacheOffsetsSize
+    private val config = fileStoreFactory.config
 
     private val cacheStore = fileStoreFactory.newFileCacheStore(accountant)
 
@@ -73,7 +75,7 @@ internal class RestructureWorker(
         try {
             for (file in topicPaths.files) {
                 val processedSize = try {
-                    this.processFile(file, progressBar, seenOffsets)
+                    this.processFile(topic, file, progressBar, seenOffsets)
                         .also { size ->
                             val expectedSize = file.range.range.size
                             if (expectedSize != null && size != expectedSize) {
@@ -115,6 +117,7 @@ internal class RestructureWorker(
 
     @Throws(IOException::class)
     private suspend fun processFile(
+        topic: String,
         file: TopicFile,
         progressBar: ProgressBar,
         seenOffsets: OffsetRangeSet,
@@ -135,7 +138,14 @@ internal class RestructureWorker(
             withContext(Dispatchers.Default) {
                 GenericRecordReader(input).use { reader ->
                     var currentOffset = offset
+                    val fileAlreadyProcessed = seenOffsets.contains(
+                        file.range.topicPartition,
+                        transaction.offset,
+                        transaction.lastModified,
+                    )
+                    var offsetPendingCommit = !fileAlreadyProcessed
                     while (reader.hasNext()) {
+                        val record = reader.next()
                         val alreadyContains = time("accounting.check") {
                             seenOffsets.contains(
                                 file.range.topicPartition,
@@ -144,14 +154,22 @@ internal class RestructureWorker(
                             )
                         }
                         if (!alreadyContains) {
-                            // Get the fields
-                            writeRecord(transaction, reader.next())
+                            if (config.projectIncluded(projectIdFrom(record))) {
+                                writeRecord(transaction, record)
+                                offsetPendingCommit = false
+                            }
                         }
                         processedRecordsCount++
                         if (file.size != null) {
                             progressBar.update(processedRecordsCount)
                         }
                         currentOffset++
+                    }
+
+                    if (offsetPendingCommit) {
+                        val ledger = Accountant.Ledger()
+                        ledger.add(transaction)
+                        accountant.process(ledger)
                     }
 
                     currentOffset - offset

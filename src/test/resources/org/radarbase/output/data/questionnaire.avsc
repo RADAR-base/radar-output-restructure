@@ -1,0 +1,48 @@
+{
+  "type": "record",
+  "name": "QuestionnaireRecord",
+  "fields": [
+    {
+      "name": "key",
+      "type": {
+        "type": "record",
+        "name": "Key",
+        "fields": [
+          { "name": "projectId", "type": "string" },
+          { "name": "userId", "type": "string" },
+          { "name": "sourceId", "type": "string" }
+        ]
+      }
+    },
+    {
+      "name": "value",
+      "type": {
+        "type": "record",
+        "name": "Value",
+        "fields": [
+          { "name": "time", "type": "double" },
+          { "name": "timeCompleted", "type": "double" },
+          { "name": "timeNotification", "type": "double" },
+          { "name": "name", "type": "string" },
+          { "name": "version", "type": "string" },
+          {
+            "name": "answers",
+            "type": {
+              "type": "array",
+              "items": {
+                "type": "record",
+                "name": "Answer",
+                "fields": [
+                  { "name": "questionId", "type": "string" },
+                  { "name": "value", "type": "string" },
+                  { "name": "startTime", "type": "double" },
+                  { "name": "endTime", "type": "double" }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
