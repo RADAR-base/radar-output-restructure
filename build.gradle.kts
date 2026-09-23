@@ -63,6 +63,10 @@ dependencies {
         add("implementation", rootProject.libs.apache.commons.lang) {
             because("Force safe version of commons-lang across all modules")
         }
+        add("implementation", rootProject.libs.bouncycastle.bcprov) {
+            // minio pulls in a vulnerable bcprov (1.78.1 in 8.5.x, 1.81 in 8.6.0).
+            because("CVE-2025-14813, CVE-2026-13506, CVE-2026-8763")
+        }
     }
     // --- Vulnerability fixes end ---
 
@@ -93,7 +97,7 @@ dependencies {
     }
 
     implementation(libs.azure.storage.blob) {
-        runtimeOnly(platform(libs.netty.bom))
+        implementation(platform(libs.netty.bom))
         runtimeOnly(libs.reactor.netty.http)
     }
     implementation(libs.opencsv) {
