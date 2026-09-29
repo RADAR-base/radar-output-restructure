@@ -18,7 +18,7 @@ data class RedisConfig(
     /**
      * Timeout in milliseconds for Redis operations.
      */
-    val timeoutMs: Int = 5000
+    val timeoutMs: Int = 5000,
 ) {
     fun withEnv(): RedisConfig = this
         .copyEnv("REDIS_URI") { copy(uri = URI.create(it)) }
