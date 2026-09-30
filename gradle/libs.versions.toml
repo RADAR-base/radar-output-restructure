@@ -1,6 +1,6 @@
 [versions]
 project = "3.0.7-SNAPSHOT"
-gradle = "8.14"
+gradle = "9.6.0"
 dockerCompose = "0.17.5"
 radarCommons = "1.2.8"
 radarSchemas = "0.9.2"
