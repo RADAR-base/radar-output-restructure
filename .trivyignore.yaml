@@ -1,0 +1,12 @@
+# Trivy ignore file (https://trivy.dev/latest/docs/configuration/filtering/#trivyignoreyaml).
+# Every entry needs a reason and an expiry, for example:
+#
+#   vulnerabilities:
+#     - id: CVE-2024-12345
+#       statement: Not exploitable, because ...
+#       expired_at: 2027-01-01
+vulnerabilities:
+  - id: CVE-2025-59952
+    statement: >-
+      io.minio:minio 8.5.17 (HIGH): the fix (8.6.0) pulls in OkHttp 5, which breaks the OkHttp 4 users in the fleet. Waiting for the fleet-wide OkHttp 5 migration.
+    expired_at: 2027-04-05
