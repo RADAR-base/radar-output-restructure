@@ -16,9 +16,21 @@
 
 package org.radarbase.output.format
 
+import java.io.IOException
+
 class FormatFactory : FormatProvider<RecordConverterFactory> {
     override val formats: List<RecordConverterFactory> = listOf(
         CsvAvroConverter.factory,
         JsonAvroConverter.factory,
+        OdmAvroConverter.factory,
     )
+
+    @Throws(IOException::class)
+    override fun init(properties: Map<String, String>) {
+        val odmFactory = OdmAvroConverter.factory as OdmAvroConverterFactory
+        odmFactory.metadataVersionOid =
+            properties[OdmFieldConfig.PROP_METADATA_VERSION_OID]
+                ?: OdmFieldConfig.DEFAULT_METADATA_VERSION_OID
+        odmFactory.fieldConfig = OdmFieldConfig.fromProperties(properties)
+    }
 }

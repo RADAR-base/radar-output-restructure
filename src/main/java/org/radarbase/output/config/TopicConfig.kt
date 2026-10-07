@@ -14,7 +14,7 @@ data class TopicConfig(
      * Specify alternative path format, following
      * [org.radarbase.output.path.FormattedPathFactory] format.
      */
-    val pathProperties: PathFormatterConfig,
+    val pathProperties: PathFormatterConfig = PathFormatterConfig(),
     /**
      * Exclude given fields from output files.
      */

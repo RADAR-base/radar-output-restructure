@@ -83,7 +83,7 @@ compression:
 
 # File format
 format:
-  # Format type: CSV or JSON
+  # Format type: csv, json, or odm
   type: csv
   # Whether to deduplicate the files in each topic by default
   deduplication:
@@ -94,8 +94,25 @@ format:
     # ignoreFields: []
   # Format factory class
   # factory: org.radarbase.output.format.FormatFactory
-  # Additional format properties
+  # Additional format properties (ODM field mappings when type is odm)
   # properties: {}
+  #
+  # ODM output example:
+  # type: odm
+  # properties:
+  #   metadataVersionOid: v1.0.0
+  #   subjectKeyField: key.userId
+  #   projectIdField: key.projectId
+  #   studyEventOidField: value.name
+  #   formOidField: value.name
+  #   answersField: value.answers
+  #   itemOidField: questionId
+  #   itemValueField: value
+  #   itemGroupOidTemplate: "{formOid}_IG"
+  #   igRepeatKey: "1"
+  #   repeatKeySeparator: "|"
+  #   dateInputFormat: '{"day":dd,"month":MMM,"year":yyyy}'
+  #   dateOutputFormat: yyyy-MM-dd             # REDCap import requires Y-M-D; empty to disable
   # Do not write certain fields to file
   # excludeFields: []
 
@@ -142,6 +159,12 @@ paths:
   # properties:
   #   format: ${projectId}/${userId}/${topic}/${time:mm}/${time:YYYYmmDD_HH'00'}${attempt}${extension}
   #   plugins: fixed time key value org.example.plugin.MyPathPlugin
+
+# Project whitelist: if set, only records from these projects are written.
+# Empty or omitted means all projects are included.
+# includeProjectIds:
+#   - RECURRENT-GB
+#   - RECURRENT-GB-Proxy
 
 # Individual topic configuration
 topics:

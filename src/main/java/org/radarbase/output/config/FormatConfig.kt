@@ -6,7 +6,7 @@ import org.radarbase.output.format.RecordConverterFactory
 data class FormatConfig(
     override val factory: String = FormatFactory::class.qualifiedName!!,
     override val properties: Map<String, String> = emptyMap(),
-    /** Output format. One of csv or json. */
+    /** Output format. One of csv, json, or odm. */
     val type: String = "csv",
     /** Whether and how to remove duplicate entries. */
     val deduplication: DeduplicationConfig = DeduplicationConfig(

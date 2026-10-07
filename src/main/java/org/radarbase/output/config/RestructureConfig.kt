@@ -12,6 +12,11 @@ data class RestructureConfig(
     val worker: WorkerConfig = WorkerConfig(),
     /** Topic exceptional handling. */
     val topics: Map<String, TopicConfig> = emptyMap(),
+    /**
+     * If non-empty, only records whose project ID is in this set are written.
+     * Empty means all projects are included.
+     */
+    val includeProjectIds: Set<String> = emptySet(),
     /** Source data resource configuration. */
     val source: ResourceConfig = ResourceConfig("s3"),
     /** Target data resource configuration. */
@@ -25,6 +30,15 @@ data class RestructureConfig(
     /** File format to use for output files. */
     val format: FormatConfig = FormatConfig(),
 ) {
+    /** Returns true if the given topic should be processed during restructuring. */
+    fun topicIncluded(name: String): Boolean = topics[name]?.exclude != true
+
+    /** Whether a record with the given project ID should be processed. */
+    fun projectIncluded(projectId: String?): Boolean {
+        if (includeProjectIds.isEmpty()) return true
+        return projectId != null && projectId in includeProjectIds
+    }
+
     fun validate() {
         source.validate()
         target.validate()
